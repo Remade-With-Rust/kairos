@@ -14,7 +14,7 @@ the crate, so a failure names its crate and nothing else:
 | `gate-symbols` | `rusty_symbols` | `=0.1.0`, `default-features = false` |
 | `gate-thoth` | `thoth` | git tag `v0.3.0`, `default-features = false` |
 | `gate-json` | `rusty_json_turbo` (lib `serde_json`) | git, `0.1.0`, `no_std + alloc` |
-| `gate-zstd` | `rusty_zstd` | `=0.2.3`, `no_std + alloc` |
+| `gate-zstd` | `rusty_zstd` | `=0.2.5`, `no_std + alloc` |
 | `gate-erasure` | `rusty_erasure-core` | `=0.4.0` |
 | `gate-time` | `rusty_time-core` | `=0.1.10` |
 | `gate-xml` | `rusty_xml` | `=0.8.1` |

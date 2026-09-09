@@ -11,8 +11,15 @@
 /oracle/FreeRTOS-Kernel/
 /oracle/FreeRTOS/
 /oracle/build/
-# The plain oracle traces: the tracked form is the zstd frame beside them
+# The plain oracle traces: the tracked form is the zstd frame beside them,
+# which `kairos oracle trace` writes only after two runs agree byte for
+# byte. The .sim/.oracle pair is `kairos conform` scratch — rewritten at
+# whatever length it was last asked for, so tracking it churns megabytes
+# per run and proves nothing the pinned digests in rusty_rtos_demo's
+# tests/conformance.rs do not prove better.
 /oracle/traces/*.trace
+/oracle/traces/*.sim
+/oracle/traces/*.oracle
 *.log
 .DS_Store
 Thumbs.db

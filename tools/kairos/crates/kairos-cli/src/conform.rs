@@ -23,7 +23,10 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 1] = ["dynamic"];
+const SCENARIOS: [&str; 9] = [
+    "dynamic", "PollQ", "BlockQ", "semtest", "countsem", "recmutex", "blocktim", "QPeek",
+    "GenQTest",
+];
 
 /// The demo package, and the binary inside it.
 const DEMO: &str = "rusty_rtos_demo";
@@ -45,48 +48,50 @@ fn build_sim(root: &Path) -> Result<()> {
 }
 
 /// Run the Rust sim and return its trace.
+///
+/// The built binary is invoked directly rather than through `cargo run`:
+/// the trace is stderr, and so is any warning cargo decides to print, so a
+/// single unrelated lint would otherwise appear as line 1 of the trace and
+/// "diverge" against the oracle's first event. Build once, then run the
+/// artefact.
 fn run_sim(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<String> {
     let dir = root.join(DEMO);
+    let bin = dir
+        .join("target")
+        .join("release")
+        .join(format!("{SIM_BIN}{}", std::env::consts::EXE_SUFFIX));
+    if !bin.is_file() {
+        return fail(format!("{} was not built", bin.display()));
+    }
+    let ticks = ticks.to_string();
+    let mut command = std::process::Command::new(&bin);
+    command.args([scenario, &ticks]).current_dir(&dir);
+    if exits {
+        command.env("KAIROS_TRACE_EXITS", "1");
+    }
+    println!("$ {} {scenario} {ticks}", bin.display());
+    let output = command.output()?;
+    let trace = String::from_utf8_lossy(&output.stderr).into_owned();
     let out = root
         .join("oracle")
         .join("traces")
         .join(format!("{scenario}.sim"));
-    let ticks = ticks.to_string();
-    let mut args = vec![
-        "run",
-        "--release",
-        "--quiet",
-        "--bin",
-        SIM_BIN,
-        "--",
-        scenario,
-        &ticks,
-    ];
-    // The trace is stderr; cargo's own chatter is not, thanks to --quiet.
-    let mut command = std::process::Command::new("cargo");
-    command.args(&mut args).current_dir(&dir);
-    if exits {
-        command.env("KAIROS_TRACE_EXITS", "1");
+    if let Some(parent) = out.parent() {
+        fs::create_dir_all(parent)?;
     }
-    println!("$ cargo run --release --quiet --bin {SIM_BIN} -- {scenario} {ticks}");
-    let output = command.output()?;
-    let trace = String::from_utf8_lossy(&output.stderr).into_owned();
-    fs::create_dir_all(out.parent().unwrap_or(&dir))?;
     fs::write(&out, &trace)?;
     Ok(trace)
 }
 
 /// Run the C oracle and return its trace.
 fn run_oracle(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<String> {
-    let bin = root.join("oracle").join("build").join(scenario);
+    let bin = root.join("oracle").join("build").join("corpus");
     if !bin.is_file() {
-        return fail(format!(
-            "oracle/build/{scenario} is not built; run `kairos oracle build {scenario}`"
-        ));
+        return fail("oracle/build/corpus is not built; run `kairos oracle build`");
     }
     let env = if exits { "KAIROS_TRACE_EXITS=1 " } else { "" };
     let script = format!(
-        "ulimit -f 4194304; {env}timeout 900 ./oracle/build/{scenario} {scenario} {ticks} 2> oracle/traces/{scenario}.oracle; echo exit=$?"
+        "ulimit -f 4194304; {env}timeout 900 ./oracle/build/corpus {scenario} {ticks} 2> oracle/traces/{scenario}.oracle; echo exit=$?"
     );
     let (ok, _stdout, stderr) = crate::oracle::host_shell(root, &script)?;
     if !ok {

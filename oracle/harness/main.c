@@ -27,7 +27,15 @@
 #include "kairos_trace.h"
 
 /* The standard demo tasks (FreeRTOS/Demo/Common/include). */
+#include "BlockQ.h"
+#include "GenQTest.h"
+#include "PollQ.h"
+#include "QPeek.h"
+#include "blocktim.h"
+#include "countsem.h"
 #include "dynamic.h"
+#include "recmutex.h"
+#include "semtest.h"
 
 /* From the patched Posix port. */
 extern void vPortKairosTick( void );
@@ -37,6 +45,15 @@ extern unsigned long ulKairosExits;
 
 #define harnessCHECK_TASK_PRIORITY    ( tskIDLE_PRIORITY + 5 )
 #define harnessCHECK_PERIOD_TICKS     ( 100 )
+
+/* The priority each scenario that takes one is started at. Written down
+ * here because the Rust corpus has to use exactly these: a scenario started
+ * at a different priority is a different scenario, and its trace would
+ * rightly differ. */
+#define harnessPOLLQ_PRIORITY         ( tskIDLE_PRIORITY + 2 )
+#define harnessBLOCKQ_PRIORITY        ( tskIDLE_PRIORITY + 2 )
+#define harnessSEMTEST_PRIORITY       ( tskIDLE_PRIORITY + 1 )
+#define harnessGENQ_PRIORITY          ( tskIDLE_PRIORITY )
 
 typedef struct
 {
@@ -50,9 +67,57 @@ static void prvStartDynamic( void )
     vStartDynamicPriorityTasks();
 }
 
+static void prvStartPollQ( void )
+{
+    vStartPolledQueueTasks( harnessPOLLQ_PRIORITY );
+}
+
+static void prvStartBlockQ( void )
+{
+    vStartBlockingQueueTasks( harnessBLOCKQ_PRIORITY );
+}
+
+static void prvStartSemTest( void )
+{
+    vStartSemaphoreTasks( harnessSEMTEST_PRIORITY );
+}
+
+static void prvStartCountSem( void )
+{
+    vStartCountingSemaphoreTasks();
+}
+
+static void prvStartRecMutex( void )
+{
+    vStartRecursiveMutexTasks();
+}
+
+static void prvStartBlockTim( void )
+{
+    vCreateBlockTimeTasks();
+}
+
+static void prvStartQPeek( void )
+{
+    vStartQueuePeekTasks();
+}
+
+static void prvStartGenQTest( void )
+{
+    vStartGenericQueueTasks( harnessGENQ_PRIORITY );
+}
+
 static const Scenario_t xScenarios[] =
 {
-    { "dynamic", prvStartDynamic, xAreDynamicPriorityTasksStillRunning },
+    { "dynamic",  prvStartDynamic,  xAreDynamicPriorityTasksStillRunning   },
+    { "PollQ",    prvStartPollQ,    xArePollingQueuesStillRunning          },
+    { "BlockQ",   prvStartBlockQ,   xAreBlockingQueuesStillRunning         },
+    { "semtest",  prvStartSemTest,  xAreSemaphoreTasksStillRunning         },
+    { "countsem", prvStartCountSem, xAreCountingSemaphoreTasksStillRunning },
+    { "recmutex", prvStartRecMutex, xAreRecursiveMutexTasksStillRunning    },
+    { "blocktim", prvStartBlockTim, xAreBlockTimeTestTasksStillRunning     },
+    { "QPeek",    prvStartQPeek,    xAreQueuePeekTasksStillRunning         },
+    { "GenQTest", prvStartGenQTest, xAreGenericQueueTasksStillRunning      },
 };
 
 static const Scenario_t * pxScenario = NULL;

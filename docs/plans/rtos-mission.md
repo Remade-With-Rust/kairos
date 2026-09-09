@@ -70,7 +70,7 @@ tool, 839 lines; `gen-sibling-patches.py`, 173 lines; the package template).
 | package | layer | status (`KAIROS.toml`) | proven on the host | on a chip / emulator |
 |---|---|---|---|---|
 | `rusty_rtos_core` | 0 | K0 types (private) | 34 tests, 8 bare-metal rungs, Miri on the unit tests, deny + audit clean (2026-09-09) | — |
-| `rusty_rtos_kernel` | 1 | **K1 scheduler** (private) | `dynamic` trace-identical to the C kernel for 100,000 ticks, counters equal (2026-09-09); Miri green; fleet gate on 8 rungs | — |
+| `rusty_rtos_kernel` | 1 | **K1 scheduler, passed** (private) | all nine K1 scenarios trace-identical to the C kernel for 100,000 ticks, counters equal (2026-09-09); Miri green over the corpus; fleet gate on 8 rungs | — |
 | `rusty_rtos_port` | 1 | **K1 sim port** (private) | the deterministic sim port implements the sim contract v1; Miri green; fleet gate (2026-09-09) | — |
 | `rusty_rtos_heap` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
 | `rusty_rtos_json` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
@@ -80,7 +80,7 @@ tool, 839 lines; `gen-sibling-patches.py`, 173 lines; the package template).
 | `rusty_rtos_sntp` | 1 | planned | — | — |
 | `rusty_rtos_tcp` | 1 | planned | — | — |
 | `rusty_rtos_pkcs11`, `_cellular`, `_fat`, `_posix`, `_cli`, `_mpu` | 1 | planned (after 1.0 of the kernel) | — | — |
-| `rusty_rtos_demo` | 2 | **K1 corpus, 1 of 9** (private, standard tier) | `dynamic` remade and trace-identical; the runner, the trace sink and `kairos conform` (2026-09-09) | — |
+| `rusty_rtos_demo` | 2 | **K1 corpus, 9 of 9** (private, standard tier) | `dynamic`, `PollQ`, `BlockQ`, `semtest`, `countsem`, `recmutex`, `blocktim`, `QPeek`, `GenQTest` remade and trace-identical; the runner, the trace sink and `kairos conform` (2026-09-09) | — |
 | `rusty_rtos-capi` | 2 | scaffold (private) | fleet gate (2026-09-09) | — |
 | `kairos` (fleet tool) | 2 | K0 (in the umbrella `Remade-With-Rust/kairos`, private) | status / check / new / patches / harden / deploy / secrets / oracle all exercised in K0; `oracle trace dynamic` reproducible | — |
 
@@ -519,29 +519,42 @@ the box, so the seven dependents' CI cannot fetch the private core until
 `kairos secrets` is run. The kill test is therefore **passed locally, CI
 pending the owner**.
 
-**K1 — the scheduler agrees with the C kernel (2026-09-09).** The first
-scenario of the conformance corpus, `dynamic`, produces a trace **identical
-to the C kernel's for 100,000 ticks** — 1,219,231 lines, the counters
-included (umbrella `docs/LEDGER.md`). That is the K1 kill test for one
-scenario; eight remain, and each is the same command:
+**K1 — the scheduler agrees with the C kernel (2026-09-09). Passed.** All
+nine scenarios of the conformance corpus produce traces **identical to the C
+kernel's for 100,000 ticks each** — 8,408,764 lines, the counters included
+(umbrella `docs/LEDGER.md`). One command is the whole gate:
 
 ```sh
-kairos conform dynamic --ticks 100000
+kairos conform --all --ticks 100000
 ```
+
+`dynamic`, `PollQ`, `BlockQ`, `semtest`, `countsem`, `recmutex`, `blocktim`,
+`QPeek`, `GenQTest`. Between them they exercise dynamic priorities and
+suspension, polled and blocking queues, binary and counting semaphores,
+mutexes with priority inheritance and their recursive variant, block times
+to the tick, peeking and the order four priorities wake in, both ends of a
+queue, and `xTaskAbortDelay` dragging a blocked task off a mutex so its
+holder has to disinherit down to whoever is still waiting rather than to its
+own base priority.
 
 What exists behind it: `rusty_rtos_port`'s deterministic sim port (sim
 contract v1); `rusty_rtos_kernel`'s scheduler — ready lists, both delayed
 lists, pending-ready and suspended, the tick, the context switch, queues
-with their two event lists, and `vTaskDelay` / `vTaskSuspend` /
-`vTaskResume` / `vTaskPrioritySet` / `vTaskSuspendAll` / `xTaskResumeAll`
-following the C control flow statement for statement; `rusty_rtos_demo`'s
-runner, trace sink and the `dynamic` tasks as resumable state machines; and
-`kairos conform`, the gate. Miri is green on the kernel and the port.
+with their two event lists, semaphores, mutexes with inheritance and
+disinheritance-after-timeout, and `vTaskDelay` / `vTaskSuspend` /
+`vTaskResume` / `vTaskPrioritySet` / `vTaskSuspendAll` / `xTaskResumeAll` /
+`xTaskAbortDelay` following the C control flow statement for statement;
+`rusty_rtos_demo`'s runner, trace sink and 34 demo tasks as resumable state
+machines; and `kairos conform`, the gate. Miri is green on the core, the
+kernel, the port, and over all nine scenarios.
 
-Not done in K1: the other eight scenarios, the Kani harnesses for the CBMC
-proof list (K2's), and the arena-and-list cost row — which needs a
-measurement arm the family does not have yet and is therefore K3's, with
-the first silicon.
+The arena-and-list cost row is taken too, and it is the one number that did
+not come out where the plan hoped: **2.08×** the C list, against a 1.25×
+revisit line. §5.2 item 2 is therefore open, with the three ways out and the
+diagnosis in the ledger.
+
+Not done in K1: the Kani harnesses for the CBMC proof list (K2's), and
+anything on silicon (K3's).
 
 **K0 checklist** (the family exists — the kill test is a clean clone of any
 package building alone with green CI):
@@ -686,7 +699,9 @@ the C arm of the QEMU A/B.
 | 6 | QEMU `mps2-an505` (Cortex-M33) | K8 MPU / TrustZone | install |
 | 7 | a Cortex-M4F board + probe | K3 on real Cortex-M silicon; FPU lazy stacking | buy |
 
-**Rows** — [ ] K1 arena-list cost vs C list (host counts) · [ ] K3 context
+**Rows** — [x] K1 arena-list cost vs C list (host counts): 46.45 vs 22.32
+instructions per list operation, 2.08×, callgrind under WSL2
+(`bench/list-cost/run.sh`, 2026-09-09) · [ ] K3 context
 switch cycles M3-qemu, RV32-qemu, C6 · [ ] K3 tick ISR cycles · [ ] K3
 ISR-to-task latency · [ ] K3 flash + RAM per profile vs the C map · [ ] K4
 `heap_4` differential trace · [ ] K5 S1 on Kairos vs esp-rtos · [ ] K5 Xtensa
@@ -715,7 +730,7 @@ reused.
 | `esp-radio-rtos-driver` adapter on a non-esp-rtos scheduler | esp-rs (docs / a reference impl) | not filed | K5 opens it if the trait's contract is under-documented |
 | `rusty_alloc` `prim::fixed` on Cortex-M (small-metal was measured on the S3 only) | rusty_alloc | not filed | K4's `heap_3` seam on the M3 cell |
 | `rusty_time` `no_std` leaf for the SNTP client: `rusty_time-core` 0.1.10 carries the `no-std` category but has no `#![no_std]` (it needs `std` on `thumbv7em` / `riscv32imac`, measured 2026-09-09 in `tools/house-gate`) | rusty_time | drafted (`docs/upstream/rusty_time-no-std-leaf.md`), not filed | decides §5.5 item 4; until it lands, `rusty_rtos_sntp` is a coreSNTP remake |
-| `rusty_zstd` 0.2.3 `no_std + alloc` uses `core::sync::atomic::AtomicU64`, absent on 32-bit bare metal (`thumbv7em`, `riscv32imac`); wasm and 64-bit hosts are fine | rusty_zstd | drafted (`docs/upstream/rusty_zstd-atomic-u64.md`), not filed | on-chip compression (OTA, trace capture) waits for it; the fleet tool uses rusty_zstd on the host today |
+| ~~`rusty_zstd` 0.2.3 `no_std + alloc` uses `core::sync::atomic::AtomicU64`~~ | rusty_zstd | **resolved upstream in 0.2.5**, never filed; re-measured 2026-09-09 (`gate-zstd` exit 0 on both bare-metal targets), house-gate pin moved to `=0.2.5` | on-chip compression (OTA, trace capture) is unblocked; the fleet tool still links 0.2.3 on the host, which is a pin to align, not a blocker |
 | `rusty_erasure-core` 0.4.0 imports `AtomicU64` in its `no_std` build; same 32-bit gap | rusty_erasure | drafted (`docs/upstream/rusty_erasure-atomic-u64.md`), not filed | nothing in Kairos v1 needs it; recorded so the ladder is honest |
 | smoltcp: any API gap the +TCP surface needs (e.g. socket-set sizing from a `Config`) | smoltcp | not filed | K7 |
 | FreeRTOS upstream: a deterministic-tick option for the Posix port (our oracle patch) | FreeRTOS-Kernel | not filed | the patch stays in-tree either way |
@@ -727,9 +742,16 @@ reused.
    unrelated crate, which only affects the tool (`kairos-cli`, never
    published). Alternatives: keep `rusty_rtos` for everything.
 2. **Arena lists vs intrusive lists** (§2.5). Decided for the arena; the K1
-   ledger row is the revisit condition (a cost above 1.25× the C list on the
-   ready-list ops re-opens it as a fenced `-core-unsafe` twin, gated by the
-   same trace).
+   ledger row was the revisit condition, and **it has fired**: 46.45
+   instructions per list operation against `list.c`'s 22.32, or 2.08×,
+   where 1.25× was the line. The row also says where the cost is, and it is
+   not the index arithmetic — it is a branch and a bounds check on every
+   link access, several of them re-validating a handle the same call already
+   validated. So the choice is three ways, not two: reaffirm the decision
+   with this price written down; spend a K2 task on the two changes the
+   ledger names (end markers in the item array, validate once per call) and
+   re-run `bench/list-cost/run.sh`; or open the fenced `-core-unsafe` twin
+   gated by the same nine traces. The first two keep `forbid(unsafe)`.
 3. **The +TCP engine.** smoltcp as the engine with the FreeRTOS-shaped API
    above it (recommended: pure Rust, `no_std`, heap-free, already the engine
    under embassy-net), versus a from-scratch remake for a 1:1 code map.
@@ -756,7 +778,7 @@ reused.
 | phase | kill test | state |
 |---|---|---|
 | **K0 family** | a clean clone of any package builds alone and its CI is green; the C oracle produces an identical trace twice | **passed locally 2026-09-09** (8 repos, fleet gate green on the box; `dynamic` trace identical twice); CI green pending the owner's Actions billing and `kairos secrets` |
-| **K1 scheduler on sim** | nine demo scenarios trace-identical to the C kernel for 100 000 ticks; counters equal; Miri green; the arena-list cost row | **1 of 9 passed 2026-09-09** — `dynamic`: 1,219,231 lines identical at 100 000 ticks, ticks/yields/exits equal, Miri green. Eight scenarios open; the cost row moves to K3 with the first measurement arm |
+| **K1 scheduler on sim** | nine demo scenarios trace-identical to the C kernel for 100 000 ticks; counters equal; Miri green; the arena-list cost row | **passed 2026-09-09** — nine of nine, 8,408,764 lines identical at 100 000 ticks, ticks/yields/exits equal on every one; Miri green over the whole corpus; the cost row taken and **2.08×**, which fires §2.5's revisit condition (`docs/LEDGER.md`) |
 | **K2 IPC + timers** | the remaining demo scenarios trace-identical; Kani harnesses for the CBMC proof list pass; no-panic property test; mutants score ledgered | open |
 | **K3 silicon + QEMU** | the full corpus check task passes one hour on M3-qemu, RV32-qemu and a C6; context switch / tick / latency cycle rows vs the C demo; flash + RAM decomposition | open |
 | **K4 heaps** | `heap_4` differential trace matches C; `StaticAllocation` on every cell; RAM table per profile | open |
@@ -803,6 +825,9 @@ A number in our favour gets the arm-duration and work-parity checks first
 | 2026-09-09 | The taxonomy: `rusty_rtos_{core, kernel, port, heap, mpu, tcp, mqtt, http, json, sntp, backoff, pkcs11, cellular, fat, posix, cli}` + `rusty_rtos_demo` + `rusty_rtos-capi` + `kairos`. One package per FreeRTOS LTS repository; Labs after 1.0; AWS libraries never. |
 | 2026-09-09 | **The C kernel's trace is the oracle.** FreeRTOS-Kernel V11.3.1 on its Posix port with a deterministic tick, every `trace*` macro printing a line, is the reference; our kernel's `Trace` seam prints the same line; a demo scenario is conformant when the traces diff clean. The standard demo tasks are the corpus; the CBMC/VeriFast proofs are the Kani/loom list. |
 | 2026-09-09 | **Handles are indices, never pointers.** Every kernel object lives in an arena; lists are index-linked; the core is `forbid(unsafe)`. The revisit condition is a K1 ledger row above 1.25× the C list cost. |
+| 2026-09-09 | **The revisit condition fired.** The K1 row is 2.08× (46.45 vs 22.32 instructions per list operation, callgrind, `bench/list-cost/run.sh`). The decision above is therefore open, as §5.2 item 2 sets out; it is the owner's to close and nothing downstream assumes either answer. |
+| 2026-09-09 | **A switched-out call's tail belongs to its task, not to the clock.** A thread stops at the switch; a stackless call runs to the end of the frame the scheduler abandoned. The port stops counting that tail's critical-section exits as sim time and tallies them (`Port::begin_unwind` / `end_unwind`); the kernel replays the tally when the task next runs. Counting rather than discarding is load-bearing: a tail can open a section of its own, and `xQueueReceive`'s timeout path does. |
+| 2026-09-09 | **The C heap's cost is a config fact, not a kernel one.** Every `heap_N.c` suspends the scheduler around `malloc`, so creating a kernel object after the scheduler starts costs one more outermost exit on the C side. `Config::DYNAMIC_ALLOCATION` says whether a configuration mirrors such a kernel: true for the Posix demo, false for silicon, where this kernel allocates nothing and the exit is not there to spend. |
 | 2026-09-09 | `unsafe` lives only in `rusty_rtos_port-*` (context switch, vectors, registers) and `rusty_rtos-capi` (validated FFI), fenced per block, inventoried in `UNSAFE.md`, counted per release. |
 | 2026-09-09 | The config is a type: geometry as associated consts, subsystems as cargo features, hooks as a trait, ISR-ness as a token; every knob classified in `docs/CONFIG-MAP.md`; `parameterizing-a-constant` governs every test. |
 | 2026-09-09 | Ports in v1: sim, posix, cortex-m (M0/M3/M4F/M7/M33 NTZ), riscv (RV32 + esp-hal C6/P4), xtensa (ESP32/S3, local gate). The legacy ports and AArch64 are never / later. |
@@ -822,7 +847,7 @@ A number in our favour gets the arm-duration and work-parity checks first
 | 2026-09-09 | **Critical nesting is per task, and its exits are deferred, not lost.** Three facts about the C Posix port that a stackless kernel has to state explicitly, each found by a trace diff: a task's first switch-in resets the nesting (`prvWaitForStart`); nesting is saved and restored across a switch (`prvSwitchThread`), so an abandoned frame's exits are paid when the task runs again; and the tick handler's nesting bump is a raw `++`/`--`, never `vPortExitCritical`, so it must not create an owed exit. On the sim these are not bookkeeping — an outermost critical-section exit *is* the clock, so getting them wrong moves every tick. |
 | 2026-09-09 | **`KAIROS_TRACE_EXITS` is part of the conformance toolkit.** Both the C harness and the Rust sink can add a ` #<exits>` column, and `kairos conform --exits` compares it. The events agreed for 1,598 lines after the sim-time accounting had already drifted, so the event diff names the symptom and the column names the cause. Off by default: a trace with the column is not the contract's format. |
 | 2026-09-09 | **Sibling patching stays a `[patch]` table, not a `paths` override.** A `paths` override leaves `Cargo.lock` in its standalone form, which is why it was tried; cargo refuses to let one alter a package's dependency list, and every Kairos sibling is a facade over a `-core` crate, so the facade's own dependency is altered the moment both are overridden ("in the future this message will become a hard error"). The rule that keeps `[patch]` honest: the committed lockfile is the standalone one, `--locked` is a standalone check, and `kairos patches` emits a row only for a crate the graph actually names — reaching through a facade to its core, which patching the facade alone would silently leave on the published version. |
-| 2026-09-09 | **The house stack is validated by a compile gate, not a reading.** `tools/house-gate` in the umbrella checks every house crate Kairos could consume, at its pin, `no_std` on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf` and on the host, under the Kairos `deny.toml`. Verdicts of 2026-09-09 in `docs/HOUSE-STACK.md`: ready on bare metal — `rusty_alloc-api` 2.0.4 (with `--cfg ra_single_threaded --cfg ra_small_profile`), `rusty_symbols` 0.1.0, `thoth` v0.3.0 (git tag, `default-features = false`), `rusty_json_turbo` 0.1.0 (git; lib `serde_json`); host-only today — `rusty_zstd` 0.2.3 and `rusty_erasure-core` 0.4.0 (`AtomicU64`), `rusty_time-core` 0.1.10 and `rusty_xml` 0.8.1 (`std`); out of scope for an RTOS — SpaceDB, FFAI, remade_ffmpeg_rs, rusty_maps (their closures resolve clean of C and of banned crates). Four crates.io names are imposters and are banned by name in every `deny.toml`: `rusty_time`, `rff`, `thoth`, `spacedb`. |
+| 2026-09-09 | **The house stack is validated by a compile gate, not a reading.** `tools/house-gate` in the umbrella checks every house crate Kairos could consume, at its pin, `no_std` on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf` and on the host, under the Kairos `deny.toml`. Verdicts of 2026-09-09 in `docs/HOUSE-STACK.md`: ready on bare metal — `rusty_alloc-api` 2.0.4 (with `--cfg ra_single_threaded --cfg ra_small_profile`), `rusty_symbols` 0.1.0, `thoth` v0.3.0 (git tag, `default-features = false`), `rusty_json_turbo` 0.1.0 (git; lib `serde_json`); `rusty_zstd` 0.2.5 (0.2.3 failed on `AtomicU64`; re-measured the same day at 0.2.5, which passes on both bare-metal targets, and the pin moved); host-only today — `rusty_erasure-core` 0.4.0 (`AtomicU64`), `rusty_time-core` 0.1.10 and `rusty_xml` 0.8.1 (`std`); out of scope for an RTOS — SpaceDB, FFAI, remade_ffmpeg_rs, rusty_maps (their closures resolve clean of C and of banned crates). Four crates.io names are imposters and are banned by name in every `deny.toml`: `rusty_time`, `rff`, `thoth`, `spacedb`. |
 | 2026-09-09 | `rusty_rtos_json` is the coreJSON API (zero-allocation validator + `JSON_Search`); `rusty_json_turbo` (the house serde_json) is the typed layer behind a `serde` feature under `alloc`. One job, one parser each; the json package plan carries the row. |
 | 2026-09-09 | The allocator seam has both halves: `rusty_rtos_alloc` with `std` (default) for hosted deliverables, and `--no-default-features` under `--cfg ra_single_threaded --cfg ra_small_profile` for firmware, checked on the four bare-metal targets by CI and by `kairos check` (`cfgs` in `KAIROS.toml`). The fixed `Region` and `heap_3` wiring stay K4's. |
 | 2026-09-09 | **The fleet tool consumes the house stack it validates**: `rusty_alloc` through the seam, `thoth` v0.3.0 for the status glyphs, `rusty_json_turbo` for `status --json`, `rusty_zstd` for the stored oracle traces (`<scenario>.trace.zst`, level 19, decompressed and compared before it is kept, `oracle cat` to read). Every stored trace is therefore a zstd frame from the day the corpus exists (K1 diffs against `kairos oracle cat`). What Kairos wants on bare metal and cannot have yet is `docs/plans/build-me-bare.md`. |
@@ -867,7 +892,7 @@ esp-bootloader-esp-idf 0.6.0, esp-storage 0.10.0, esp-idf-svc 0.52.1,
 esp-idf-sys 0.37.2, cortex-m 0.7.9, cortex-m-rt 0.7.6, riscv 0.16.1,
 riscv-rt 0.18.0, heapless 0.9.3, critical-section 1.2.0, portable-atomic
 1.15.0, defmt 1.1.1, embedded-alloc 0.7.0, freertos-rust 0.2.0 (C bindings —
-a comparison arm, never a dependency), rusty_alloc 2.0.4, rusty_zstd 0.2.3,
+a comparison arm, never a dependency), rusty_alloc 2.0.4, rusty_zstd 0.2.5 (the fleet tool still links 0.2.3),
 mid-verify 0.1.0, spacedb-sdk 0.6.0, loom 0.7.2, kani-verifier 0.67.0,
 proptest 1.11.0, cargo-mutants 27.1.0, cargo-deny 0.20.2, cargo-vet 0.10.2,
 cargo-geiger 0.13.0, cargo-audit 0.22.2. Neither Embassy (an async executor)

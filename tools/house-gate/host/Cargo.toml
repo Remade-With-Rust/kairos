@@ -12,4 +12,4 @@ ffai-core = { version = "=0.7.1" }
 rusty_time-core = { version = "=0.1.10" }
 rusty_xml = { version = "=0.8.1" }
 rusty_erasure = { version = "=0.4.0" }
-rusty_zstd = { version = "=0.2.3" }
+rusty_zstd = { version = "=0.2.5" }

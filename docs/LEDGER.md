@@ -10,16 +10,29 @@ pinning and the arm order for anything timed. Nothing here is timed yet.
 
 ## Conformance — the Rust kernel against the C kernel (2026-09-09, K1)
 
-The headline: **`rusty_rtos_kernel` reproduces the C kernel's trace exactly**
-for the `dynamic` scenario, for 100,000 ticks, including the counters.
+The headline: **`rusty_rtos_kernel` reproduces the C kernel's trace exactly**,
+for all nine scenarios of the K1 corpus, for 100,000 ticks each, counters
+included. 8,408,764 lines of agreement, and not a sample among them.
+
+| scenario | lines identical at 100,000 ticks | ticks | yields | exits |
+|---|---|---|---|---|
+| `dynamic` | 1,219,231 | 100000 | 179588 | 1066689 |
+| `PollQ` | 117,417 | 100051 | 2056 | 105608 |
+| `BlockQ` | 1,344,460 | 100011 | 195466 | 1282272 |
+| `semtest` | 1,503,634 | 100000 | 64837 | 1163649 |
+| `countsem` | 966,326 | 100000 | 21001 | 1280002 |
+| `recmutex` | 1,385,862 | 100000 | 40923 | 1068657 |
+| `blocktim` | 131,384 | 100062 | 4505 | 114313 |
+| `QPeek` | 486,871 | 100000 | 88964 | 414030 |
+| `GenQTest` | 1,253,579 | 100000 | 150435 | 1299809 |
 
 | fact | value | method |
 |---|---|---|
-| `dynamic`, 100,000 ticks | **1,219,231 lines identical**, the verdict line included | `kairos conform dynamic --ticks 100000`: runs `rusty_rtos_demo`'s sim (release) and the instrumented C oracle, compares line for line, and fails at the first difference. Not a sample and not a summary — every line |
-| counters at 100,000 ticks | ticks 100000, yields 179588, exits 1066689, lines 1219230 — identical on both sides | the harness's `KAIROS_RESULT` line, from the patched port's counters on the C side and `SimPort`'s on ours |
-| `dynamic`, 2000 ticks | 24,403 lines identical | `kairos conform dynamic` (the default length); the same run stored as `oracle/traces/dynamic.trace.zst` |
-| counters at 2000 ticks | ticks 2000, yields 3589, exits 21346, lines 24402 | as above; pinned as a test in `rusty_rtos_demo` (`tests/conformance.rs`) with an FNV-1a/64 digest of the trace, so drift fails without a C toolchain |
-| corpus covered | 1 scenario of 9 (`dynamic`) | the other eight are written as they are ported; the gate is the same command |
+| the gate | `kairos conform --all --ticks 100000` | runs `rusty_rtos_demo`'s sim (release) and the instrumented C oracle, compares line for line, and fails at the first difference. Not a sample and not a summary — every line, the verdict line included |
+| counters | ticks, yields, exits and line counts identical on both sides, every scenario | the harness's `KAIROS_RESULT` line, from the patched port's counters on the C side and `SimPort`'s on ours |
+| the same nine at 2000 ticks | identical, and stored | `kairos oracle trace --all`: each scenario run twice on the C kernel, refused unless byte-identical, kept as `oracle/traces/<scenario>.trace.zst` (rusty_zstd level 19, round trip verified) |
+| offline regression | all nine pinned by counters, line count, byte count and an FNV-1a/64 digest **of the C kernel's own trace file** | `rusty_rtos_demo`'s `tests/conformance.rs`; it fails on drift without a C toolchain, which is what CI has. Poisoning one pinned number fails the test, so the gate is not vacuous |
+| Miri over the corpus | green: all nine scenarios, twice each, at 20 ticks | `cargo +nightly miri test` in `rusty_rtos_demo`, 13 minutes; this is what puts the arenas and the lists through an interpreter that checks them, rather than 11 unit tests |
 
 **What "identical" means here.** The trace is one line per scheduling
 decision — task create, switch in and out, tick, delay, suspend, resume,
@@ -29,13 +42,12 @@ tick each line carries. Sim time on both sides is a count of outermost
 critical-section exits (`ORACLES.md`, sim contract v1), so agreeing on the
 trace means agreeing on *when* as well as *what*.
 
-**What it does not mean.** Nothing here has run on a chip, nothing is
-timed, and the Rust kernel does not switch stacks — on the sim a task is a
+**What it does not mean.** Nothing here has run on a chip and nothing is
+timed. The Rust kernel does not switch stacks — on the sim a task is a
 resumable state machine and the runner drives it, which is what lets the
-kernel be `forbid(unsafe)`. The arena-and-list cost row K1 also asks for is
-not taken yet; the port's context switch is K3's.
+kernel be `forbid(unsafe)`. The port's context switch is K3's.
 
-### Three things the C port does that a stackless kernel has to say out loud
+### Five things the C port does that a stackless kernel has to say out loud
 
 Each cost a diff, and each is now a named mechanism rather than a fudge:
 
@@ -52,8 +64,29 @@ Each cost a diff, and each is now a named mechanism rather than a fudge:
    raw `uxCriticalNesting++`/`--`, never `vPortExitCritical`, so it must not
    create an owed exit. Modelling it as one invented a tick at every switch
    the tick itself caused.
+4. **A thread stops at the switch; a stackless call does not.** The frame
+   the scheduler switched away from is still on the machine and runs to its
+   end — closing the sections it had open *and*, on some paths, opening one
+   more. `xQueueReceive`'s timeout path calls `prvIsQueueEmpty` after the
+   `xTaskResumeAll` that may have switched the caller out, and on the C side
+   that section is charged to the task when it next runs. So the port stops
+   counting the tail's exits as sim time and *tallies* them
+   (`Port::begin_unwind` / `end_unwind`), and the kernel replays the tally
+   on resume. Counting rather than discarding is the whole point: an earlier
+   version discarded exactly the sections that were open, which was right
+   until a tail opened one of its own. It cost `blocktim` a divergence that
+   the totals hid completely — ticks, yields, exits and line count all
+   agreed at 59,000 ticks while one exit sat 1,377 lines too early.
+5. **The heap costs time.** Every `heap_N.c` wraps its `malloc` in
+   `vTaskSuspendAll()` / `xTaskResumeAll()`, and `xTaskResumeAll` is a
+   critical section. So on the C side creating a queue *after* the scheduler
+   has started costs one more outermost exit than creating it before. This
+   kernel allocates nothing, so it spends the exit deliberately, under
+   `Config::DYNAMIC_ALLOCATION` — true for the Posix demo configuration,
+   false for silicon, where the exit is not there to spend. `GenQTest`
+   creates a mutex from a running task, and that is where it showed up.
 
-The debugging tool that found all three: `KAIROS_TRACE_EXITS=1` on both
+The debugging tool that found all five: `KAIROS_TRACE_EXITS=1` on both
 sides adds a ` #<exits>` column to every trace line, and `kairos conform
 --exits` compares them. The events agreed for 1,598 lines after the
 accounting had already drifted, so the column is the diagnosis and the event
@@ -83,5 +116,64 @@ plan §8), and why the `trace` verb now runs under `timeout 300` and
 |---|---|---|
 | `rusty_rtos_core` passes the fleet gate | yes | `kairos check rusty_rtos_core --fmt --clippy --test --deny`: fmt, clippy `-D warnings` under the workspace lint policy, 34 host tests, `cargo deny check` (advisories, bans, licenses, sources all ok), then `cargo check` on `thumbv7em-none-eabihf`, `thumbv8m.main-none-eabihf`, `riscv32imac-unknown-none-elf`, `riscv32imafc-unknown-none-elf` with and without `alloc` (8 rungs) |
 | `rusty_rtos_kernel`, `_port`, `_demo` pass the fleet gate | yes | the same command; each also checked on the four bare-metal targets, `no_std` and `no_std + alloc` |
-| Miri | green on `rusty_rtos_kernel` and `rusty_rtos_port` unit tests | `cargo +nightly miri test --lib`, miri 0.1.0 of 2026-09-08 |
+| Miri | green on `rusty_rtos_core`, `_kernel` and `_port` unit tests, and on all nine corpus scenarios | `cargo +nightly miri test --workspace` in each; the corpus run is `rusty_rtos_demo`'s determinism test, which drops to 20 ticks under `cfg!(miri)` so the interpreter can finish (13 minutes) |
 | `cargo audit` on `rusty_rtos_core` | 0 advisories over 17 locked crates | advisory-db of 2026-09-09 (1243 advisories) |
+
+## The arena-and-list cost row (2026-09-09, K1)
+
+Mission plan §2.5 chose index-linked lists over pointer-linked ones so the
+core could be `forbid(unsafe)`, and wrote down the price of being wrong: a
+K1 ledger row above **1.25×** the C list cost reopens the decision. Here is
+the row. **It is 2.08×, and the revisit condition has fired.**
+
+| arm | instructions per list operation | vs C |
+|---|---|---|
+| `FreeRTOS-Kernel/list.c`, gcc 15.2 `-O2` | **22.32** | 1.00× |
+| the same, gcc 15.2 `-O3` | 21.82 | 0.98× |
+| `rusty_rtos_core::list`, rustc 1.98 release (opt-level 3, LTO, one codegen unit) | **46.45** | **2.08×** |
+
+**Method** — `bench/list-cost/run.sh`, one command, on WSL2 Ubuntu on this
+Windows 11 host. It is not timed: instructions are counted with callgrind,
+which is deterministic, so there is no noise floor to argue about and no
+reason to interleave the arms.
+
+- **Work-count parity, enforced.** Both arms run the same 40 operations per
+  round on 8 items — 8 appends to a ready list, 8 round-robin picks, 8
+  removals, 8 ordered inserts into a delayed list, 8 more removals — which
+  is the mix `prvAddTaskToReadyList`, `taskSELECT_HIGHEST_PRIORITY_TASK` and
+  `prvAddCurrentTaskToDelayedList` actually make. Both sort the same
+  pseudo-random values from the same xorshift, spelled the same way.
+- **A correctness gate.** Each arm prints a checksum of every value its list
+  operations returned. They match (`7de9075f4deb23e5`), and the script stops
+  if they ever do not: two instruction counts of two different programs are
+  not a comparison.
+- **The cost is a slope, not a count.** Each arm is counted at 100k, 200k
+  and 300k rounds and the cost of a round is the difference, so process
+  start-up, the dynamic loader, libc and the final `printf` cancel exactly
+  instead of being estimated away. The second difference is printed as the
+  linearity check: −8,756 on 89M for C and −32,213 on 186M for Rust, that
+  is 0.01% and 0.017%, so the counts are affine in the round count and the
+  slope is a slope.
+- The C arm compiles `FreeRTOS-Kernel/list.c` unmodified, from the pinned
+  V11.3.1 checkout.
+
+**Where the 24 extra instructions go.** Not to the index arithmetic. Every
+link the C follows with one dereference costs us a branch (is this link an
+item or a list's end marker?) plus a bounds check plus the load, and there
+are about five link accesses in each of `insert_end`, `remove` and
+`insert` — several of them re-validating a handle the same call already
+validated. Two changes are visible from here, neither of which touches the
+decision itself: put the end markers in the same array as the items so the
+branch disappears, and validate a handle once per call rather than once per
+access.
+
+**What this row does and does not say.** It is a static count of one data
+structure on x86-64, not a scheduler benchmark and not a number from a chip:
+it says nothing about how often these operations run, about cache behaviour,
+or about what a Cortex-M4 makes of the same code. The scheduler-level
+figure — what a context switch costs end to end — is K3's, with the first
+silicon and an A/B against the C kernel on the same board. **The decision is
+the owner's:** the plan's condition has fired, so §2.5's "handles are
+indices, never pointers" gets a decision-log row, either reaffirming it with
+this price attached or funding the two changes above and re-running this
+same script.

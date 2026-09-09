@@ -50,10 +50,49 @@ struct Scenario {
     demo_files: &'static [&'static str],
 }
 
-const SCENARIOS: [Scenario; 1] = [Scenario {
-    name: "dynamic",
-    demo_files: &["FreeRTOS/Demo/Common/Minimal/dynamic.c"],
-}];
+const SCENARIOS: [Scenario; 9] = [
+    Scenario {
+        name: "dynamic",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/dynamic.c"],
+    },
+    Scenario {
+        name: "PollQ",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/PollQ.c"],
+    },
+    Scenario {
+        name: "BlockQ",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/BlockQ.c"],
+    },
+    Scenario {
+        name: "semtest",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/semtest.c"],
+    },
+    Scenario {
+        name: "countsem",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/countsem.c"],
+    },
+    Scenario {
+        name: "recmutex",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/recmutex.c"],
+    },
+    Scenario {
+        name: "blocktim",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/blocktim.c"],
+    },
+    Scenario {
+        name: "QPeek",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/QPeek.c"],
+    },
+    Scenario {
+        name: "GenQTest",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/GenQTest.c"],
+    },
+];
+
+/// One binary serves the whole corpus: the harness's table names every
+/// scenario, so building per scenario would compile the kernel seven times
+/// for seven identical binaries.
+const ORACLE_BIN: &str = "corpus";
 
 const KERNEL_SOURCES: [&str; 6] = [
     "tasks.c",
@@ -345,8 +384,13 @@ fn build(root: &Path, name: &str) -> Result<()> {
     sources.push("oracle/FreeRTOS-Kernel/portable/MemMang/heap_3.c".into());
     sources.push("oracle/harness/main.c".into());
     sources.push("oracle/harness/kairos_trace.c".into());
-    for f in sc.demo_files {
-        sources.push(format!("oracle/FreeRTOS/{f}"));
+    // Every scenario's demo file goes into every binary: the harness's
+    // table names them all, and one build serves the whole corpus.
+    let _ = sc;
+    for scenario in &SCENARIOS {
+        for f in scenario.demo_files {
+            sources.push(format!("oracle/FreeRTOS/{f}"));
+        }
     }
     let includes = [
         "oracle/harness",
@@ -362,7 +406,7 @@ fn build(root: &Path, name: &str) -> Result<()> {
     for s in &sources {
         cmd.push_str(&format!(" {s}"));
     }
-    cmd.push_str(&format!(" -o oracle/build/{name} -pthread"));
+    cmd.push_str(&format!(" -o oracle/build/{ORACLE_BIN} -pthread"));
     println!("$ {cmd}");
     let (ok, stdout, stderr) = host_shell(root, &cmd)?;
     print!("{stdout}");
@@ -372,9 +416,12 @@ fn build(root: &Path, name: &str) -> Result<()> {
     if !stderr.trim().is_empty() {
         println!("{}", stderr.trim_end());
     }
-    let bin = build_dir.join(name);
+    let bin = build_dir.join(ORACLE_BIN);
     let size = fs::metadata(&bin).map(|m| m.len()).unwrap_or(0);
-    println!("built oracle/build/{name} ({size} bytes)");
+    println!(
+        "built oracle/build/{ORACLE_BIN} ({size} bytes), serving {} scenario(s)",
+        SCENARIOS.len()
+    );
     Ok(())
 }
 
@@ -382,11 +429,9 @@ fn build(root: &Path, name: &str) -> Result<()> {
 
 fn trace(root: &Path, name: &str, ticks: u64) -> Result<()> {
     scenario(name)?;
-    let bin = root.join("oracle").join("build").join(name);
+    let bin = root.join("oracle").join("build").join(ORACLE_BIN);
     if !bin.is_file() {
-        return fail(format!(
-            "oracle/build/{name} is not built; run `kairos oracle build {name}`"
-        ));
+        return fail("oracle/build/corpus is not built; run `kairos oracle build`");
     }
     let traces = root.join("oracle").join("traces");
     fs::create_dir_all(&traces)?;
@@ -394,7 +439,7 @@ fn trace(root: &Path, name: &str, ticks: u64) -> Result<()> {
         // `timeout` and `ulimit -f` (1 GiB) keep a scenario that never
         // reaches max_ticks from filling the disk.
         let script = format!(
-            "ulimit -f 1048576; timeout 300 ./oracle/build/{name} {name} {ticks} 2> oracle/traces/{name}.trace{suffix}; echo exit=$?"
+            "ulimit -f 1048576; timeout 300 ./oracle/build/{ORACLE_BIN} {name} {ticks} 2> oracle/traces/{name}.trace{suffix}; echo exit=$?"
         );
         let (ok, stdout, stderr) = host_shell(root, &script)?;
         if !ok {
