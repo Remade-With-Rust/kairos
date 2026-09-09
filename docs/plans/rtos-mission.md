@@ -69,20 +69,20 @@ tool, 839 lines; `gen-sibling-patches.py`, 173 lines; the package template).
 
 | package | layer | status (`KAIROS.toml`) | proven on the host | on a chip / emulator |
 |---|---|---|---|---|
-| `rusty_rtos_core` | 0 | planned | — | — |
-| `rusty_rtos_kernel` | 1 | planned | — | — |
-| `rusty_rtos_port` | 1 | planned | — | — |
-| `rusty_rtos_heap` | 1 | planned | — | — |
-| `rusty_rtos_json` | 1 | planned | — | — |
-| `rusty_rtos_backoff` | 1 | planned | — | — |
+| `rusty_rtos_core` | 0 | K0 types (private) | 34 tests, 8 bare-metal rungs, Miri on the unit tests, deny + audit clean (2026-09-09) | — |
+| `rusty_rtos_kernel` | 1 | scaffold (private) | fleet gate: fmt, clippy, deny, 8 rungs (2026-09-09) | — |
+| `rusty_rtos_port` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
+| `rusty_rtos_heap` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
+| `rusty_rtos_json` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
+| `rusty_rtos_backoff` | 1 | scaffold (private, standard tier) | fleet gate (2026-09-09) | — |
 | `rusty_rtos_mqtt` | 1 | planned | — | — |
 | `rusty_rtos_http` | 1 | planned | — | — |
 | `rusty_rtos_sntp` | 1 | planned | — | — |
 | `rusty_rtos_tcp` | 1 | planned | — | — |
 | `rusty_rtos_pkcs11`, `_cellular`, `_fat`, `_posix`, `_cli`, `_mpu` | 1 | planned (after 1.0 of the kernel) | — | — |
-| `rusty_rtos_demo` | 2 | planned | — | — |
-| `rusty_rtos-capi` | 2 | planned | — | — |
-| `kairos` (fleet tool) | 2 | planned | — | — |
+| `rusty_rtos_demo` | 2 | scaffold (private, standard tier) | fleet gate (2026-09-09) | — |
+| `rusty_rtos-capi` | 2 | scaffold (private) | fleet gate (2026-09-09) | — |
+| `kairos` (fleet tool) | 2 | K0 (in the umbrella `Remade-With-Rust/kairos`, private) | status / check / new / patches / harden / deploy / secrets / oracle all exercised in K0; `oracle trace dynamic` reproducible | — |
 
 **Reference, pinned for this plan:** FreeRTOS-Kernel **V11.3.1** (released
 2026-08-21) as the kernel oracle; the **FreeRTOS 202604.01-LTS** set (kernel
