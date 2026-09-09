@@ -9,6 +9,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "FreeRTOS.h"
@@ -29,6 +30,26 @@ static unsigned long ulOrdinalCount[ 128 ]; /* per kind byte */
 static unsigned long ulOrdinalsUsed = 0UL;
 static unsigned long ulLines = 0UL;
 static int xBufferSet = 0;
+static int xShowExits = 0;
+
+/* The patched Posix port's outermost-exit counter (sim contract v1, rule 3). */
+extern unsigned long ulKairosExits;
+
+void kairos_trace_debug_init( void )
+{
+    xShowExits = ( getenv( "KAIROS_TRACE_EXITS" ) != NULL ) ? 1 : 0;
+}
+
+/* End the line, with the debug column when it is switched on. */
+static void prvTail( void )
+{
+    if( xShowExits != 0 )
+    {
+        fprintf( stderr, " #%lu", ulKairosExits );
+    }
+
+    fputc( '\n', stderr );
+}
 
 static void prvEnsureBuffer( void )
 {
@@ -100,7 +121,8 @@ static unsigned long prvTick( void )
 void kairos_trace_ev( const char * pcEvent )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s\n", prvTick(), pcEvent );
+    fprintf( stderr, "%lu %s", prvTick(), pcEvent );
+    prvTail();
     ulLines++;
 }
 
@@ -108,7 +130,8 @@ void kairos_trace_u( const char * pcEvent,
                      unsigned long ulArg )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s %lu\n", prvTick(), pcEvent, ulArg );
+    fprintf( stderr, "%lu %s %lu", prvTick(), pcEvent, ulArg );
+    prvTail();
     ulLines++;
 }
 
@@ -116,7 +139,8 @@ void kairos_trace_task( const char * pcEvent,
                         const char * pcName )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s %s\n", prvTick(), pcEvent, pcName );
+    fprintf( stderr, "%lu %s %s", prvTick(), pcEvent, pcName );
+    prvTail();
     ulLines++;
 }
 
@@ -125,7 +149,8 @@ void kairos_trace_task_u( const char * pcEvent,
                           unsigned long ulArg )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s %s %lu\n", prvTick(), pcEvent, pcName, ulArg );
+    fprintf( stderr, "%lu %s %s %lu", prvTick(), pcEvent, pcName, ulArg );
+    prvTail();
     ulLines++;
 }
 
@@ -135,7 +160,8 @@ void kairos_trace_task_iu( const char * pcEvent,
                            unsigned long ulArg )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s %s %ld %lu\n", prvTick(), pcEvent, pcName, lArg, ulArg );
+    fprintf( stderr, "%lu %s %s %ld %lu", prvTick(), pcEvent, pcName, lArg, ulArg );
+    prvTail();
     ulLines++;
 }
 
@@ -144,7 +170,8 @@ void kairos_trace_obj( const char * pcEvent,
                        const void * pvObject )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s %c%lu\n", prvTick(), pcEvent, cKind, prvOrdinalPerKind( cKind, pvObject ) );
+    fprintf( stderr, "%lu %s %c%lu", prvTick(), pcEvent, cKind, prvOrdinalPerKind( cKind, pvObject ) );
+    prvTail();
     ulLines++;
 }
 
@@ -154,7 +181,8 @@ void kairos_trace_obj_u( const char * pcEvent,
                          unsigned long ulArg )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s %c%lu %lu\n", prvTick(), pcEvent, cKind, prvOrdinalPerKind( cKind, pvObject ), ulArg );
+    fprintf( stderr, "%lu %s %c%lu %lu", prvTick(), pcEvent, cKind, prvOrdinalPerKind( cKind, pvObject ), ulArg );
+    prvTail();
     ulLines++;
 }
 
@@ -165,7 +193,8 @@ void kairos_trace_obj_uu( const char * pcEvent,
                           unsigned long ulArg2 )
 {
     prvEnsureBuffer();
-    fprintf( stderr, "%lu %s %c%lu %lu %lu\n", prvTick(), pcEvent, cKind, prvOrdinalPerKind( cKind, pvObject ), ulArg1, ulArg2 );
+    fprintf( stderr, "%lu %s %c%lu %lu %lu", prvTick(), pcEvent, cKind, prvOrdinalPerKind( cKind, pvObject ), ulArg1, ulArg2 );
+    prvTail();
     ulLines++;
 }
 

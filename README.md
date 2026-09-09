@@ -52,7 +52,7 @@ KAIROS.toml          the fleet manifest: every package, its kind, status, intend
                      crates, no_std crates, targets, the siblings it uses, its plan
 ORACLES.md           every pinned reference (FreeRTOS-Kernel V11.3.1, the 202604.01 LTS set), the
                      sim contract and the trace format
-tools/kairos/        the fleet tool (Rust): status · check · new · patches · harden · deploy · secrets · oracle;
+tools/kairos/        the fleet tool (Rust): status · check · new · patches · harden · deploy · secrets · oracle · conform;
                      on the house stack: rusty_alloc (seam), thoth (glyphs), rusty_json_turbo (--json), rusty_zstd (traces)
 tools/house-gate/    the house-stack compile gate: each house crate at its pin, no_std on the Kairos targets, under deny.toml
 oracle/harness/      the deterministic-tick patch and trace hooks for the C kernel (tracked);
@@ -84,6 +84,8 @@ tools/kairos/target/release/kairos oracle patch             # the deterministic-
 tools/kairos/target/release/kairos oracle build dynamic     # gcc under WSL (Windows) or cc (Linux); no CMake
 tools/kairos/target/release/kairos oracle trace dynamic     # run twice, refuse a differing trace, store oracle/traces/dynamic.trace.zst
 tools/kairos/target/release/kairos oracle cat dynamic       # the stored trace, decompressed, for a diff
+tools/kairos/target/release/kairos conform dynamic          # the K1 gate: the Rust kernel's trace against the C kernel's
+tools/kairos/target/release/kairos conform --all --exits    # every scenario, with the critical-section-exit column
 tools/kairos/target/release/kairos status --json            # the fleet table as JSON (the house serde_json)
 ```
 

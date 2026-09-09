@@ -23,4 +23,6 @@ kairos oracle patch            # the deterministic-tick patch, idempotent
 kairos oracle build dynamic    # gcc under WSL (Windows) or cc (Linux)
 kairos oracle trace dynamic --ticks 2000   # run twice, refuse a differing trace, store oracle/traces/dynamic.trace.zst (rusty_zstd, round-tripped)
 kairos oracle cat dynamic                  # the stored trace, decompressed to stdout (diff it against the kernel's)
+kairos conform dynamic --ticks 100000      # the K1 gate: this kernel against the Rust one, line for line
+KAIROS_TRACE_EXITS=1 ./oracle/build/dynamic dynamic 2000   # + the exit-count column both sides can print
 ```

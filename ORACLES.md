@@ -94,3 +94,14 @@ queues, event groups and stream buffers by a creation ordinal per kind
 event set for K1/K2 is the 42 macros in `oracle/harness/FreeRTOSConfig.h`,
 mirrored one for one by `rusty_rtos_core::trace::Event`; the other ~470 (the
 `traceENTER_*` / `traceRETURN_*` pairs) are NOT part of the contract.
+
+### The debug column
+
+With `KAIROS_TRACE_EXITS` set in the environment, **both** sides append
+` #<outermost critical-section exits>` to every line, and `kairos conform
+--exits` compares that too. It is off by default because a line with the
+column is not the contract's format — but it is how a divergence is
+actually diagnosed. Sim time is a count of those exits (rule 3), so a
+kernel can emit the right events for a long while after it has started
+disagreeing about *when*: on the first `dynamic` diff the events matched
+for 1,598 lines past the point where the accounting had drifted.

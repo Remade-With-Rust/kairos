@@ -283,7 +283,7 @@ fn wsl_path(p: &Path) -> String {
 }
 
 /// Run a shell command line on the oracle host: WSL on Windows, `sh` elsewhere.
-fn host_shell(cwd: &Path, script: &str) -> Result<(bool, String, String)> {
+pub(crate) fn host_shell(cwd: &Path, script: &str) -> Result<(bool, String, String)> {
     let output = if cfg!(windows) {
         let cd = wsl_path(cwd);
         Command::new("wsl")

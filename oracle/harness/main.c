@@ -116,6 +116,7 @@ int main( int argc,
         ulMaxTicks = strtoul( argv[ 2 ], NULL, 10 );
     }
 
+    kairos_trace_debug_init();
     pxScenario->pfnStart();
     xTaskCreate( prvCheckTask, "CHECK", configMINIMAL_STACK_SIZE, NULL, harnessCHECK_TASK_PRIORITY, NULL );
     vTaskStartScheduler();

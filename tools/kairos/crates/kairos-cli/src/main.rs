@@ -24,6 +24,7 @@
 //! Copied from Janus's `tools/janus` (2026-09-09) and grown; generalising the
 //! two into one binary is an upstream item in the mission plan.
 
+mod conform;
 mod harden;
 mod oracle;
 mod patches;
@@ -255,6 +256,46 @@ fn run_env(
     }
 }
 
+/// The package's `Cargo.lock`, if it is the one a **standalone clone**
+/// resolves — every sibling still carrying its `source = "git+..."` line.
+///
+/// Inside the umbrella every package patches its siblings to local paths
+/// (`kairos patches`), and a `[patch]` rewrites the lockfile: the patched
+/// crate loses its git source. That lockfile is useless to anyone else, and
+/// `Cargo.lock` is committed precisely so a fresh clone reproduces the
+/// build (hardening gate H-07). So `check` reads the good one before it
+/// runs cargo and puts it back afterwards
+/// ([`restore_standalone_lockfile`]) — the working tree is always left in
+/// the state that should be committed.
+fn standalone_lockfile(dir: &Path, package: &Package, manifest: &Manifest) -> Option<String> {
+    if package.uses.is_empty() {
+        return None;
+    }
+    let text = fs::read_to_string(dir.join("Cargo.lock")).ok()?;
+    for used in &package.uses {
+        let sibling = used.split('/').next().unwrap_or(used);
+        let url = format!("git+https://github.com/{}/{sibling}", manifest.kairos.org);
+        if !text.contains(&url) {
+            return None;
+        }
+    }
+    Some(text)
+}
+
+/// Put back the lockfile cargo rewrote, if it rewrote it.
+fn restore_standalone_lockfile(dir: &Path, before: Option<&String>) {
+    let Some(before) = before else {
+        return;
+    };
+    let lock = dir.join("Cargo.lock");
+    if fs::read_to_string(&lock).is_ok_and(|now| now == *before) {
+        return;
+    }
+    if fs::write(&lock, before).is_ok() {
+        println!("  restored the standalone Cargo.lock (the [patch] table had rewritten it)");
+    }
+}
+
 /// Does `crates/<krate>/Cargo.toml` declare `feature` under `[features]`?
 fn crate_has_feature(dir: &Path, krate: &str, feature: &str) -> bool {
     let manifest = dir.join("crates").join(krate).join("Cargo.toml");
@@ -481,6 +522,15 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
         }
         println!("== {} ==", package.name);
         ran += 1;
+        // Every cargo command below runs with the umbrella's `[patch]` table
+        // in place, which rewrites `Cargo.lock`. Keep the standalone one.
+        let lock_before = standalone_lockfile(&dir, package, manifest);
+        if lock_before.is_none() && !package.uses.is_empty() && dir.join("Cargo.lock").is_file() {
+            failures.push(format!(
+                "{}: Cargo.lock is not the standalone one — it was written with the umbrella's [patch] table in place, so a fresh clone cannot use it (hardening gate H-07). Restore it: `mv .cargo/config.toml .cargo/config.toml.off && cargo generate-lockfile && mv .cargo/config.toml.off .cargo/config.toml`",
+                package.name
+            ));
+        }
         if with_fmt {
             if let Err(e) = run(false, &dir, "cargo", &["fmt", "--all", "--check"]) {
                 failures.push(format!("{}: fmt: {e}", package.name));
@@ -560,6 +610,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                     }
                 }
             }
+            restore_standalone_lockfile(&dir, lock_before.as_ref());
             if with_xtensa {
                 // The S3's own bare-metal target, through the esp toolchain
                 // (rustup's `+esp`), with `core` and `alloc` built from source:
@@ -963,6 +1014,7 @@ USAGE
   kairos deploy --umbrella (--public | --private) [--message TEXT] [--dry-run]
   kairos secrets [--from-env VAR] [--dry-run]
   kairos oracle fetch | patch | build [SCENARIO] | trace [SCENARIO] [--ticks N] [--all] | cat [SCENARIO]
+  kairos conform [SCENARIO] [--ticks N] [--all] [--exits]
 
 `status --ci` adds the latest GitHub Actions conclusion per package (through
 `gh`). `check` is the compile gate — host workspace plus each no_std crate on
@@ -989,6 +1041,8 @@ secret, on stdin, never on a command line.
 pins, `patch` applies the deterministic-tick edits to the Posix port, `build`
 compiles a scenario with the system C compiler (under WSL on Windows), and
 `trace` runs it twice and refuses a trace that differs between the runs.
+`conform` is the K1 gate: it runs a scenario on the Rust kernel and on the
+C oracle and compares the traces line for line, counters included.
 Run from anywhere inside the Kairos folder.";
 
 fn main() -> ExitCode {
@@ -1071,6 +1125,7 @@ fn real_main() -> Result<()> {
         }
         "secrets" => secrets(&manifest, &args[1..]),
         "oracle" => oracle::main(&root, &args[1..]),
+        "conform" => conform::main(&root, &args[1..]),
         other => fail(format!("unknown verb {other:?}\n\n{USAGE}")),
     }
 }

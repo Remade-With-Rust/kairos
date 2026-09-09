@@ -25,6 +25,13 @@ void kairos_trace_obj_uu( const char * pcEvent, char cKind, const void * pvObjec
 /* How many lines have been printed; the harness reports it at the end. */
 unsigned long kairos_trace_lines( void );
 
+/* With KAIROS_TRACE_EXITS set in the environment, every line gains a final
+ * " #<outermost critical-section exits>" column. It is the only way to see
+ * where sim time is passing, and a Rust-side divergence is almost always a
+ * disagreement about this number rather than about the event itself. Off by
+ * default: the contract's line format has no such column. */
+void kairos_trace_debug_init( void );
+
 /* Flush the trace (the harness exits with _exit so the buffer must be flushed by hand). */
 void kairos_trace_flush( void );
 

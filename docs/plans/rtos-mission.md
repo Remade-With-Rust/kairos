@@ -70,8 +70,8 @@ tool, 839 lines; `gen-sibling-patches.py`, 173 lines; the package template).
 | package | layer | status (`KAIROS.toml`) | proven on the host | on a chip / emulator |
 |---|---|---|---|---|
 | `rusty_rtos_core` | 0 | K0 types (private) | 34 tests, 8 bare-metal rungs, Miri on the unit tests, deny + audit clean (2026-09-09) | — |
-| `rusty_rtos_kernel` | 1 | scaffold (private) | fleet gate: fmt, clippy, deny, 8 rungs (2026-09-09) | — |
-| `rusty_rtos_port` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
+| `rusty_rtos_kernel` | 1 | **K1 scheduler** (private) | `dynamic` trace-identical to the C kernel for 100,000 ticks, counters equal (2026-09-09); Miri green; fleet gate on 8 rungs | — |
+| `rusty_rtos_port` | 1 | **K1 sim port** (private) | the deterministic sim port implements the sim contract v1; Miri green; fleet gate (2026-09-09) | — |
 | `rusty_rtos_heap` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
 | `rusty_rtos_json` | 1 | scaffold (private) | fleet gate (2026-09-09) | — |
 | `rusty_rtos_backoff` | 1 | scaffold (private, standard tier) | fleet gate (2026-09-09) | — |
@@ -80,7 +80,7 @@ tool, 839 lines; `gen-sibling-patches.py`, 173 lines; the package template).
 | `rusty_rtos_sntp` | 1 | planned | — | — |
 | `rusty_rtos_tcp` | 1 | planned | — | — |
 | `rusty_rtos_pkcs11`, `_cellular`, `_fat`, `_posix`, `_cli`, `_mpu` | 1 | planned (after 1.0 of the kernel) | — | — |
-| `rusty_rtos_demo` | 2 | scaffold (private, standard tier) | fleet gate (2026-09-09) | — |
+| `rusty_rtos_demo` | 2 | **K1 corpus, 1 of 9** (private, standard tier) | `dynamic` remade and trace-identical; the runner, the trace sink and `kairos conform` (2026-09-09) | — |
 | `rusty_rtos-capi` | 2 | scaffold (private) | fleet gate (2026-09-09) | — |
 | `kairos` (fleet tool) | 2 | K0 (in the umbrella `Remade-With-Rust/kairos`, private) | status / check / new / patches / harden / deploy / secrets / oracle all exercised in K0; `oracle trace dynamic` reproducible | — |
 
@@ -519,6 +519,30 @@ the box, so the seven dependents' CI cannot fetch the private core until
 `kairos secrets` is run. The kill test is therefore **passed locally, CI
 pending the owner**.
 
+**K1 — the scheduler agrees with the C kernel (2026-09-09).** The first
+scenario of the conformance corpus, `dynamic`, produces a trace **identical
+to the C kernel's for 100,000 ticks** — 1,219,231 lines, the counters
+included (umbrella `docs/LEDGER.md`). That is the K1 kill test for one
+scenario; eight remain, and each is the same command:
+
+```sh
+kairos conform dynamic --ticks 100000
+```
+
+What exists behind it: `rusty_rtos_port`'s deterministic sim port (sim
+contract v1); `rusty_rtos_kernel`'s scheduler — ready lists, both delayed
+lists, pending-ready and suspended, the tick, the context switch, queues
+with their two event lists, and `vTaskDelay` / `vTaskSuspend` /
+`vTaskResume` / `vTaskPrioritySet` / `vTaskSuspendAll` / `xTaskResumeAll`
+following the C control flow statement for statement; `rusty_rtos_demo`'s
+runner, trace sink and the `dynamic` tasks as resumable state machines; and
+`kairos conform`, the gate. Miri is green on the kernel and the port.
+
+Not done in K1: the other eight scenarios, the Kani harnesses for the CBMC
+proof list (K2's), and the arena-and-list cost row — which needs a
+measurement arm the family does not have yet and is therefore K3's, with
+the first silicon.
+
 **K0 checklist** (the family exists — the kill test is a clean clone of any
 package building alone with green CI):
 
@@ -732,7 +756,7 @@ reused.
 | phase | kill test | state |
 |---|---|---|
 | **K0 family** | a clean clone of any package builds alone and its CI is green; the C oracle produces an identical trace twice | **passed locally 2026-09-09** (8 repos, fleet gate green on the box; `dynamic` trace identical twice); CI green pending the owner's Actions billing and `kairos secrets` |
-| **K1 scheduler on sim** | nine demo scenarios trace-identical to the C kernel for 100 000 ticks; counters equal; Miri green; the arena-list cost row | open |
+| **K1 scheduler on sim** | nine demo scenarios trace-identical to the C kernel for 100 000 ticks; counters equal; Miri green; the arena-list cost row | **1 of 9 passed 2026-09-09** — `dynamic`: 1,219,231 lines identical at 100 000 ticks, ticks/yields/exits equal, Miri green. Eight scenarios open; the cost row moves to K3 with the first measurement arm |
 | **K2 IPC + timers** | the remaining demo scenarios trace-identical; Kani harnesses for the CBMC proof list pass; no-panic property test; mutants score ledgered | open |
 | **K3 silicon + QEMU** | the full corpus check task passes one hour on M3-qemu, RV32-qemu and a C6; context switch / tick / latency cycle rows vs the C demo; flash + RAM decomposition | open |
 | **K4 heaps** | `heap_4` differential trace matches C; `StaticAllocation` on every cell; RAM table per profile | open |
@@ -794,6 +818,10 @@ A number in our favour gets the arm-duration and work-parity checks first
 | 2026-09-09 | The classic `FreeRTOS/FreeRTOS` repository is pinned to `main` @ `f4fcc3b2` (2026-08-26), sparse-checked-out to `Demo/Common/{Minimal,include}`, `Demo/Posix_GCC`, `Test/{CBMC,VeriFast}`: no release tag covers the demo corpus, and the pin is what makes it a number. |
 | 2026-09-09 | **Sibling overrides are cargo `paths` overrides, not `[patch]` tables.** Measured on `rusty_rtos_kernel`: a `[patch]` rewrites `Cargo.lock` (the patched crate loses its git `source`, unused rows become `[[patch.unused]]`), so the lockfile committed from inside the umbrella fails `--locked` in a standalone clone and vice versa. A `paths` override is applied after resolution: the committed lockfile keeps `git+…#<commit>`, `cargo metadata --locked` passes in both places, the local checkout is what compiles, and an unmatched entry is ignored. `kairos patches` reads each package's manifests and lists only the crates the graph names. Janus's wall 5 (unused patch rows) is thereby closed rather than avoided. |
 | 2026-09-09 | The umbrella repository is `Remade-With-Rust/kairos` (the manifest's `umbrella` field, mirroring Janus's `janus`), whatever the local folder is called; it holds the plan, the manifest, the tool, the oracle harness and the stored traces, and never a package. |
+| 2026-09-09 | **A task on the sim is a resumable state machine, not a stack.** A context switch is a stack swap and a stack swap is `unsafe`, which the family forbids outside `rusty_rtos_port-<arch>`. So `rusty_rtos_kernel` decides *which* task runs and `rusty_rtos_demo`'s runner acts on the decision by stepping that task's body one C statement at a time. Both kernels then make the same kernel calls in the same order, which is all the trace records. The cost is that a scenario must be remade as a state machine rather than linked; the benefit is a scheduler with no `unsafe` at all, and a trace that is identical to the C kernel's. |
+| 2026-09-09 | **Critical nesting is per task, and its exits are deferred, not lost.** Three facts about the C Posix port that a stackless kernel has to state explicitly, each found by a trace diff: a task's first switch-in resets the nesting (`prvWaitForStart`); nesting is saved and restored across a switch (`prvSwitchThread`), so an abandoned frame's exits are paid when the task runs again; and the tick handler's nesting bump is a raw `++`/`--`, never `vPortExitCritical`, so it must not create an owed exit. On the sim these are not bookkeeping — an outermost critical-section exit *is* the clock, so getting them wrong moves every tick. |
+| 2026-09-09 | **`KAIROS_TRACE_EXITS` is part of the conformance toolkit.** Both the C harness and the Rust sink can add a ` #<exits>` column, and `kairos conform --exits` compares it. The events agreed for 1,598 lines after the sim-time accounting had already drifted, so the event diff names the symptom and the column names the cause. Off by default: a trace with the column is not the contract's format. |
+| 2026-09-09 | **Sibling patching stays a `[patch]` table, not a `paths` override.** A `paths` override leaves `Cargo.lock` in its standalone form, which is why it was tried; cargo refuses to let one alter a package's dependency list, and every Kairos sibling is a facade over a `-core` crate, so the facade's own dependency is altered the moment both are overridden ("in the future this message will become a hard error"). The rule that keeps `[patch]` honest: the committed lockfile is the standalone one, `--locked` is a standalone check, and `kairos patches` emits a row only for a crate the graph actually names — reaching through a facade to its core, which patching the facade alone would silently leave on the published version. |
 | 2026-09-09 | **The house stack is validated by a compile gate, not a reading.** `tools/house-gate` in the umbrella checks every house crate Kairos could consume, at its pin, `no_std` on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf` and on the host, under the Kairos `deny.toml`. Verdicts of 2026-09-09 in `docs/HOUSE-STACK.md`: ready on bare metal — `rusty_alloc-api` 2.0.4 (with `--cfg ra_single_threaded --cfg ra_small_profile`), `rusty_symbols` 0.1.0, `thoth` v0.3.0 (git tag, `default-features = false`), `rusty_json_turbo` 0.1.0 (git; lib `serde_json`); host-only today — `rusty_zstd` 0.2.3 and `rusty_erasure-core` 0.4.0 (`AtomicU64`), `rusty_time-core` 0.1.10 and `rusty_xml` 0.8.1 (`std`); out of scope for an RTOS — SpaceDB, FFAI, remade_ffmpeg_rs, rusty_maps (their closures resolve clean of C and of banned crates). Four crates.io names are imposters and are banned by name in every `deny.toml`: `rusty_time`, `rff`, `thoth`, `spacedb`. |
 | 2026-09-09 | `rusty_rtos_json` is the coreJSON API (zero-allocation validator + `JSON_Search`); `rusty_json_turbo` (the house serde_json) is the typed layer behind a `serde` feature under `alloc`. One job, one parser each; the json package plan carries the row. |
 | 2026-09-09 | The allocator seam has both halves: `rusty_rtos_alloc` with `std` (default) for hosted deliverables, and `--no-default-features` under `--cfg ra_single_threaded --cfg ra_small_profile` for firmware, checked on the four bare-metal targets by CI and by `kairos check` (`cfgs` in `KAIROS.toml`). The fixed `Region` and `heap_3` wiring stay K4's. |

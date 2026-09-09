@@ -53,7 +53,7 @@ plan = "docs/plans/rusty_rtos_core.md"
 [[package]]
 name = "rusty_rtos_kernel"
 kind = "function"
-status = "scaffold"
+status = "K1 scheduler"
 visibility = "private"
 description = "FreeRTOS-Kernel remade in Rust: the fixed-priority preemptive scheduler, task notifications, queues, semaphores, mutexes with priority inheritance, queue sets, software timers, event groups, stream and message buffers — a pure state machine over the Port seam, forbid(unsafe), traced against the C kernel."
 crates = ["rusty_rtos_kernel", "rusty_rtos_kernel-core"]
@@ -65,7 +65,7 @@ plan = "docs/plans/rusty_rtos_kernel.md"
 [[package]]
 name = "rusty_rtos_port"
 kind = "function"
-status = "scaffold"
+status = "K1 sim port"
 visibility = "private"
 description = "The FreeRTOS ports remade in Rust: the deterministic sim port (the oracle harness), the Posix host port, and the Cortex-M, RISC-V and Xtensa ports — the only crates in the family with a fenced unsafe block, at the context switch and the vector table."
 crates = ["rusty_rtos_port", "rusty_rtos_port-core"]
@@ -115,13 +115,13 @@ plan = "docs/plans/rusty_rtos_backoff.md"
 [[package]]
 name = "rusty_rtos_demo"
 kind = "process"
-status = "scaffold"
+status = "K1 corpus 1/9"
 visibility = "private"
 description = "The FreeRTOS standard demo tasks (Demo/Common/Minimal) remade in Rust as the Kairos conformance corpus: every scenario self-checks like the C original and, on the sim port, diffs its trace against the C kernel's."
 crates = ["rusty_rtos_demo", "rusty_rtos_demo-core"]
 no_std_crates = ["rusty_rtos_demo-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
-uses = ["rusty_rtos_core"]
+uses = ["rusty_rtos_core", "rusty_rtos_kernel", "rusty_rtos_port"]
 plan = "docs/plans/rusty_rtos_demo.md"
 
 [[package]]
