@@ -40,7 +40,10 @@ status = "K0 types"
 visibility = "private"
 description = "The shared vocabulary of the Kairos family (FreeRTOS remade in Rust): ticks, priorities, generational handles, one Copy error, the Config trait, and the Port / Heap / Trace / Hooks seams. No pointers, no allocator, no arch. forbid(unsafe)."
 crates = ["rusty_rtos_core", "rusty_rtos_alloc"]
-no_std_crates = ["rusty_rtos_core"]
+no_std_crates = ["rusty_rtos_core", "rusty_rtos_alloc"]
+# rusty_alloc's no_std build is opt-in by design (single thread, small segment
+# geometry); the seam's bare-metal rungs and every firmware set these two.
+cfgs = ["ra_single_threaded", "ra_small_profile"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
 uses = []
 plan = "docs/plans/rusty_rtos_core.md"

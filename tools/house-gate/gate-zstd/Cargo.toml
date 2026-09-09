@@ -1,0 +1,10 @@
+[package]
+name = "gate-zstd"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rusty_zstd = { workspace = true }

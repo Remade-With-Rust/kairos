@@ -53,12 +53,15 @@ KAIROS.toml          the fleet manifest: every package, its kind, status, intend
 ORACLES.md           every pinned reference (FreeRTOS-Kernel V11.3.1, the 202604.01 LTS set), the
                      sim contract and the trace format
 tools/kairos/        the fleet tool (Rust): status · check · new · patches · harden · deploy · secrets · oracle
+tools/house-gate/    the house-stack compile gate: each house crate at its pin, no_std on the Kairos targets, under deny.toml
 oracle/harness/      the deterministic-tick patch and trace hooks for the C kernel (tracked);
                      oracle/FreeRTOS-Kernel and oracle/FreeRTOS are fetched checkouts (ignored)
 .cargo/config.toml   [net] only; each repo's own (generated, gitignored) .cargo/config.toml
                      patches the siblings IT uses to the local checkouts — `kairos patches`
 docs/                plans/rtos-mission.md, the one plan; API-MAP.md and CONFIG-MAP.md, the contracts;
-                     LEDGER.md, the family-level numbers (the oracle trace, the fleet gate)
+                     LEDGER.md, the family-level numbers (the oracle trace, the fleet gate);
+                     HOUSE-STACK.md, every house crate's readiness for this family, compile-gated;
+                     upstream/, issue drafts for the house crates the gate found short
 rusty_rtos_*/        the packages (each: .git, Cargo.toml, crates/, firmware/, docs/plans/<name>.md,
                      docs/LEDGER.md, docs/plans/use-protection-please.md, ci)
 ```

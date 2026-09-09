@@ -689,7 +689,9 @@ reused.
 | Generalise the fleet tool (`janus` and `kairos` are one binary reading `<NAME>.toml`) | janus `tools/janus` | not filed | Kairos ships with a copy until then |
 | `esp-radio-rtos-driver` adapter on a non-esp-rtos scheduler | esp-rs (docs / a reference impl) | not filed | K5 opens it if the trait's contract is under-documented |
 | `rusty_alloc` `prim::fixed` on Cortex-M (small-metal was measured on the S3 only) | rusty_alloc | not filed | K4's `heap_3` seam on the M3 cell |
-| `rusty_time` `no_std` leaf for the SNTP client | rusty_time | not filed | decides §5.5 item 4 |
+| `rusty_time` `no_std` leaf for the SNTP client: `rusty_time-core` 0.1.10 carries the `no-std` category but has no `#![no_std]` (it needs `std` on `thumbv7em` / `riscv32imac`, measured 2026-09-09 in `tools/house-gate`) | rusty_time | drafted (`docs/upstream/rusty_time-no-std-leaf.md`), not filed | decides §5.5 item 4; until it lands, `rusty_rtos_sntp` is a coreSNTP remake |
+| `rusty_zstd` 0.2.3 `no_std + alloc` uses `core::sync::atomic::AtomicU64`, absent on 32-bit bare metal (`thumbv7em`, `riscv32imac`); wasm and 64-bit hosts are fine | rusty_zstd | drafted (`docs/upstream/rusty_zstd-atomic-u64.md`), not filed | on-chip compression (OTA, trace capture) waits for it; the fleet tool uses rusty_zstd on the host today |
+| `rusty_erasure-core` 0.4.0 imports `AtomicU64` in its `no_std` build; same 32-bit gap | rusty_erasure | drafted (`docs/upstream/rusty_erasure-atomic-u64.md`), not filed | nothing in Kairos v1 needs it; recorded so the ladder is honest |
 | smoltcp: any API gap the +TCP surface needs (e.g. socket-set sizing from a `Config`) | smoltcp | not filed | K7 |
 | FreeRTOS upstream: a deterministic-tick option for the Posix port (our oracle patch) | FreeRTOS-Kernel | not filed | the patch stays in-tree either way |
 
@@ -710,7 +712,10 @@ reused.
    smoltcp's socket model, the remake is opened as a package plan.
 4. **SNTP.** A `no_std` leaf of the house `rusty_time` (chrony remake) versus
    a coreSNTP remake. Recommended: the leaf, if `rusty_time` can expose one
-   without `std`; else the remake (it is small).
+   without `std`; else the remake (it is small). **Measured 2026-09-09:**
+   `rusty_time-core` 0.1.10 is `std`-only on the bare-metal targets (the
+   umbrella's `tools/house-gate`), so the remake is the default until the
+   upstream leaf exists (`docs/upstream/rusty_time-no-std-leaf.md`).
 5. **Tick width and `TickType_t` at the C ABI.** The ABI must pick one width
    per build (a `capi` feature); the Rust API is generic.
 6. **A self-hosted runner** for the Xtensa gate and the QEMU cells (the
@@ -788,6 +793,9 @@ A number in our favour gets the arm-duration and work-parity checks first
 | 2026-09-09 | The classic `FreeRTOS/FreeRTOS` repository is pinned to `main` @ `f4fcc3b2` (2026-08-26), sparse-checked-out to `Demo/Common/{Minimal,include}`, `Demo/Posix_GCC`, `Test/{CBMC,VeriFast}`: no release tag covers the demo corpus, and the pin is what makes it a number. |
 | 2026-09-09 | **Sibling overrides are cargo `paths` overrides, not `[patch]` tables.** Measured on `rusty_rtos_kernel`: a `[patch]` rewrites `Cargo.lock` (the patched crate loses its git `source`, unused rows become `[[patch.unused]]`), so the lockfile committed from inside the umbrella fails `--locked` in a standalone clone and vice versa. A `paths` override is applied after resolution: the committed lockfile keeps `git+…#<commit>`, `cargo metadata --locked` passes in both places, the local checkout is what compiles, and an unmatched entry is ignored. `kairos patches` reads each package's manifests and lists only the crates the graph names. Janus's wall 5 (unused patch rows) is thereby closed rather than avoided. |
 | 2026-09-09 | The umbrella repository is `Remade-With-Rust/kairos` (the manifest's `umbrella` field, mirroring Janus's `janus`), whatever the local folder is called; it holds the plan, the manifest, the tool, the oracle harness and the stored traces, and never a package. |
+| 2026-09-09 | **The house stack is validated by a compile gate, not a reading.** `tools/house-gate` in the umbrella checks every house crate Kairos could consume, at its pin, `no_std` on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf` and on the host, under the Kairos `deny.toml`. Verdicts of 2026-09-09 in `docs/HOUSE-STACK.md`: ready on bare metal — `rusty_alloc-api` 2.0.4 (with `--cfg ra_single_threaded --cfg ra_small_profile`), `rusty_symbols` 0.1.0, `thoth` v0.3.0 (git tag, `default-features = false`), `rusty_json_turbo` 0.1.0 (git; lib `serde_json`); host-only today — `rusty_zstd` 0.2.3 and `rusty_erasure-core` 0.4.0 (`AtomicU64`), `rusty_time-core` 0.1.10 and `rusty_xml` 0.8.1 (`std`); out of scope for an RTOS — SpaceDB, FFAI, remade_ffmpeg_rs, rusty_maps (their closures resolve clean of C and of banned crates). Four crates.io names are imposters and are banned by name in every `deny.toml`: `rusty_time`, `rff`, `thoth`, `spacedb`. |
+| 2026-09-09 | `rusty_rtos_json` is the coreJSON API (zero-allocation validator + `JSON_Search`); `rusty_json_turbo` (the house serde_json) is the typed layer behind a `serde` feature under `alloc`. One job, one parser each; the json package plan carries the row. |
+| 2026-09-09 | The allocator seam has both halves: `rusty_rtos_alloc` with `std` (default) for hosted deliverables, and `--no-default-features` under `--cfg ra_single_threaded --cfg ra_small_profile` for firmware, checked on the four bare-metal targets by CI and by `kairos check` (`cfgs` in `KAIROS.toml`). The fixed `Region` and `heap_3` wiring stay K4's. |
 | 2026-09-09 | The oracle is a dev-only C dependency built by the fleet tool from source with the system compiler under WSL; it never enters a package's build graph, and `kairos oracle patch` restores the pinned `port.c` before applying its six exact-anchor edits, so the checkout is never in an unknown state. |
 
 ---

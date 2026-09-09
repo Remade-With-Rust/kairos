@@ -1,0 +1,27 @@
+# The house-stack compile gate (umbrella docs/HOUSE-STACK.md): does each house
+# crate build `no_std` (+ alloc) on the Kairos targets, at the pin the house
+# names, under the Kairos deny policy? One member per crate so a failure names
+# its crate. `host/` is a second workspace for the crates that only resolve on
+# a host (SpaceDB, FFAI, rusty_time, rusty_xml, rusty_erasure, rusty_zstd with
+# std). Run: see README.md.
+[workspace]
+resolver = "2"
+members = ["gate-*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+rusty_zstd = { version = "=0.2.3", default-features = false, features = ["alloc"] }
+rusty_erasure-core = { version = "=0.4.0", default-features = false }
+rusty_time-core = { version = "=0.1.10", default-features = false }
+rusty_symbols = { version = "=0.1.0", default-features = false }
+thoth = { version = "0.3.0", git = "https://github.com/Remade-With-Rust/thoth", tag = "v0.3.0", default-features = false }
+serde_json = { package = "rusty_json_turbo", version = "0.1.0", git = "https://github.com/Remade-With-Rust/rusty_json_turbo", default-features = false, features = ["alloc"] }
+rusty_xml = { version = "=0.8.1", default-features = false }
+rusty_alloc-api = { version = "=2.0.4", default-features = false }
+
+[profile.release]
+overflow-checks = true

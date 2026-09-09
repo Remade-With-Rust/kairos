@@ -111,6 +111,12 @@ pub(crate) struct Package {
     crates: Vec<String>,
     #[serde(default)]
     no_std_crates: Vec<String>,
+    /// `--cfg` flags the no_std rungs are checked under (as `RUSTFLAGS`), for
+    /// crates whose `no_std` build must be opted into: rusty_alloc refuses to
+    /// build without `ra_single_threaded` and allocates nothing without
+    /// `ra_small_profile`, by design. A firmware sets the same flags.
+    #[serde(default)]
+    cfgs: Vec<String>,
     #[serde(default)]
     targets: Vec<String>,
     /// Sibling packages this package's graph reaches: `"pkg"` for every crate
@@ -211,11 +217,28 @@ fn find_package<'a>(manifest: &'a Manifest, name: &str) -> Result<&'a Package> {
 
 /// Run a command, echoing it first. In `dry` mode only the echo happens.
 fn run(dry: bool, cwd: &Path, program: &str, args: &[&str]) -> Result<String> {
-    println!("$ {program} {}", args.join(" "));
+    run_env(dry, cwd, program, args, &[])
+}
+
+/// `run`, with extra environment variables for the child (printed too, so the
+/// log shows exactly what was executed).
+fn run_env(
+    dry: bool,
+    cwd: &Path,
+    program: &str,
+    args: &[&str],
+    env: &[(&str, String)],
+) -> Result<String> {
+    let prefix: String = env.iter().map(|(k, v)| format!("{k}=\"{v}\" ")).collect();
+    println!("$ {prefix}{program} {}", args.join(" "));
     if dry {
         return Ok(String::new());
     }
-    let output = Command::new(program).args(args).current_dir(cwd).output()?;
+    let output = Command::new(program)
+        .args(args)
+        .envs(env.iter().map(|(k, v)| (*k, v.as_str())))
+        .current_dir(cwd)
+        .output()?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     if output.status.success() {
@@ -230,6 +253,30 @@ fn run(dry: bool, cwd: &Path, program: &str, args: &[&str]) -> Result<String> {
             output.status
         ))
     }
+}
+
+/// Does `crates/<krate>/Cargo.toml` declare `feature` under `[features]`?
+fn crate_has_feature(dir: &Path, krate: &str, feature: &str) -> bool {
+    let manifest = dir.join("crates").join(krate).join("Cargo.toml");
+    let Ok(text) = fs::read_to_string(manifest) else {
+        return false;
+    };
+    let mut in_features = false;
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.starts_with('[') {
+            in_features = line == "[features]";
+            continue;
+        }
+        if in_features
+            && line
+                .split_once('=')
+                .is_some_and(|(k, _)| k.trim().trim_matches('"') == feature)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Run a command quietly and report only whether it succeeded, with its stdout.
@@ -438,15 +485,32 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 ));
             }
         }
+        // The feature ladder above `core`: each rung only where the crate
+        // declares the feature (the allocator seam has `small-metal`, not
+        // `alloc`).
+        let rustflags: Vec<(&str, String)> = if package.cfgs.is_empty() {
+            Vec::new()
+        } else {
+            let flags: Vec<String> = package.cfgs.iter().map(|c| format!("--cfg {c}")).collect();
+            vec![("RUSTFLAGS", flags.join(" "))]
+        };
         for krate in &package.no_std_crates {
+            let rungs: Vec<Option<&str>> = std::iter::once(None)
+                .chain(
+                    ["alloc", "small-metal"]
+                        .into_iter()
+                        .filter(|f| crate_has_feature(&dir, krate, f))
+                        .map(Some),
+                )
+                .collect();
             for target in &package.targets {
-                for extra in [None, Some("alloc")] {
+                for extra in rungs.iter().copied() {
                     let mut args = vec!["check", "-p", krate, "--no-default-features"];
                     if let Some(feature) = extra {
                         args.extend(["--features", feature]);
                     }
                     args.extend(["--target", target]);
-                    if let Err(e) = run(false, &dir, "cargo", &args) {
+                    if let Err(e) = run_env(false, &dir, "cargo", &args, &rustflags) {
                         failures.push(format!(
                             "{}: {krate} on {target} (features {}): {e}",
                             package.name,

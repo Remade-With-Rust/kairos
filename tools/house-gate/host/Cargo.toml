@@ -1,0 +1,15 @@
+[package]
+name = "gate-host"
+license = "MIT OR Apache-2.0"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+spacedb-sdk = { version = "=0.6.0", default-features = false }
+ffai-core = { version = "=0.7.1" }
+rusty_time-core = { version = "=0.1.10" }
+rusty_xml = { version = "=0.8.1" }
+rusty_erasure = { version = "=0.4.0" }
+rusty_zstd = { version = "=0.2.3" }
