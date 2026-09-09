@@ -28,7 +28,7 @@ mod harden;
 mod oracle;
 mod patches;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     env, fmt, fs,
     path::{Path, PathBuf},
@@ -347,22 +347,8 @@ fn ci_conclusion(org: &str, name: &str) -> String {
 
 fn status(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_ci = has_flag(args, "--ci");
-    println!(
-        "fleet: {} (branch {})\n",
-        manifest.kairos.org, manifest.kairos.default_branch
-    );
-    println!(
-        "{:<22} {:<11} {:<10} {:<8} {:<4} {:<4} {:<6} {:<5} {}remote",
-        "package",
-        "kind",
-        "status",
-        "vis",
-        "dir",
-        "git",
-        "clean",
-        "plan",
-        if with_ci { "ci           " } else { "" }
-    );
+    let as_json = has_flag(args, "--json");
+    let mut rows = Vec::new();
     for package in &manifest.packages {
         let dir = root.join(&package.name);
         let exists = dir.join("Cargo.toml").is_file();
@@ -379,37 +365,92 @@ fn status(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
             .as_deref()
             .is_some_and(|p| dir.join(p).is_file() || root.join(p).is_file());
         let ci = if with_ci && git {
-            format!("{:<13}", ci_conclusion(&manifest.kairos.org, &package.name))
+            Some(ci_conclusion(&manifest.kairos.org, &package.name))
         } else if with_ci {
-            format!("{:<13}", "-")
+            Some("-".to_owned())
         } else {
-            String::new()
+            None
+        };
+        rows.push(StatusRow {
+            name: package.name.clone(),
+            kind: package.kind.clone(),
+            status: package.status.clone(),
+            visibility: package.visibility.clone(),
+            dir: exists,
+            git,
+            clean,
+            plan,
+            ci,
+            remote,
+        });
+    }
+    if as_json {
+        let text = serde_json::to_string_pretty(&rows).map_err(|e| Fail(format!("json: {e}")))?;
+        println!("{text}");
+        return Ok(());
+    }
+    println!(
+        "fleet: {} (branch {})\n",
+        manifest.kairos.org, manifest.kairos.default_branch
+    );
+    println!(
+        "{:<22} {:<11} {:<10} {:<8} {:<4} {:<4} {:<6} {:<5} {}remote",
+        "package",
+        "kind",
+        "status",
+        "vis",
+        "dir",
+        "git",
+        "clean",
+        "plan",
+        if with_ci { "ci           " } else { "" }
+    );
+    for row in &rows {
+        let ci = match &row.ci {
+            Some(c) => format!("{c:<13}"),
+            None => String::new(),
         };
         println!(
             "{:<22} {:<11} {:<10} {:<8} {:<4} {:<4} {:<6} {:<5} {}{}",
-            package.name,
-            package.kind,
-            package.status,
-            package.visibility,
-            mark(exists),
-            mark(git),
-            mark(clean),
-            mark(plan),
+            row.name,
+            row.kind,
+            row.status,
+            row.visibility,
+            mark(row.dir),
+            mark(row.git),
+            mark(row.clean),
+            mark(row.plan),
             ci,
-            remote
+            row.remote
         );
     }
     Ok(())
 }
 
-/// A status glyph from the house chrome crate: the same constant every
-/// Remade UI prints, ASCII-safe in source.
+/// A status glyph from the house chrome crate (thoth): the same constant
+/// every Remade UI prints, ASCII-safe in source.
 fn mark(b: bool) -> &'static str {
     if b {
-        rusty_symbols::status::OK
+        thoth::status::OK
     } else {
-        rusty_symbols::status::CROSS
+        thoth::status::CROSS
     }
+}
+
+/// One row of `status`, the shape `--json` prints (the house JSON layer).
+#[derive(Debug, Serialize)]
+struct StatusRow {
+    name: String,
+    kind: String,
+    status: String,
+    visibility: String,
+    dir: bool,
+    git: bool,
+    clean: bool,
+    plan: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ci: Option<String>,
+    remote: String,
 }
 
 // -------------------------------------------------------------------- check --
@@ -913,7 +954,7 @@ fn secrets(manifest: &Manifest, args: &[String]) -> Result<()> {
 const USAGE: &str = "kairos — fleet tool for the Kairos umbrella folder
 
 USAGE
-  kairos status [--ci]
+  kairos status [--ci] [--json]
   kairos check [PACKAGE ...] [--fmt] [--clippy] [--test] [--deny] [--harden] [--xtensa]
   kairos new NAME [--kind function] [--description TEXT] [--tier critical-path|standard|utility] [--date YYYY-MM-DD] [--dry-run]
   kairos patches [--dry-run]
@@ -921,7 +962,7 @@ USAGE
   kairos deploy PACKAGE (--public | --private) [--message TEXT] [--dry-run] [--override-visibility]
   kairos deploy --umbrella (--public | --private) [--message TEXT] [--dry-run]
   kairos secrets [--from-env VAR] [--dry-run]
-  kairos oracle fetch | patch | build [SCENARIO] | trace [SCENARIO] [--ticks N] [--all]
+  kairos oracle fetch | patch | build [SCENARIO] | trace [SCENARIO] [--ticks N] [--all] | cat [SCENARIO]
 
 `status --ci` adds the latest GitHub Actions conclusion per package (through
 `gh`). `check` is the compile gate — host workspace plus each no_std crate on

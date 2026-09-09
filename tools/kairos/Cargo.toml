@@ -28,10 +28,19 @@ unimplemented = "deny"
 kairos-alloc = { path = "crates/kairos-alloc" }
 serde = { version = "1", features = ["derive"] }
 toml = "0.9"
-# The house UI chrome: status glyphs as named constants, ASCII-safe in source.
-# `default-features = false` because the binary installs the allocator itself
-# through the seam below (one link, one allocator).
-rusty_symbols = { version = "0.1", default-features = false }
+# The house UI chrome, unified: `thoth::status::{OK, CROSS}` are the glyphs
+# every Remade UI prints, ASCII-safe in source. By git tag: the crates.io
+# `thoth` is an unrelated GraphQL crate. `default-features = false` because
+# the binary installs the allocator itself through the seam below (thoth's
+# default would pull rusty_alloc-api 1.1.6 into a library).
+thoth = { version = "0.3.0", git = "https://github.com/Remade-With-Rust/thoth", tag = "v0.3.0", default-features = false }
+# The house JSON layer: serde_json forked and made fast; the library keeps
+# the name `serde_json`, so this is the whole migration. By git until it is
+# on crates.io. `status --json` is its consumer.
+serde_json = { package = "rusty_json_turbo", version = "0.1.0", git = "https://github.com/Remade-With-Rust/rusty_json_turbo", default-features = false, features = ["std"] }
+# The house compressor: a stored oracle trace is one zstd frame
+# (`oracle/traces/<scenario>.trace.zst`), round-tripped before it is kept.
+rusty_zstd = "=0.2.3"
 # The allocator, pinned EXACTLY in the seam crate and nowhere else.
 rusty_alloc-api = { version = "=2.0.4", default-features = false }
 

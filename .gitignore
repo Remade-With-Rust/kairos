@@ -11,6 +11,8 @@
 /oracle/FreeRTOS-Kernel/
 /oracle/FreeRTOS/
 /oracle/build/
+# The plain oracle traces: the tracked form is the zstd frame beside them
+/oracle/traces/*.trace
 *.log
 .DS_Store
 Thumbs.db

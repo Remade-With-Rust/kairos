@@ -52,7 +52,8 @@ KAIROS.toml          the fleet manifest: every package, its kind, status, intend
                      crates, no_std crates, targets, the siblings it uses, its plan
 ORACLES.md           every pinned reference (FreeRTOS-Kernel V11.3.1, the 202604.01 LTS set), the
                      sim contract and the trace format
-tools/kairos/        the fleet tool (Rust): status · check · new · patches · harden · deploy · secrets · oracle
+tools/kairos/        the fleet tool (Rust): status · check · new · patches · harden · deploy · secrets · oracle;
+                     on the house stack: rusty_alloc (seam), thoth (glyphs), rusty_json_turbo (--json), rusty_zstd (traces)
 tools/house-gate/    the house-stack compile gate: each house crate at its pin, no_std on the Kairos targets, under deny.toml
 oracle/harness/      the deterministic-tick patch and trace hooks for the C kernel (tracked);
                      oracle/FreeRTOS-Kernel and oracle/FreeRTOS are fetched checkouts (ignored)
@@ -61,6 +62,7 @@ oracle/harness/      the deterministic-tick patch and trace hooks for the C kern
 docs/                plans/rtos-mission.md, the one plan; API-MAP.md and CONFIG-MAP.md, the contracts;
                      LEDGER.md, the family-level numbers (the oracle trace, the fleet gate);
                      HOUSE-STACK.md, every house crate's readiness for this family, compile-gated;
+                     plans/build-me-bare.md, the queue of house crates Kairos wants on bare metal;
                      upstream/, issue drafts for the house crates the gate found short
 rusty_rtos_*/        the packages (each: .git, Cargo.toml, crates/, firmware/, docs/plans/<name>.md,
                      docs/LEDGER.md, docs/plans/use-protection-please.md, ci)
@@ -80,7 +82,9 @@ KAIROS_GIT_TOKEN=<pat> tools/kairos/target/release/kairos secrets     # the sibl
 tools/kairos/target/release/kairos oracle fetch             # clone the pinned FreeRTOS commits (ORACLES.md) into oracle/
 tools/kairos/target/release/kairos oracle patch             # the deterministic-tick edits to the Posix port (sim contract v1)
 tools/kairos/target/release/kairos oracle build dynamic     # gcc under WSL (Windows) or cc (Linux); no CMake
-tools/kairos/target/release/kairos oracle trace dynamic     # run twice, refuse a differing trace, store oracle/traces/dynamic.trace
+tools/kairos/target/release/kairos oracle trace dynamic     # run twice, refuse a differing trace, store oracle/traces/dynamic.trace.zst
+tools/kairos/target/release/kairos oracle cat dynamic       # the stored trace, decompressed, for a diff
+tools/kairos/target/release/kairos status --json            # the fleet table as JSON (the house serde_json)
 ```
 
 `deploy` needs exactly one of `--public` / `--private` and refuses a mismatch

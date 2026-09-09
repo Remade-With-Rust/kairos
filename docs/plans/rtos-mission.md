@@ -510,7 +510,8 @@ and passes the fleet gate on the developer box (`kairos check --fmt --clippy
 --test --deny`: 8 bare-metal rungs each); `rusty_rtos_core` carries the real
 types (§2.5) with 34 host tests; the instrumented C oracle builds under WSL and
 `kairos oracle trace dynamic` produces a 24,403-line trace that is
-byte-identical across two runs (umbrella `docs/LEDGER.md`). Two items are
+byte-identical across two runs, stored as `oracle/traces/dynamic.trace.zst`
+(umbrella `docs/LEDGER.md`). Two items are
 owner steps and stay open: CI runs on GitHub have not started because the
 org's Actions billing is failing ("recent account payments have failed or
 your spending limit needs to be increased"), and `KAIROS_GIT_TOKEN` is not on
@@ -796,6 +797,7 @@ A number in our favour gets the arm-duration and work-parity checks first
 | 2026-09-09 | **The house stack is validated by a compile gate, not a reading.** `tools/house-gate` in the umbrella checks every house crate Kairos could consume, at its pin, `no_std` on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf` and on the host, under the Kairos `deny.toml`. Verdicts of 2026-09-09 in `docs/HOUSE-STACK.md`: ready on bare metal — `rusty_alloc-api` 2.0.4 (with `--cfg ra_single_threaded --cfg ra_small_profile`), `rusty_symbols` 0.1.0, `thoth` v0.3.0 (git tag, `default-features = false`), `rusty_json_turbo` 0.1.0 (git; lib `serde_json`); host-only today — `rusty_zstd` 0.2.3 and `rusty_erasure-core` 0.4.0 (`AtomicU64`), `rusty_time-core` 0.1.10 and `rusty_xml` 0.8.1 (`std`); out of scope for an RTOS — SpaceDB, FFAI, remade_ffmpeg_rs, rusty_maps (their closures resolve clean of C and of banned crates). Four crates.io names are imposters and are banned by name in every `deny.toml`: `rusty_time`, `rff`, `thoth`, `spacedb`. |
 | 2026-09-09 | `rusty_rtos_json` is the coreJSON API (zero-allocation validator + `JSON_Search`); `rusty_json_turbo` (the house serde_json) is the typed layer behind a `serde` feature under `alloc`. One job, one parser each; the json package plan carries the row. |
 | 2026-09-09 | The allocator seam has both halves: `rusty_rtos_alloc` with `std` (default) for hosted deliverables, and `--no-default-features` under `--cfg ra_single_threaded --cfg ra_small_profile` for firmware, checked on the four bare-metal targets by CI and by `kairos check` (`cfgs` in `KAIROS.toml`). The fixed `Region` and `heap_3` wiring stay K4's. |
+| 2026-09-09 | **The fleet tool consumes the house stack it validates**: `rusty_alloc` through the seam, `thoth` v0.3.0 for the status glyphs, `rusty_json_turbo` for `status --json`, `rusty_zstd` for the stored oracle traces (`<scenario>.trace.zst`, level 19, decompressed and compared before it is kept, `oracle cat` to read). Every stored trace is therefore a zstd frame from the day the corpus exists (K1 diffs against `kairos oracle cat`). What Kairos wants on bare metal and cannot have yet is `docs/plans/build-me-bare.md`. |
 | 2026-09-09 | The oracle is a dev-only C dependency built by the fleet tool from source with the system compiler under WSL; it never enters a package's build graph, and `kairos oracle patch` restores the pinned `port.c` before applying its six exact-anchor edits, so the checkout is never in an unknown state. |
 
 ---

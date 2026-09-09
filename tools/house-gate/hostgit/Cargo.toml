@@ -1,0 +1,11 @@
+[package]
+name = "gate-hostgit"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+remade-ffmpeg = { package = "remade-ffmpeg", version = "0.2.1", git = "https://github.com/Remade-With-Rust/remade_ffmpeg_rs", default-features = false }
+rmap-core = { version = "0.0.0", git = "https://github.com/Remade-With-Rust/rusty_maps", default-features = false }

@@ -21,5 +21,6 @@ exit, and add `vPortKairosTick()` for the idle hook (the sim contract).
 kairos oracle fetch            # clone the pinned commits (refuses a mismatch)
 kairos oracle patch            # the deterministic-tick patch, idempotent
 kairos oracle build dynamic    # gcc under WSL (Windows) or cc (Linux)
-kairos oracle trace dynamic --ticks 2000   # run twice, refuse a differing trace, store oracle/traces/dynamic.trace
+kairos oracle trace dynamic --ticks 2000   # run twice, refuse a differing trace, store oracle/traces/dynamic.trace.zst (rusty_zstd, round-tripped)
+kairos oracle cat dynamic                  # the stored trace, decompressed to stdout (diff it against the kernel's)
 ```

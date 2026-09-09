@@ -29,13 +29,17 @@ done
 RUSTFLAGS="--cfg ra_single_threaded --cfg ra_small_profile" \
   cargo check -p gate-alloc --target thumbv7em-none-eabihf
 cargo deny check                       # the Kairos policy over the whole graph
-cd host && cargo generate-lockfile && cargo deny check   # SpaceDB, FFAI, rusty_time, rusty_xml, rusty_erasure, rusty_zstd: resolve + policy only
+(cd host && cargo check && cargo deny check)             # SpaceDB, FFAI, rusty_time, rusty_xml, rusty_erasure, rusty_zstd on the host
+(cd hostgit && CARGO_NET_GIT_FETCH_WITH_CLI=true cargo check)   # remade-ffmpeg (rff) and rmap-core by git URL
 ```
 
 `host/` is a second workspace for the crates that only make sense on a host
-(`spacedb-sdk`, `ffai-core`, and the `std` builds of the others). It is
-resolved and policy-checked, not compiled: FFAI pulls candle, and nothing in
-an RTOS links either.
+(`spacedb-sdk`, `ffai-core`, and the `std` builds of the others); `hostgit/`
+a third for the two that come by git URL (`remade-ffmpeg`, the `rff` facade,
+`default-features = false`; `rmap-core` from the private `rusty_maps`, which
+needs `CARGO_NET_GIT_FETCH_WITH_CLI=true` so the gh credentials apply). Both
+compile with `cargo check` on the host (21 s and 54 s on 2026-09-09): nothing
+in an RTOS links them, but the pins are proven, not read.
 
 Verdicts and the date they were taken: `docs/HOUSE-STACK.md`. Re-run the gate
 when a pin moves, and move the pin in one commit with the verdict.

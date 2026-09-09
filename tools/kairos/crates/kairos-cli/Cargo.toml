@@ -16,7 +16,9 @@ path = "src/main.rs"
 kairos-alloc = { workspace = true }
 serde = { workspace = true }
 toml = { workspace = true }
-rusty_symbols = { workspace = true }
+thoth = { workspace = true }
+serde_json = { workspace = true }
+rusty_zstd = { workspace = true }
 
 [lints]
 workspace = true

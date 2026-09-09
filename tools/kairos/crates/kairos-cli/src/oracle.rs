@@ -11,7 +11,11 @@
 //!   WSL on Windows (the Posix port needs pthreads and signals), directly on
 //!   a Unix host. No CMake, no make: one compiler invocation this tool owns.
 //! * `trace <scenario> [--ticks N]` runs the binary twice, refuses a trace
-//!   that differs between the runs, and stores it under `oracle/traces/`.
+//!   that differs between the runs, and stores it under `oracle/traces/` as
+//!   one zstd frame (`<scenario>.trace.zst`, the house compressor,
+//!   round-tripped before it is kept); the plain file stays beside it for
+//!   humans and is not tracked.
+//! * `cat <scenario>` decompresses the stored trace to stdout (for a diff).
 //!
 //! The C toolchain is a dev-only oracle dependency, never a build dependency
 //! of anything that ships.
@@ -423,9 +427,37 @@ fn trace(root: &Path, name: &str, ticks: u64) -> Result<()> {
             "the scenario did not pass its own check: {verdict1}"
         ));
     }
+    // The tracked form: one zstd frame, at the archival level (a trace is
+    // repetitive text, and it is read far more often than written), and
+    // never kept without a round trip proving it decodes to the bytes seen.
+    let packed = rusty_zstd::compress(&a, 19).map_err(|e| format!("rusty_zstd: {e}"))?;
+    let back = rusty_zstd::decompress(&packed).map_err(|e| format!("rusty_zstd: {e}"))?;
+    if back != a {
+        return fail("rusty_zstd round trip did not reproduce the trace; nothing stored");
+    }
+    fs::write(traces.join(format!("{name}.trace.zst")), &packed)?;
     println!(
-        "oracle/traces/{name}.trace: {lines1} lines, byte-identical across two runs, scenario pass ({ticks} ticks)"
+        "oracle/traces/{name}.trace.zst: {lines1} lines, byte-identical across two runs, scenario pass ({ticks} ticks); {} -> {} bytes, round trip verified",
+        a.len(),
+        packed.len()
     );
+    Ok(())
+}
+
+/// The stored trace, decompressed to stdout.
+fn cat(root: &Path, name: &str) -> Result<()> {
+    use std::io::Write as _;
+    scenario(name)?;
+    let path = root
+        .join("oracle")
+        .join("traces")
+        .join(format!("{name}.trace.zst"));
+    let packed = fs::read(&path)
+        .map_err(|e| format!("{}: {e} (run `kairos oracle trace {name}`)", path.display()))?;
+    let text = rusty_zstd::decompress(&packed).map_err(|e| format!("rusty_zstd: {e}"))?;
+    let mut out = std::io::stdout().lock();
+    out.write_all(&text)?;
+    out.flush()?;
     Ok(())
 }
 
@@ -439,6 +471,10 @@ pub(crate) fn main(root: &Path, args: &[String]) -> Result<()> {
         "build" => {
             let name = args.get(1).map(String::as_str).unwrap_or("dynamic");
             build(root, name)
+        }
+        "cat" => {
+            let name = args.get(1).map_or("dynamic", String::as_str);
+            cat(root, name)
         }
         "trace" => {
             let name = args
@@ -460,7 +496,7 @@ pub(crate) fn main(root: &Path, args: &[String]) -> Result<()> {
             }
         }
         _ => fail(
-            "oracle needs one of: fetch | patch | build [SCENARIO] | trace [SCENARIO] [--ticks N] [--all]",
+            "oracle needs one of: fetch | patch | build [SCENARIO] | trace [SCENARIO] [--ticks N] [--all] | cat [SCENARIO]",
         ),
     }
 }
