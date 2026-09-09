@@ -1,0 +1,26 @@
+# The allocator seam for the fleet tool. One crate holds the exact pin so the
+# deliverable (`kairos-cli`) never names `rusty_alloc` itself and no library
+# ever declares a global allocator — the house rule from
+# building-the-new-internet, stack.md section 5.
+
+[package]
+name = "kairos-alloc"
+description = "The Kairos fleet tool's allocator seam: rusty_alloc, pinned once."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[features]
+default = ["std"]
+std = ["rusty_alloc-api/std"]
+# Guard pages, encrypted free lists: for anything exposed to untrusted input.
+secure = ["rusty_alloc-api/secure"]
+
+[dependencies]
+rusty_alloc-api = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,134 @@
+# KAIROS.toml — the fleet manifest for the Kairos umbrella folder.
+#
+# `tools/kairos` reads this file. Each [[package]] is an INDEPENDENT git repo and
+# cargo workspace living in a sibling directory of the same name. `kairos deploy`
+# pushes exactly one of them to GitHub; `kairos check` compile-gates all of them
+# on the host and on the listed bare-metal targets; `kairos patches` writes each
+# repo's umbrella-only [patch] table from its `uses` list.
+#
+# visibility = the intended visibility at deploy time. Policy (mission plan
+# section 2.11): every repo starts PRIVATE and is flipped public when it clears
+# the market-ready bar. `kairos deploy` still requires an explicit --public /
+# --private flag and refuses a mismatch unless --override-visibility is given.
+#
+# status: planned | scaffold | <milestone>-host (proven on the host / sim only)
+#         | <milestone> (a Verified cell) | released
+#
+# crates: the crates a package publishes, each at crates/<crate>. uses: the
+# sibling packages in this package's dependency graph ("pkg" for every crate of
+# the sibling, "pkg/crate" for one crate). Keep `uses` honest — a sibling
+# listed here but absent from the graph is an unused [patch] row, which makes
+# `cargo metadata --locked` nondeterministic.
+
+[kairos]
+org = "Remade-With-Rust"
+default_branch = "main"
+# The umbrella repository's name on GitHub (this folder may be called anything).
+umbrella = "kairos"
+# The umbrella repo itself (this folder: the plan, the manifest, the tool, the
+# oracle harness). Packages are NOT inside it; they are ignored by .gitignore
+# and deployed on their own.
+visibility = "private"
+token = "KAIROS_GIT_TOKEN"
+
+# ---------------------------------------------------------------- Layer 0 ----
+
+[[package]]
+name = "rusty_rtos_core"
+kind = "foundation"
+status = "planned"
+visibility = "private"
+description = "The shared vocabulary of the Kairos family (FreeRTOS remade in Rust): ticks, priorities, generational handles, one Copy error, the Config trait, and the Port / Heap / Trace / Hooks seams. No pointers, no allocator, no arch. forbid(unsafe)."
+crates = ["rusty_rtos_core", "rusty_rtos_alloc"]
+no_std_crates = ["rusty_rtos_core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = []
+plan = "docs/plans/rusty_rtos_core.md"
+
+# ---------------------------------------------------------------- Layer 1 ----
+
+[[package]]
+name = "rusty_rtos_kernel"
+kind = "function"
+status = "planned"
+visibility = "private"
+description = "FreeRTOS-Kernel remade in Rust: the fixed-priority preemptive scheduler, task notifications, queues, semaphores, mutexes with priority inheritance, queue sets, software timers, event groups, stream and message buffers — a pure state machine over the Port seam, forbid(unsafe), traced against the C kernel."
+crates = ["rusty_rtos_kernel", "rusty_rtos_kernel-core"]
+no_std_crates = ["rusty_rtos_kernel-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_kernel.md"
+
+[[package]]
+name = "rusty_rtos_port"
+kind = "function"
+status = "planned"
+visibility = "private"
+description = "The FreeRTOS ports remade in Rust: the deterministic sim port (the oracle harness), the Posix host port, and the Cortex-M, RISC-V and Xtensa ports — the only crates in the family with a fenced unsafe block, at the context switch and the vector table."
+crates = ["rusty_rtos_port", "rusty_rtos_port-core"]
+no_std_crates = ["rusty_rtos_port-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_port.md"
+
+[[package]]
+name = "rusty_rtos_heap"
+kind = "function"
+status = "planned"
+visibility = "private"
+description = "FreeRTOS heap_1 / heap_4 / heap_5 remade in Rust behind the Heap seam, with the heap protector; heap_3 as the seam over rusty_alloc small-metal and esp-alloc; static allocation first-class."
+crates = ["rusty_rtos_heap", "rusty_rtos_heap-core"]
+no_std_crates = ["rusty_rtos_heap-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_heap.md"
+
+[[package]]
+name = "rusty_rtos_json"
+kind = "function"
+status = "planned"
+visibility = "private"
+description = "coreJSON remade in Rust: the strict ECMA-404 validator and the query-by-path search, zero allocation, no_std, forbid(unsafe), with the no-panic gate every parser in the family carries."
+crates = ["rusty_rtos_json", "rusty_rtos_json-core"]
+no_std_crates = ["rusty_rtos_json-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_json.md"
+
+[[package]]
+name = "rusty_rtos_backoff"
+kind = "function"
+status = "planned"
+visibility = "private"
+description = "backoffAlgorithm remade in Rust: exponential backoff with jitter for network retries, no_std, forbid(unsafe), gated against the C library's own test vectors."
+crates = ["rusty_rtos_backoff", "rusty_rtos_backoff-core"]
+no_std_crates = ["rusty_rtos_backoff-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_backoff.md"
+
+# ---------------------------------------------------------------- Layer 2 ----
+
+[[package]]
+name = "rusty_rtos_demo"
+kind = "process"
+status = "planned"
+visibility = "private"
+description = "The FreeRTOS standard demo tasks (Demo/Common/Minimal) remade in Rust as the Kairos conformance corpus: every scenario self-checks like the C original and, on the sim port, diffs its trace against the C kernel's."
+crates = ["rusty_rtos_demo", "rusty_rtos_demo-core"]
+no_std_crates = ["rusty_rtos_demo-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_demo.md"
+
+[[package]]
+name = "rusty_rtos-capi"
+kind = "process"
+status = "planned"
+visibility = "private"
+description = "The FreeRTOS C ABI over the Kairos kernel: xTaskCreate, xQueueSend, xSemaphoreTake, xTimerCreate and the rest as extern C symbols with generated FreeRTOS.h-compatible headers, so a C program relinks and the unmodified C demo tasks pass."
+crates = ["rusty_rtos-capi", "rusty_rtos-capi-core"]
+no_std_crates = ["rusty_rtos-capi-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos-capi.md"

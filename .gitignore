@@ -1,0 +1,16 @@
+# Kairos is an UMBRELLA folder. Every package below is an independent git
+# repository + cargo workspace, deployed to GitHub on its own by `kairos deploy`.
+# They are therefore ignored here rather than tracked as submodules.
+/rusty_rtos_*/
+/rusty_rtos-*/
+/kairos-*/
+/tools/kairos/target/
+**/target/
+# The C oracle checkouts and build products (pinned in ORACLES.md, fetched by
+# `kairos oracle fetch`); the harness sources beside them ARE tracked.
+/oracle/FreeRTOS-Kernel/
+/oracle/FreeRTOS/
+/oracle/build/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,25 @@
+[package]
+name = "__NAME__"
+description = "__DESCRIPTION__"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+readme = "../../README.md"
+documentation = "https://docs.rs/__NAME__"
+keywords = ["rtos", "freertos", "embedded", "no-std", "remade-with-rust"]
+categories = ["embedded", "no-std", "os"]
+
+[features]
+default = ["std"]
+std = ["__NAME__-core/std"]
+alloc = ["__NAME__-core/alloc"]
+
+[dependencies]
+__NAME__-core = { workspace = true }
+
+[lints]
+workspace = true

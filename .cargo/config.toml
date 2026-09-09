@@ -1,0 +1,9 @@
+# The Kairos umbrella is NOT a cargo workspace. Each package repo patches the
+# siblings it uses in its own (gitignored) .cargo/config.toml, written by
+# `kairos patches` — never here: an unused [patch] entry makes
+# `cargo metadata --locked` nondeterministic (Janus mission plan, wall 5).
+
+[net]
+# Sibling repos are PRIVATE until market-ready; fetch through the git CLI so the
+# operator's credential helper (gh auth) applies.
+git-fetch-with-cli = true
