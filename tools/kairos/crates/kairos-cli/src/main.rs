@@ -939,6 +939,10 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 .file_name()
                 .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
             ran += 1;
+            // Name it: a bare `cargo check --all-targets` in the log says
+            // nothing about which tool it checked, and two of them look
+            // identical.
+            println!("$ cargo check --all-targets   (tools/{name})");
             if let Err(e) = run(false, &tool, "cargo", &["check", "--all-targets"]) {
                 failures.push(format!("tools/{name}: {e}"));
             }
