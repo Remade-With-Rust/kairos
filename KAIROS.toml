@@ -61,6 +61,11 @@ no_std_crates = ["rusty_rtos_kernel-core"]
 # The CBMC proof harnesses live here, behind `cfg(kani)`, which nothing but
 # the model checker compiles: `check --kani` is the gate that they still do.
 proofs = ["rusty_rtos_kernel-core"]
+# The kernel allocates NOTHING, and that is checked on the linked artifact
+# rather than claimed. It is not a small property: it is what makes the
+# scheduler usable with static allocation only, and it is why an allocator's
+# routing costs cannot reach the kernel at all.
+no_alloc_crates = ["rusty_rtos_kernel-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
 uses = ["rusty_rtos_core"]
 plan = "docs/plans/rusty_rtos_kernel.md"

@@ -978,6 +978,73 @@ the family's four targets. This closes the **comparison** and leaves the
 **target** clause open, exactly as B4a substituted `mps2-an385` for the
 `lm3s6965evb` the plan named and recorded why.
 
+### Chasing the router: a host that refuses to reproduce, and a gate born from it
+
+The one-byte experiment says the cost is routed. The obvious next question is
+*by which constant*, because on a 32-bit target two of them equal 512:
+`SMALL_SIZE_MAX` (`SMALL_WSIZE_MAX * INTPTR_SIZE` = 128 x 4, the top of the
+`direct[]` table) and `SMALL_OBJ_SIZE_MAX` (`SLICE/8`, the top of the
+small-page range). On 64-bit they come apart — 1,024 against 512 — so the same
+sweep on a host names its own cause.
+
+`tools/alloc-route-probe` is that sweep: one self-contained binary, the same
+`=2.1.0` and the same two cfgs, pinned to one core at High priority,
+`rdtsc`, best of 400 rounds with a null arm subtracted. It prints the
+constants it compiled against rather than restating them.
+
+| fact | value | method |
+|---|---|---|
+| the host does **not** reproduce the step | no step at 512, none at 1,024; the only step is 2,048 -> 2,049 (11 -> 91 cycles/op) | so the lower step is **not** the `direct[]` table, whose top is 1,024 here, and not a generic geometry effect |
+| `MEDIUM_OBJ_SIZE_MAX` is confirmed twice | it routes on **both** platforms | the one boundary not in question |
+| and the host runs **24x faster** | 11–13 cycles/op against the device's 271–314 | not a core-speed ratio — a different path. The host hits a fast path the device does not |
+| what actually differs | the **prim** | a firmware gets `prim::fixed`, a host `prim::windows`/`prim::unix` — and the prim is selected by target OS, not by a feature, so it **cannot be swapped on a host** to isolate it. That run has to happen inside the crate |
+
+**A hypothesis, labelled as one.** `alloc.rs` records that "a tight alloc/free
+loop frees into `local_free`, so the queue front's `free` list is ALWAYS dry
+when the next allocation arrives" — and this harness *is* that loop. If the
+device takes `malloc_generic` on most operations while the host does not, the
+24x gap and the step are the same fact seen twice. Unconfirmed: nothing on the
+seam exposes a slow-path counter.
+
+**The probe that could not answer it, deleted rather than shipped.** The
+footprint route — a small page is one slice (4 KiB), a medium four (16 KiB),
+so a 513-byte allocation should claim 4x the region — is invisible from
+outside: `region_stats()` answers over region **extents**, moving when a whole
+segment is claimed and not when a page is. It read 0 for all six sizes. **Third
+check-that-cannot-fail this project has caught**, after B3's grep and the S3
+reclamation test.
+
+### The kernel allocates nothing — and the check that seemed to prove it did not
+
+The Kairos-side lever was going to be "re-size any kernel allocation that
+lands in the expensive band". There are none: **the kernel allocates nothing,
+in any configuration** — no `Box`, no `Vec`, and not one `cfg(feature =
+"alloc")` in `rusty_rtos_kernel-core`. So the routing cliff cannot reach
+Kairos internally at all; it reaches only an application's allocations,
+through K4's `heap_3` seam. That is now written into
+`rusty_rtos_heap/docs/plans/rusty_rtos_heap.md` as a design input, along with
+what that package must **not** do about it (round requests up to cross the
+boundary: 16% for up to 25% more memory, and it stops being a win the day the
+allocator is fixed).
+
+**But the check that appeared to prove it was worthless, and that is the
+lesson.** "It compiles with `--no-default-features` on four bare targets" says
+nothing about allocation: `extern crate alloc` resolves from the sysroot on a
+bare-metal target whatever the feature flags say. A `Box::new` added to the
+kernel compiled **clean through all eight `no_std` rungs**. The claim has to be
+read off the object file.
+
+| fact | value | method |
+|---|---|---|
+| the kernel references the allocator zero times | **0** `__rust_alloc` / `__rust_dealloc` symbols | `cargo build -p rusty_rtos_kernel-core --no-default-features --target thumbv7em-none-eabihf`, then `llvm-nm` the rlib |
+| and the check can fail | a `Box::new` turns 0 into **2** (`__rust_alloc`, `__rust_alloc_zeroed`, both undefined) | poison-proven both directions |
+| it is a gate, not a note | `no_alloc_crates` in `KAIROS.toml`; runs with the ordinary `kairos check`, not behind a flag | fast, and exactly the kind of property that rots silently. A missing `llvm-nm` reports "the check did NOT run, so this is not a verdict about the code" rather than passing |
+
+**And the report is filed.** `rusty_alloc`'s own repo now carries
+`docs/plans/fixed-prim-small-step.md` in the house plan format — the step, the
+host refutation, the four dead models, the two seam gaps, the three
+reproducers, and the `heap_4` A/B that says why 16% is worth their time.
+
 ### Flash and RAM, decomposed — the part of K3 a cell CAN carry
 
 A footprint is a property of the linked binary, not of execution.

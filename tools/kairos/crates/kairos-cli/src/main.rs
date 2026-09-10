@@ -118,6 +118,16 @@ pub(crate) struct Package {
     /// harness can stop compiling and every other gate stays green.
     #[serde(default)]
     proofs: Vec<String>,
+    /// Crates that must allocate NOTHING, checked on the linked artifact.
+    ///
+    /// The obvious check — "it compiles with `--no-default-features`" —
+    /// does NOT work, and was believed for a while. `extern crate alloc`
+    /// resolves from the sysroot on a bare-metal target whatever the
+    /// feature flags say, so a `Box::new` added to the kernel compiled
+    /// clean through every one of the eight `no_std` rungs. A claim about
+    /// allocation has to be read off the object file.
+    #[serde(default)]
+    no_alloc_crates: Vec<String>,
     /// `--cfg` flags the no_std rungs are checked under (as `RUSTFLAGS`), for
     /// crates whose `no_std` build must be opted into: rusty_alloc refuses to
     /// build without `ra_single_threaded` and allocates nothing without
@@ -576,6 +586,33 @@ fn qemu_dir(program: &str) -> Option<PathBuf> {
     roots.into_iter().find(|dir| dir.join(&exe).is_file())
 }
 
+/// Does this rlib reference the Rust allocator at all?
+///
+/// `llvm-nm` prints an undefined `U` line per referenced symbol, so a crate
+/// that never allocates has none. Poison-proven both ways: a `Box::new`
+/// added to `rusty_rtos_kernel-core` turns 0 references into 2
+/// (`__rust_alloc`, `__rust_alloc_zeroed`).
+fn nm_mentions_allocator(rlib: &Path) -> Result<bool> {
+    if !rlib.is_file() {
+        return fail(format!("no rlib at {}", rlib.display()));
+    }
+    let out = Command::new("llvm-nm").arg(rlib).output();
+    let out = match out {
+        Ok(o) => o,
+        // Missing tool and failing check are different states, and saying
+        // so is the difference between "install LLVM" and an afternoon
+        // reading a kernel diff.
+        Err(_) => {
+            return fail(
+                "`llvm-nm` not found. It ships with LLVM and with the Rust                  `llvm-tools` component. The check did NOT run, so this is                  not a verdict about the code."
+                    .to_string(),
+            );
+        }
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(text.contains("__rust_alloc") || text.contains("__rust_dealloc"))
+}
+
 fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_tests = has_flag(args, "--test");
     let with_clippy = has_flag(args, "--clippy");
@@ -752,6 +789,46 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 ) {
                     failures.push(format!("{}: qemu cell {name}: {e}", package.name));
                 }
+            }
+        }
+        // A crate that claims to allocate nothing is checked on its
+        // rlib, not on its source. This runs with the ordinary gate
+        // rather than behind a flag: it is fast, and it is the kind of
+        // property that rots silently.
+        for krate in &package.no_alloc_crates {
+            let Some(target) = package.targets.first() else {
+                continue;
+            };
+            ran += 1;
+            if let Err(e) = run(
+                false,
+                &dir,
+                "cargo",
+                &[
+                    "build",
+                    "-p",
+                    krate,
+                    "--no-default-features",
+                    "--target",
+                    target,
+                ],
+            ) {
+                failures.push(format!("{}: no-alloc build {krate}: {e}", package.name));
+                continue;
+            }
+            let rlib = dir
+                .join("target")
+                .join(target)
+                .join("debug")
+                .join(format!("lib{}.rlib", krate.replace('-', "_")));
+            match nm_mentions_allocator(&rlib) {
+                Err(e) => failures.push(format!("{}: no-alloc {krate}: {e}", package.name)),
+                Ok(true) => failures.push(format!(
+                    "{}: {krate} references the allocator (`__rust_alloc`) in                      {}. It is declared allocation-free.",
+                    package.name,
+                    rlib.display()
+                )),
+                Ok(false) => println!("  {krate}: allocates nothing (0 allocator symbols)"),
             }
         }
         if with_soak {

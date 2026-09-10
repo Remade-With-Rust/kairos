@@ -1,0 +1,23 @@
+# A self-contained reproducer for the rusty_alloc routing step.
+#
+# Deliberately its own workspace and its own binary so the allocator's
+# maintainers can `cargo run --release` it without any of Kairos.
+[package]
+name = "alloc-route-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+rusty_alloc = "=2.1.0"
+# The GlobalAlloc shim, so the probe calls the allocator the way a
+# program does rather than reaching into its internals.
+rusty_alloc-api = { version = "=2.1.0", default-features = false, features = ["std"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[workspace]

@@ -1,0 +1,4 @@
+# The same two cfgs every Kairos firmware builds rusty_alloc with, and the
+# ones that select the geometry under test.
+[build]
+rustflags = ["--cfg", "ra_single_threaded", "--cfg", "ra_small_profile"]
