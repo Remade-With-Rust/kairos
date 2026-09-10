@@ -241,17 +241,34 @@ attribute cannot be what makes that one fail.
 | a receive reads the item as the wrong type | the receive fills a buffer you nominate and nothing checks the type | a `u16` comes out because nothing else could have gone in — no `try_from`, no clamp |
 | a failed send is ignored and the value lost | `xQueueSend`'s `BaseType_t` is as ignorable as any other return | `Sent<T>` is `#[must_use]` and **has no variant that drops the value** — the failure branch cannot be written without saying what happened to it |
 | a queue is sent a pointer to a stack local | legal, and `MessageBufferAMP` in this corpus does it on purpose | the value *moves*; there is no pointer to outlive |
+| `xQueueSendFromISR` called from a task | in scope everywhere; takes the wrong lock | `send_from_isr` wants an `Isr`, and a task holds only the kernel |
+| `xQueueSend` called from an interrupt | in scope everywhere; may try to block, which corrupts the scheduler | `send` wants the kernel, and an interrupt holds only an `Isr` |
+| shared data touched without taking the mutex | a FreeRTOS mutex protects *nothing* — it is a counting semaphore with inheritance and a name, and the data it is said to guard is an unrelated variable somewhere else | `Mutex<T>` owns `T`; there is no `get`, no `lock` that returns it, and no reachable field. `Mutex::with` takes the lock, runs the closure, gives it back |
+
+The two halves of every FreeRTOS call live on two different types here, and
+there is exactly one runtime check — at the boundary where `Isr::with`
+grants the capability, which is the `configASSERT( xPortIsInsideInterrupt()
+)` the C fires on the ports that can tell and stays silent about on the
+ones that cannot. Everything downstream of that boundary is the type
+system. The shape is `critical_section::with`'s, for the same reason: a
+capability that must not outlive its context is borrowed inside a closure
+rather than returned.
+
+### The typed face is cheap to verify, and that is the topology argument
+
+| fact | value | method |
+|---|---|---|
+| Kani harnesses | **25 of 35 verify**, up from 22 of 32 | the three new ones are the Rust face's own properties, over a `Raw` fake with symbolic occupancy: **a value handed to `send` is never lost** (it is in the queue or it comes back *equal to what went in*), what comes out is what went in, and a refused send does not disturb a value whose index is already queued |
+| what they cost | **1 s, 2 s and 1 s** | 120, 164 and 166 checks. The raw kernel's nearest equivalent, `queue_generic_send_stale_handle`, does not converge in **700 s** |
+| why the difference is the design and not the tool | the state is not there to explore | four of the ten harnesses that do not converge fail because a *symbolic handle* reaches a kernel call and the model checker must then explore every arena slot it could name. Against the typed face those four **cannot be written**: a `Queue<T, N>` is minted by `create` and there is no constructor that invents one. That is compile-time topology stated as something checkable — not "the proof got faster" but "the state the proof was exploring does not exist" |
 
 ### Still open in K2.1
 
-`Mutex<T>` that owns what it protects, the from-ISR surface as a capability
-token, and compile-time topology. The last of those has a measured
-argument behind it rather than a taste: ten of K2's thirty-two Kani
-harnesses do not converge, and both causes are the dynamic layer —
-`start_scheduler` building state, and a symbolic *handle* forcing the model
-checker to explore every arena slot it could name. Naming tasks and queues
-by type instead of by handle should collapse that, and the Kani count is
-the number that will say whether it did.
+The topology work proper: tasks and queues named by type rather than by
+runtime handle *inside the kernel*, so the arena indirection goes and the
+six harnesses that need a started kernel get cheap too. The three above are
+the argument for doing it, not the doing of it — they show the effect at
+the face, where there is no arena, and the kernel is where the arena is.
 
 ## The oracle (2026-09-09)
 
