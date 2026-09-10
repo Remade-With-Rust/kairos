@@ -23,12 +23,46 @@
 //! 4 KiB and `SMALL_OBJ_SIZE_MAX` at 512. Running the same sweep here puts
 //! the step at exactly one of them, and that names the router.
 //!
-//! It matters because it decides whether the fix is free. If the page kind
-//! routes it, moving the boundary trades speed for page granularity — a
-//! medium page is four slices, so a class costs 16 KiB of region instead of
-//! 4 KiB, which on a 64 KiB microcontroller region is a bad trade. If the
-//! `direct[]` table routes it, then the *fast* lookup is losing to the
-//! fallback and the fix costs no memory at all.
+//! # THE ANSWER, and why this probe alone could not give it
+//!
+//! **It is the `direct[]` table, and the router is the pointer width.**
+//! Resolved upstream 2026-09-10 (`rusty_alloc/docs/plans/fixed-prim-small-step.md`
+//! §8) after this probe was filed as evidence.
+//!
+//! Run this on x86-64 and nothing steps — not at 512, not at 1,024. The
+//! conclusion drawn from that was "so it is not `SMALL_SIZE_MAX`", and **that
+//! does not follow.** A host where neither candidate steps has not exonerated
+//! either one; it has shown it cannot discriminate. Worse, on x86-64 the
+//! suspect is not even at the scene: `SMALL_SIZE_MAX` is 1,024 there and 512
+//! on the 32-bit chip where the step was seen, so the two constants that
+//! coincide on the device are pulled apart here **and the phenomenon goes
+//! with them**.
+//!
+//! The run that settles it holds the crate, the cfgs and the prim fixed and
+//! varies **only the pointer width** — which is `--target i686-...`, not a
+//! different machine and not a bare-metal prim:
+//!
+//! ```text
+//! arm       256 vs 264 (control)   512 vs 513   2048 vs 2049
+//! x86-64            -0.9%             +0.1%        -81.9%
+//! i686              -0.4%            +8.6%         -80.6%
+//! ```
+//!
+//! So `prim::fixed` is exonerated — the step appears on the OS prim as soon
+//! as the pointer is 32 bits.
+//!
+//! **The lesson is `codec-measurement` §11's own**: never refute a lever on
+//! one measurement, and vary the axis that could flip the answer. The axis
+//! was pointer width, and it was the one held fixed. This file is kept
+//! because a probe that produced a wrong refutation is worth more with the
+//! refutation attached than deleted.
+//!
+//! The mechanism, counted rather than timed: both routes enter
+//! `malloc_generic` on **every** operation, so the slow path is not the
+//! difference. The `direct[]` route retires and re-carves its page every
+//! ~513 operations — `GENERIC_COLLECT_DEFAULT`, the periodic sweep, 512 at
+//! the small profile — and the bin route above `SMALL_SIZE_MAX` never does.
+//! Confirmed on 32-bit silicon in `esp32s3-devkit-alloc-cycles`.
 //!
 //! The probe prints the constants it actually compiled against rather than
 //! restating them, so a reader can check the premise before the result.
@@ -141,8 +175,15 @@ fn main() {
     println!();
 
     if SMALL_SIZE_MAX == SMALL_OBJ_SIZE_MAX {
-        println!("  !! the two candidates are EQUAL in this build, so it cannot");
-        println!("     separate them. That is the 32-bit case; run on 64-bit.");
+        println!("  the two candidates COINCIDE in this build (32-bit), which is");
+        println!("  the configuration where the step actually appears. A 64-bit");
+        println!("  build pulls them apart AND loses the phenomenon, so it names");
+        println!("  nothing -- that mistake is what the module docs record.");
+        println!();
+    } else {
+        println!("  the two candidates differ here (64-bit), and this build does");
+        println!("  NOT reproduce the step. That is a machine on which the suspect");
+        println!("  is not at the scene: it cannot clear either candidate.");
         println!();
     }
 
@@ -198,9 +239,16 @@ fn main() {
     // rather than being read as a small one.
     const MIN: i64 = 8;
     match (small_step.abs() >= MIN, direct_step.abs() >= MIN) {
-        (true, false) => println!("VERDICT: the PAGE KIND routes it (SMALL_OBJ_SIZE_MAX)."),
-        (false, true) => println!("VERDICT: the direct[] TABLE routes it (SMALL_SIZE_MAX)."),
-        (true, true) => println!("VERDICT: BOTH boundaries step. Two effects, not one."),
-        (false, false) => println!("VERDICT: neither steps here — the host does not reproduce it."),
+        (true, false) => println!("the step is at SMALL_OBJ_SIZE_MAX on this build."),
+        (false, true) => println!("the step is at SMALL_SIZE_MAX on this build."),
+        (true, true) => println!("BOTH boundaries step on this build."),
+        (false, false) => println!(
+            "neither steps on this build, which means it CANNOT discriminate              -- not that either candidate is cleared. See the module docs."
+        ),
     }
+    println!();
+    println!("ANSWER (upstream, 2026-09-10): the direct[] table routes it, and");
+    println!("the router is the POINTER WIDTH -- SMALL_SIZE_MAX is 128 * size_of");
+    println!("::<usize>(), so 1024 here and 512 on a 32-bit chip. Re-run this as");
+    println!("`cargo run --release --target i686-pc-windows-msvc` to see +8.6%.");
 }

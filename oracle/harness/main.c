@@ -33,6 +33,7 @@
     #include "MessageBufferAMP.h"
 #endif
 #include "GenQTest.h"
+#include "TaskNotify.h"
 #include "IntSemTest.h"
 #include "StreamBufferInterrupt.h"
 #include "TimerDemo.h"
@@ -118,6 +119,11 @@ static void prvStartGenQTest( void )
     vStartGenericQueueTasks( harnessGENQ_PRIORITY );
 }
 
+static void prvStartTaskNotify( void )
+{
+    vStartTaskNotifyTask();
+}
+
 static void prvStartQueueOverwrite( void )
 {
     vStartQueueOverwriteTask( harnessQOVERWRITE_PRIORITY );
@@ -171,6 +177,7 @@ static const Scenario_t xScenarios[] =
     { "blocktim", prvStartBlockTim, xAreBlockTimeTestTasksStillRunning     },
     { "QPeek",    prvStartQPeek,    xAreQueuePeekTasksStillRunning         },
     { "GenQTest", prvStartGenQTest, xAreGenericQueueTasksStillRunning      },
+    { "TaskNotify", prvStartTaskNotify, xAreTaskNotificationTasksStillRunning },
     { "QueueOverwrite", prvStartQueueOverwrite, xIsQueueOverwriteTaskStillRunning },
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
@@ -294,6 +301,10 @@ void vApplicationTickHook( void )
     else if( strcmp( pxScenario->pcName, "StreamBufferInterrupt" ) == 0 )
     {
         vBasicStreamBufferSendFromISR();
+    }
+    else if( strcmp( pxScenario->pcName, "TaskNotify" ) == 0 )
+    {
+        xNotifyTaskFromISR();
     }
     else if( strcmp( pxScenario->pcName, "TimerDemo" ) == 0 )
     {

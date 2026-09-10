@@ -55,7 +55,12 @@ struct Scenario {
     amp: bool,
 }
 
-const SCENARIOS: [Scenario; 16] = [
+const SCENARIOS: [Scenario; 17] = [
+    Scenario {
+        name: "TaskNotify",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/TaskNotify.c"],
+        amp: false,
+    },
     Scenario {
         name: "dynamic",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/dynamic.c"],

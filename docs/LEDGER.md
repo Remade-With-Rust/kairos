@@ -1023,17 +1023,86 @@ constants it compiled against rather than restating them.
 
 | fact | value | method |
 |---|---|---|
-| the host does **not** reproduce the step | no step at 512, none at 1,024; the only step is 2,048 -> 2,049 (11 -> 91 cycles/op) | so the lower step is **not** the `direct[]` table, whose top is 1,024 here, and not a generic geometry effect |
+| the host does **not** reproduce the step | no step at 512, none at 1,024; the only step is 2,048 -> 2,049 (11 -> 91 cycles/op) | **and the conclusion drawn from this was WRONG — see the correction below.** What it licenses is "this host cannot discriminate"; what was written was "so it is not the `direct[]` table" |
 | `MEDIUM_OBJ_SIZE_MAX` is confirmed twice | it routes on **both** platforms | the one boundary not in question |
 | and the host runs **24x faster** | 11–13 cycles/op against the device's 271–314 | not a core-speed ratio — a different path. The host hits a fast path the device does not |
-| what actually differs | the **prim** | a firmware gets `prim::fixed`, a host `prim::windows`/`prim::unix` — and the prim is selected by target OS, not by a feature, so it **cannot be swapped on a host** to isolate it. That run has to happen inside the crate |
+| what was blamed | the **prim** | wrong, and §"the correction" below says how the error was made |
 
-**A hypothesis, labelled as one.** `alloc.rs` records that "a tight alloc/free
-loop frees into `local_free`, so the queue front's `free` list is ALWAYS dry
-when the next allocation arrives" — and this harness *is* that loop. If the
-device takes `malloc_generic` on most operations while the host does not, the
-24x gap and the step are the same fact seen twice. Unconfirmed: nothing on the
-seam exposes a slow-path counter.
+**A hypothesis, labelled as one — and since settled, against it.** The guess
+was that the device takes `malloc_generic` where the host does not. Measured
+on the device (below): **`generic` is 1.0000 per op on BOTH routes**. The slow
+path is universal here and is not the difference. The claim that "nothing on
+the seam exposes a slow-path counter" was also wrong: `alloc::stats()` has
+carried it all along — it is in `alloc`, not `prim::fixed`, which is why a
+seam re-exporting the fixed-region API in one `pub use` could not see it. The
+seam now re-exports `stats` and `usable_size`, and both gaps are closed.
+
+### The correction: it is the POINTER WIDTH, not the prim
+
+**The allocator's maintainers took the report, reproduced it, and
+re-attributed it** (`rusty_alloc/docs/plans/fixed-prim-small-step.md` §8). The
+report was right that there is a real step, right that it is routing, and
+right about where it hurts. It was **wrong about the cause**, and the way it
+was wrong is worth more than the fix.
+
+`SMALL_SIZE_MAX` is not a profile constant. It is
+`SMALL_WSIZE_MAX * INTPTR_SIZE` — **1,024 on a 64-bit host and 512 on a
+32-bit chip**, where it lands on the same byte as `SMALL_OBJ_SIZE_MAX`. So the
+host sweep above was run on **a machine on which the suspect is not at the
+scene**, and "there is no step at 1,024, therefore it is not `direct[]`" does
+not follow. Re-run with pointer width as the only variable, same crate, same
+cfgs, the OS prim in **both** arms:
+
+| arm | 256 vs 264 (control) | **512 vs 513** | 2048 vs 2049 |
+|---|---:|---:|---:|
+| x86-64 | −0.9% | **+0.1%** | −81.9% |
+| **i686** | −0.4% | **+8.6%** | −80.6% |
+
+`prim::fixed` is exonerated: the step appears on the OS prim as soon as the
+pointer is 32 bits. The run that would finish it was not "inside the crate"
+as the report claimed — it was `cargo build --target i686`.
+
+**This is the three-probe rule's own failure mode** (`codec-measurement` §11):
+*never refute a lever on one measurement, and vary the axis that could flip
+the answer*. The axis here was pointer width, and it was held fixed.
+
+### The mechanism, counted on 32-bit silicon
+
+Their §8.2 counted it on a host; §8.5 asked for the device, noting the counter
+half "is deterministic and needs no quiet box at all". It is now in
+`esp32s3-devkit-alloc-cycles` — no clock, no best-of-N, just `stats()` either
+side of the boundary, on the 32-bit part their host arms could not be:
+
+| size | route | `generic`/op | pages_fresh | retired |
+|---:|---|---:|---:|---:|
+| 256 | `direct[]` | 1.0000 | 21 | 20 |
+| 512 | `direct[]` | 1.0000 | 21 | **21** |
+| 513 | bin peek | 1.0000 | 1 | **0** |
+| 1024 | bin peek | 1.0000 | 1 | **0** |
+
+10,240 / 512 = 20, and the direct route carves 21 — the initial page plus one
+per periodic sweep. That is `GENERIC_COLLECT_DEFAULT`, 512 at the small
+profile: in a loop holding one block live the page is empty at every sweep, so
+every sweep costs a carve, an extend and a retire. The bin route carves its
+first page and then never churns. It corroborates their host figure (195 per
+100,000 = one per 513) on hardware they do not have.
+
+**And the first version of this check was wrong in the house's favourite
+way.** It keyed on `pages_fresh` and demanded **zero** from the bin route —
+but every route must carve a first page for a class it has not served before,
+so it reported FAIL against correct behaviour. Churn is the discriminator, not
+carving; the check now keys on `pages_retired`, which is 21 against 0.
+
+**It is a deliberate trade, and the real defect was that a firmware could not
+move it.** Short sweeps buy back a starvation the small profile had at 10,000
+and cost page churn; which is right depends on the workload, and a bench that
+keeps one block live cannot decay, so it sees only the cost. Upstream shipped
+`--cfg ra_generic_collect="64" | "4096" | "65536"`, plus
+`prim::fixed::shape_of(size)` carrying `direct_route` so the next consumer
+meets the boundary in a `const` assertion instead of on silicon. **What is
+still open is how much of the 16% the churn accounts for** — their timing arm
+was withdrawn as inadmissible (its control flipped from +8.0% to +0.6%), and
+the device is the right box for it.
 
 **The probe that could not answer it, deleted rather than shipped.** The
 footprint route — a small page is one slice (4 KiB), a medium four (16 KiB),
