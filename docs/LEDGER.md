@@ -470,6 +470,137 @@ That is a fact about the harness, not the kernel — firmware has no trace —
 but it does say the arena was not the thing to attack for instructions, and
 that the list was. Which is how the list came to be attacked instead.
 
+## K2.3 — the static face (2026-09-10)
+
+The topology measurements pointed the remaining K2.1 work at an **addition
+to the API rather than a change inside the kernel**: the dynamic face must
+keep accepting a handle that may name nothing, because that is its
+contract and the corpus proves it. This is the face that never mints a bad
+one.
+
+```rust
+system! {
+    mod blinky use PosixDemoConfig;
+    tasks { consumer: 2, producer: 2 }
+    queues { data: u16; 10 }
+}
+```
+
+### Exact `.bss` by construction, as a number
+
+`TASKS` is the declared count plus the kernel's own two; `QUEUES` is the
+declared count; `SLOTS` is the sum of the declared lengths; `ITEMS` and
+`LISTS` are `items_for` / `lists_for` over the same numbers. Nothing is
+rounded up because nothing is guessed.
+
+| fact | value | method |
+|---|---|---|
+| a declared kernel against a hand-sized one | **2,088 bytes against 13,600 — 6.5×** | `size_of`, which is exact, decided at compile time and identical on every machine. "Hand-sized" is the demo's own geometry, which is what you must use when you cannot declare: `TASKS = 24`, `QUEUES = 12`, `SLOTS = 128` because it holds eighteen scenarios at once |
+| the slot count is exact, and the exactness is load-bearing | every declared slot fills and there is not one spare | `every_declared_slot_is_usable_and_there_is_not_one_spare` fills both declared queues to their declared lengths and asserts the next send of each is refused. A geometry that had been rounded up would pass a weaker test; this one fails if `SLOTS` is 12 or 14 |
+
+### No create-failure path an application can reach
+
+| how a create fails | why it cannot here |
+|---|---|
+| the task arena is full | `TASKS` **is** the declared count plus the kernel's two |
+| the queue arena is full | `QUEUES` **is** the declared count |
+| the item slots are exhausted | `SLOTS` **is** the sum of the declared lengths |
+| a list is missing | `LISTS` is `lists_for` over the same numbers |
+| the priority is out of range | a `const` assertion per task — a **build failure**, where the C gets a `configASSERT` on the bench the day that task first runs |
+
+`System::build` still answers `Result`, because the kernel calls it makes
+do and this crate may not panic. The difference is that the `Err` arm is
+now unreachable *by construction* rather than merely unlikely, and the
+table says which construction closes each one.
+
+### What it refuses, with its controls
+
+Two `compile_fail` doctests, each paired with the working line it is one
+character from, on the house's rule that a "must not compile" test which
+fails for the wrong reason is worse than none: a priority the config has
+no ready list for, and a queue told to carry what it was not declared for.
+Eight `compile_fail` rows in the crate now, all with controls.
+
+**And there is no third way in.** `System` has no public constructor but
+`build`, and `Queue<T, N>` none but `create`. That is what makes the
+symbolic-handle proofs *unwritable* against this face rather than merely
+slow — the state they explore has no way to come into being.
+
+## Ten kernel bricks, and five refutations (2026-09-10)
+
+### The instrument
+
+`bench/kernel-ir/run.sh` — callgrind Ir per function over BlockQ, GenQTest
+and TimerDemo at 20 000 ticks. **Not a clock**: deterministic to the
+instruction, so there is no noise floor, no interleaving, no null arm and
+no z-score, and a difference of one is a difference of one. What it cannot
+see is cache behaviour, so a change that trades instructions for locality
+has to be judged elsewhere and none here was.
+
+Work parity is the strongest available anywhere in this repo: the gate is
+`conform --all`, which demands a trace **identical to the C kernel's for
+all eighteen scenarios**. Two runs that produce the same trace did the
+same work by construction, which is what makes an Ir delta attributable.
+Every brick below was gated at 3 000 ticks and each batch at 100 000.
+
+Denominator, stated because it is easy to quote wrongly: the sim spends
+roughly half its instructions **formatting the trace**, which firmware
+does not have. The kernel's own rows are 94.4M of the 190.5M measured.
+
+### The ten
+
+| # | brick | Ir |
+|---|---|---|
+| 1 | `copy_data_from_queue` takes the snapshot its caller already holds | **−282,206** |
+| 2 | a peek writes `read_from` back no more — `xQueuePeek` "saves and restores" it, which is to say it leaves it as it found it | *(in 1)* |
+| 3 | `copy_data_to_queue` folds the message count into whichever resolve its branch is already making | **−149,437** |
+| 4 | the yield test asks the cheap local before re-reading the list | **−68,464** |
+| 5 | **`begin_wait` where the C sets it** — after finding the queue unusable *and* the block time non-zero, not at the top of every call | **−3,427,915** |
+| 6 | `end_wait` does not wipe a frame that was never set | } |
+| 7 | `insert_keeping_value` — the event lists stop reading an item's value out to hand it straight back | } **−600,203** |
+| 8 | no time-slice test when the tick already required a switch | } |
+| 9 | `insert` already stores the value `set_value` was storing | } |
+| 10 | `remove` already answers for an item in no list, so `container` need not ask first | } **−38,065** |
+
+**−4,566,290 Ir in total: 2.34% of every row measured, 4.84% of the
+kernel's own.** Brick 5 is three quarters of it, and it is the one that
+came from reading `queue.c` rather than from reading our own code:
+FreeRTOS calls `vTaskInternalSetTimeOutState` only when it is about to
+block, guarded by `xEntryTimeSet`, and this kernel was setting a six-field
+wait frame on *every* queue call and having `end_wait` wipe it on the way
+out.
+
+### The five refutations, which cost the same to find and are worth as much
+
+| refuted | measured |
+|---|---|
+| threading the caller's snapshot into `copy_data_to_queue` as well as the reader | −245,389 in the helper, **+211,717 in `queue_send_generic`** — a `&Queue` argument forces the caller's local to be addressable and it stops living in registers |
+| dropping the `is_empty` pre-check before `remove_from_event_list` (seven sites) | **+492,233** — the callee does answer `false` for an empty list, but the pre-check is an *inlined read* and removing it means making a *call* on every empty list |
+| `add_task_to_ready_list` returning the priority it resolved, so `remove_from_event_list` need not resolve the same TCB again | **+120,499** — the tail stops being a tail call and grows a `Result` branch |
+| merging `is_empty` and `next_round_robin` in `taskSELECT_HIGHEST_PRIORITY_TASK` | **+1,293,066** — walking down the empty priorities now runs the whole round-robin body instead of a one-field test |
+| merging `unlock_queue`'s two resolves of the same queue | **exactly 0** — LLVM had already CSE'd two identical pure reads with no mutation between them |
+
+**One law came out of four of those five**, and it is worth more than any
+single brick: *removing a redundant read wins only when the read costs
+more than the check that avoids it.* Three separate attempts replaced an
+inlined one-field test with a call and all three lost. The redundancy was
+real every time; removing it was not.
+
+The fifth is the other standing warning — **check whether the compiler has
+already done it**. Two identical resolves of the same slot, with nothing
+between them, are one resolve in the emitted code whatever the source says.
+
+### The instrument had a bug, and it was found the same way
+
+The first `diff` reported **+1,758,490** for bricks 6–10 against a true
+**−600,203**. Renaming `insert` to `insert_inner` and letting its body
+inline into two callers meant the old row vanished and its work reappeared
+under three other names, and a total taken over "rows present in both
+files" silently dropped it. The fix is to sum *every* row on each side —
+the two recordings cover the same program on the same workload, so the
+grand totals are comparable even when the rows are not. `diff.py` now
+prints both and labels which is the verdict.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |

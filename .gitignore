@@ -23,3 +23,6 @@
 *.log
 .DS_Store
 Thumbs.db
+
+# Recordings from bench/kernel-ir: callgrind dumps, 16MB and regenerable.
+bench/kernel-ir/out/
