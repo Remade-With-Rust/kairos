@@ -866,6 +866,118 @@ against the C `heap_4` on a Kairos target — the C6's `mcycle`. An arm is
 not an A/B. It is recorded because the family had no timing number from
 any silicon at all, and because the control makes it admissible.
 
+### The A/B: rusty_alloc against FreeRTOS heap_4, on silicon
+
+`rusty_rtos_core/firmware/esp32s3-devkit-alloc-ab`. **The half of
+`build-me-bare` B4b that was missing was never the board — it was the
+second allocator.** `heap_4.c` is portable C over a static byte array with
+no port dependency, so `build.rs` compiles it **verbatim** out of the
+oracle checkout (the same `FreeRTOS-Kernel` the conformance traces come
+from) with `xtensa-esp32s3-elf-gcc`, and runs it under the identical
+CCOUNT harness.
+
+| request | rusty_alloc | heap_4 | |
+|---|---:|---:|---|
+| 16 B | 99 | 236 | **2.38x faster** |
+| 32 B | 109 | 236 | **2.17x faster** |
+| 64 B | 141 | 236 | **1.67x faster** |
+| 128 B | 193 | 236 | 1.22x faster |
+| 256–512 B | 298 | 236 | **1.27x slower** |
+| 1024–2048 B | 255 | 236 | 1.08x slower |
+
+**The null A/B is zero.** The Rust arm run against *itself*, presented to
+the harness as two different allocators, came back **37,963 vs 37,963** —
+byte-identical. The resolution floor is 0 cycles, so every difference above
+it counts. Checksums are compared across arms, so work parity is checked
+rather than assumed; the arms are interleaved ABBA; the 11 cycles/op null
+arm is subtracted; and the shims make `heap_4`'s `vTaskSuspendAll` a no-op
+because the Rust arm is `ra_single_threaded` and takes no lock either — a C
+arm paying for a lock the Rust arm does not pay for would be measuring the
+lock.
+
+**A flat `heap_4` number is its best case, and the other half says so.**
+236 at every size is the tell: this workload keeps one block live, so the
+free list is one entry and first-fit answers in one step. 512-byte requests
+against a free list of 16-byte holes:
+
+| holes | rusty_alloc | heap_4 |
+|---:|---:|---:|
+| 0 | 297 | 235 |
+| 8 | 297 | **466** |
+| 32 | 297 | **1,114** |
+| 128 | 297 | **3,706** |
+
+Flat against linear — **~27 cycles per free-list entry walked** (+28.9,
++27.5, +27.1) — and `heap_4` has lost its advantage by **eight holes**.
+Different floor functions, not one function tuned differently:
+`heap_4 = c0 + 27 x entries walked`, `rusty_alloc = f(size)` independent of
+heap state.
+
+**And the first fragmentation probe was refuted.** Fragmenting with holes
+of the *same* size as the request made `heap_4` **faster** (236 -> 218),
+because first-fit stops at the first block that fits. A long list costs
+nothing until the allocator must walk *past* it; the holes have to be
+smaller than the request. Recorded so nobody re-runs it.
+
+### And the losing range is ROUTING, proven by one byte
+
+The only range `rusty_alloc` loses is 256–2048, and that is not a gradual
+effect. The plateaus in the single-arm cell are not the bin geometry — they
+span eight bins — but they land exactly on `rusty_alloc`'s **page-kind
+boundaries** under `ra_small_profile`, the configuration every Kairos
+firmware builds with: `SMALL_OBJ_SIZE_MAX = SLICE/8 = 512` and
+`MEDIUM_OBJ_SIZE_MAX = 4*SLICE/8 = 2048`.
+
+A prediction that can be wrong by one byte was tested that way:
+
+| size | total | cycles/op | route |
+|---:|---:|---:|---|
+| 511 | 84,498 | 314 | small |
+| 512 | 84,498 | 314 | small |
+| **513** | **73,490** | **271** | **medium — steps here** |
+| 2,047 | 73,490 | 271 | medium |
+| 2,048 | 73,490 | 271 | medium |
+| **2,049** | **242,979** | **933** | **own large span — and here** |
+
+**One byte moves it 43 cycles at 512 and 662 cycles at 2,048**, totals are
+byte-identical within each route, and nothing steps anywhere else. So the
+answer to "gating or routing" is **routing**: size picks the page kind, and
+the small-page route costs 16% more per operation than the medium one above
+it. Closing that gap puts 256–512 at roughly 255 and turns the one losing
+range into a win.
+
+**Four quantitative models were written down first and all four are
+refuted** — bin geometry, collect frequency, a per-page cost amortised over
+blocks (fits 16…256 at ~0.875 cycles/byte, breaks at 512), and
+blocks-per-page within a route (256 and 512 share a page size, have 16 and
+8 blocks, and cost the same 314). Recorded so nobody re-runs them.
+
+**What this cannot say, and the run that can.** On a 32-bit target two
+constants both equal 512 — `SMALL_SIZE_MAX` (`SMALL_WSIZE_MAX * INTPTR_SIZE`
+= 128 x 4, the top of the `direct[]` table) and `SMALL_OBJ_SIZE_MAX`
+(`SLICE/8`, the top of the small-page range). They coincide, so this cannot
+name the router. On **64-bit they differ** — 1,024 against 512 — so the same
+sweep on a host build under `ra_small_profile` settles it, and needs no
+hardware. It matters because it decides whether the fix is free or a
+footprint trade. Written up at
+`docs/upstream/rusty_alloc-size-class-inversion.md`.
+
+**Not quoted, and said so.** `heap_4`'s byte charge is measured — request +
+8 exactly, from `xPortGetFreeHeapSize()` either side of one allocation — and
+`rusty_alloc`'s has no counterpart: the seam exposes no per-allocation
+usable size, and `region_stats()` answers over region *extents* so it does
+not move for a small allocation (the same dead check already caught in this
+project's own S3 reclamation test). Reaching around the seam to
+`rusty_alloc::alloc::usable_size` is the one thing the seam exists to
+prevent, so it is recorded as a **seam gap** rather than turned into half a
+comparison.
+
+**It does not close B4b.** The kill test names the ESP32-C6 —
+`riscv32imac`, a Kairos target with a real `mcycle`. Xtensa is not one of
+the family's four targets. This closes the **comparison** and leaves the
+**target** clause open, exactly as B4a substituted `mps2-an385` for the
+`lm3s6965evb` the plan named and recorded why.
+
 ### Flash and RAM, decomposed — the part of K3 a cell CAN carry
 
 A footprint is a property of the linked binary, not of execution.
