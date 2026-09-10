@@ -126,6 +126,13 @@ pub(crate) struct Package {
     cfgs: Vec<String>,
     #[serde(default)]
     targets: Vec<String>,
+    /// Per-crate overrides of `targets`, for a crate that is not portable
+    /// across the package's whole list. An architecture port is the case:
+    /// `rusty_rtos_port-cortex-m` is ARMv7-M assembly and cannot build for
+    /// RISC-V, so gating it on the package's RISC-V rungs would be asking
+    /// it to be something it is not. Its own QEMU cell gates it instead.
+    #[serde(default)]
+    crate_targets: std::collections::BTreeMap<String, Vec<String>>,
     /// Sibling packages this package's graph reaches: `"pkg"` for every crate
     /// of the sibling, `"pkg/crate"` for one crate of it. Keep it honest: a
     /// sibling listed here but absent from the graph is a dead override row
@@ -627,7 +634,13 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                         .map(Some),
                 )
                 .collect();
-            for target in &package.targets {
+            // A crate with an override is checked on its own list and
+            // nothing else; without one it takes the package's.
+            let targets = package
+                .crate_targets
+                .get(krate)
+                .unwrap_or(&package.targets);
+            for target in targets {
                 for extra in rungs.iter().copied() {
                     let mut args = vec!["check", "-p", krate, "--no-default-features"];
                     if let Some(feature) = extra {

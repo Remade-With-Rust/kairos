@@ -631,6 +631,37 @@ Six of the seventeen pinned scenarios, chosen to cover different kernel
 paths. The other eleven are host-side only because they are pinned there,
 not because anything stops them running here.
 
+### The Cortex-M port exists: a real context switch, proven
+
+`rusty_rtos_port-cortex-m`, the first crate in the family to lift the
+workspace's `unsafe_code` deny — per item, with `#[expect]`, so an unused
+fence is itself a warning.
+
+| fact | value | method |
+|---|---|---|
+| all five things a `port.c` is | critical sections, yield, tick, stack init, the PendSV switch | PRIMASK with a nesting count (`uxCriticalNesting`); PendSV pending for the yield; SysTick for the tick; an architectural exception frame for a new task |
+| two real tasks, real stacks | **100 / 100 resumptions over 200 switches**, exit 0 | `firmware/mps2-an385-qemu-switch`. Each task re-checks **every word of a 256-word witness array on its own stack** after every switch, plus a value the compiler must keep in a callee-saved register — `r4-r11` are exactly what the hardware does *not* stack, so they are what the asm must save |
+| **the test can fail** | deleting `stmdb r0!, {{r4-r11}}` gives `corrupted witness word index 0` and exit 1 | that one instruction is "stop saving the callee-saved registers". A fenced `unsafe` whose test has never been made to fail is a fence around nothing; the diff is in `UNSAFE.md` |
+| the stack is the port's, not the kernel's | `CURRENT_SP_SLOT` holds the **address of** the running task's SP word | a Kairos TCB has no stack pointer, because the kernel keeps a blocking call's locals in the TCB. FreeRTOS gets the same shape by putting the SP first in its TCB ("THIS MUST BE THE FIRST MEMBER") |
+
+**The bug it cost, which is worth more than the feature.** The first
+version started nothing: `main` printed and hung. A stacked PC has **bit 0
+clear**, which is what the architecture wants of an exception frame — but
+`start_first_task` enters the task with `bx`, and `bx` reads bit 0 as
+"switch to ARM state". An M-profile core has no ARM state, so it took a
+UsageFault, which presents as *a task that simply never runs*. One `orr`.
+
+**And a constraint met from the other side.** The port's counters are
+`AtomicU32`, not `AtomicU64`, because **ARMv7-M has no 64-bit atomics** —
+the same fact that cost `rusty_zstd` and `rusty_erasure-core` their
+bare-metal builds and produced two whole `build-me-bare` bricks. Writing a
+port is where you stop reading that as someone else's bug.
+
+It is **not the scheduler**: choosing the next task is the kernel's job,
+and wiring `Kernel::switch_context` into `set_scheduler` is the next
+increment. The cell installs a round robin so the switch can be judged
+alone.
+
 ### QEMU cannot supply a cycle, a latency, or a work count
 
 Measured six ways, over 1000 / 2000 / 4000 iterations of one loop, with

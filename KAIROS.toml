@@ -68,11 +68,15 @@ plan = "docs/plans/rusty_rtos_kernel.md"
 [[package]]
 name = "rusty_rtos_port"
 kind = "function"
-status = "K1 sim port"
+status = "K3 cortex-m switch"
 visibility = "private"
 description = "The FreeRTOS ports remade in Rust: the deterministic sim port (the oracle harness), the Posix host port, and the Cortex-M, RISC-V and Xtensa ports — the only crates in the family with a fenced unsafe block, at the context switch and the vector table."
-crates = ["rusty_rtos_port", "rusty_rtos_port-core"]
-no_std_crates = ["rusty_rtos_port-core"]
+crates = ["rusty_rtos_port", "rusty_rtos_port-core", "rusty_rtos_port-cortex-m"]
+no_std_crates = ["rusty_rtos_port-core", "rusty_rtos_port-cortex-m"]
+# The Cortex-M port is ARMv7-M assembly, so it does not build for RISC-V
+# and the package's whole target list cannot apply to it. Its own QEMU cell
+# is what gates it: `kairos check rusty_rtos_port --qemu`.
+crate_targets = { "rusty_rtos_port-cortex-m" = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "thumbv7m-none-eabi"] }
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
 uses = ["rusty_rtos_core"]
 plan = "docs/plans/rusty_rtos_port.md"
