@@ -31,6 +31,7 @@
 #include "GenQTest.h"
 #include "IntSemTest.h"
 #include "StreamBufferInterrupt.h"
+#include "TimerDemo.h"
 #include "PollQ.h"
 #include "QPeek.h"
 #include "QueueOverwrite.h"
@@ -59,6 +60,7 @@ extern unsigned long ulKairosExits;
 #define harnessSEMTEST_PRIORITY       ( tskIDLE_PRIORITY + 1 )
 #define harnessGENQ_PRIORITY          ( tskIDLE_PRIORITY )
 #define harnessQOVERWRITE_PRIORITY    ( tskIDLE_PRIORITY + 1 )
+#define harnessTIMER_BASE_PERIOD      ( 50 )
 
 typedef struct
 {
@@ -132,6 +134,16 @@ static void prvStartStreamBufferInterrupt( void )
     vStartStreamBufferInterruptDemo();
 }
 
+static void prvStartTimerDemo( void )
+{
+    vStartTimerDemoTask( harnessTIMER_BASE_PERIOD );
+}
+
+static BaseType_t prvTimerDemoStillRunning( void )
+{
+    return xAreTimerDemoTasksStillRunning( harnessCHECK_PERIOD_TICKS );
+}
+
 static const Scenario_t xScenarios[] =
 {
     { "dynamic",  prvStartDynamic,  xAreDynamicPriorityTasksStillRunning   },
@@ -147,6 +159,7 @@ static const Scenario_t xScenarios[] =
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
     { "StreamBufferInterrupt", prvStartStreamBufferInterrupt, xIsInterruptStreamBufferDemoStillRunning },
+    { "TimerDemo", prvStartTimerDemo, prvTimerDemoStillRunning },
 };
 
 static const Scenario_t * pxScenario = NULL;
@@ -259,6 +272,10 @@ void vApplicationTickHook( void )
     else if( strcmp( pxScenario->pcName, "StreamBufferInterrupt" ) == 0 )
     {
         vBasicStreamBufferSendFromISR();
+    }
+    else if( strcmp( pxScenario->pcName, "TimerDemo" ) == 0 )
+    {
+        vTimerPeriodicISRTests();
     }
 }
 
