@@ -1273,6 +1273,84 @@ scenario out. It stays registered in the oracle's scenario table so the
 finding is one command to reproduce; `conform --all` keeps its own separate
 list of eighteen and is unaffected.
 
+## AbortDelay: three missing kernel APIs, and a contract ambiguity (2026-09-10)
+
+`AbortDelay` was in the plan's **K1** corpus subset, never built, never
+recorded as dropped — while `abort_delay` and the notification API it
+exercises had **zero** conformance coverage. It is the only scenario whose
+subject is unblocking a task early, and it is thorough: eight blocking
+surfaces, each blocked three times — time out, be aborted, time out again.
+The third is the one that matters, because an abort that corrupted the
+task's delayed-list membership would still pass the first two.
+
+| fact | value | method |
+|---|---|---|
+| the C oracle is reproducible | **2,549 lines, byte-identical across two runs** | unlike `TaskNotify`, which seeds a PRNG from a function address |
+| the remake agrees | **1,945 lines byte-identical**, then one ordinal difference (below) | `kairos conform AbortDelay --ticks 2000` |
+| three real APIs were missing | `ulTaskNotifyTake`, `xTaskGetHandle`, `vQueueDelete` | each found by the diff, each a core FreeRTOS call |
+| the corpus is unmoved | 17 scenarios still byte-identical; no-alloc gate still 0 symbols | the additions touch no existing path |
+
+### The lesson the diff taught twice: exits are the clock
+
+`TASK_NOTIFY_TAKE` and `TASK_NOTIFY_TAKE_BLOCK` were declared in the K0
+trace vocabulary and **emitted by nothing** — the kernel waited only on
+notification *bits*, never on a *count*. `notify_take` fills that in.
+`xTaskNotifyGive` needed no method: the C defines it as
+`xTaskGenericNotify(.., eIncrement, ..)`, so `NotifyAction::Increment`
+already was it.
+
+The other two were found the same way, and the mistake was mine both times:
+
+* **`xTaskGetHandle` emits no trace event and costs one critical-section
+  exit**, because it walks the lists inside `vTaskSuspendAll` /
+  `xTaskResumeAll`. The remake held the handle from creation instead, on
+  the reasoning that an event-less call cannot move the trace. Every event
+  agreed and the exit column was **one short** at the first block.
+* **`vQueueDelete` takes no critical section itself** — and ends in
+  `vPortFree`, which `heap_3` wraps in suspend/resume exactly as it wraps
+  malloc. So a delete costs one exit while tracing nothing. The sibling
+  `event_group_delete` already carried that note; the queue had no delete
+  at all, which also meant a scenario creating one per cycle could not run
+  long without exhausting the arena.
+
+**An event-less call is not a free call.** `exits` is sim time itself, so
+anything that takes a critical section moves the clock whether or not it
+says so.
+
+### And a fourth defect, in the reading of the C
+
+Two of the eight helpers block the *aborted* attempt with `portMAX_DELAY`,
+not `xMaxBlockTime` — `prvTestAbortingTaskNotifyWait` and
+`prvTestAbortingSemaphoreTake`. An infinite wait is the stronger test:
+nothing but the abort can end it, where a timeout would prove nothing. It
+also sends the task to the **suspended** list rather than a delayed one,
+which emits no `MOVED_TASK_TO_DELAYED_LIST` — and that extra line in our
+trace is how the difference was found. Assuming all eight helpers shared
+one shape cost 1,800 lines of agreement.
+
+### The 1,946th line is a CONTRACT ambiguity, not a kernel divergence
+
+The C harness keys a queue's trace ordinal on the object's **malloc
+address** (`prvOrdinalPerKind` searches a table of pointers). A freed object
+leaves its entry behind, so a successor gets a **new** ordinal unless the
+allocator hands back the same block. Our arena reuses the freed **index**.
+
+The two agree whenever the recreated object is the same size — every
+scenario in the corpus that deletes, `EventGroupsDemo` included — and part
+when it is not. `AbortDelay` deletes a binary semaphore and creates a
+1-item queue; `malloc` returns a different block, so the C says `q3` where
+our index says `q2`.
+
+**A running count was tried and reverted.** It makes `AbortDelay` identical
+for all 2,549 lines and **breaks `EventGroupsDemo`** (707,007 bytes against
+a pinned 702,507), whose C ordinals reuse precisely because its addresses
+do. Neither rule is right, because the subject identity in the contract is
+an allocator address — reproducible for a given libc, and not a property of
+the kernel at all. The index rule is kept, being the one that matches
+seventeen scenarios, and `trace.rs` records why. **Making the C's ordinal a
+pure creation count would settle it and requires re-pinning every scenario:
+an owner decision, alongside `QueueSet` and `TaskNotify`.**
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |
