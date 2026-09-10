@@ -30,6 +30,7 @@
 #include "BlockQ.h"
 #include "GenQTest.h"
 #include "IntSemTest.h"
+#include "StreamBufferInterrupt.h"
 #include "PollQ.h"
 #include "QPeek.h"
 #include "QueueOverwrite.h"
@@ -126,6 +127,11 @@ static void prvStartIntSemTest( void )
     vStartInterruptSemaphoreTasks();
 }
 
+static void prvStartStreamBufferInterrupt( void )
+{
+    vStartStreamBufferInterruptDemo();
+}
+
 static const Scenario_t xScenarios[] =
 {
     { "dynamic",  prvStartDynamic,  xAreDynamicPriorityTasksStillRunning   },
@@ -140,6 +146,7 @@ static const Scenario_t xScenarios[] =
     { "QueueOverwrite", prvStartQueueOverwrite, xIsQueueOverwriteTaskStillRunning },
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
+    { "StreamBufferInterrupt", prvStartStreamBufferInterrupt, xIsInterruptStreamBufferDemoStillRunning },
 };
 
 static const Scenario_t * pxScenario = NULL;
@@ -248,6 +255,10 @@ void vApplicationTickHook( void )
     else if( strcmp( pxScenario->pcName, "IntSemTest" ) == 0 )
     {
         vInterruptSemaphorePeriodicTest();
+    }
+    else if( strcmp( pxScenario->pcName, "StreamBufferInterrupt" ) == 0 )
+    {
+        vBasicStreamBufferSendFromISR();
     }
 }
 

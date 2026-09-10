@@ -50,7 +50,7 @@ struct Scenario {
     demo_files: &'static [&'static str],
 }
 
-const SCENARIOS: [Scenario; 12] = [
+const SCENARIOS: [Scenario; 13] = [
     Scenario {
         name: "dynamic",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/dynamic.c"],
@@ -98,6 +98,10 @@ const SCENARIOS: [Scenario; 12] = [
     Scenario {
         name: "IntSemTest",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/IntSemTest.c"],
+    },
+    Scenario {
+        name: "StreamBufferInterrupt",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/StreamBufferInterrupt.c"],
     },
 ];
 

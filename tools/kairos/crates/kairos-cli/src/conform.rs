@@ -23,9 +23,9 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 12] = [
+const SCENARIOS: [&str; 13] = [
     "dynamic", "PollQ", "BlockQ", "semtest", "countsem", "recmutex", "blocktim", "QPeek",
-    "GenQTest", "QueueOverwrite", "QueueSetPolling", "IntSemTest",
+    "GenQTest", "QueueOverwrite", "QueueSetPolling", "IntSemTest", "StreamBufferInterrupt",
 ];
 
 /// The demo package, and the binary inside it.

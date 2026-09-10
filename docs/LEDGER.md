@@ -92,6 +92,65 @@ sides adds a ` #<exits>` column to every trace line, and `kairos conform
 accounting had already drifted, so the column is the diagnosis and the event
 is only the symptom.
 
+## K2 — the IPC, in progress (2026-09-09)
+
+Thirteen of K2's eighteen corpus scenarios now trace identically to the C
+kernel for 100,000 ticks each: **11,328,945 lines**, counters included.
+Four are new since K1, and with them the interrupt half of the kernel.
+
+| scenario | lines identical at 100,000 ticks | what it is for |
+|---|---|---|
+| `QueueOverwrite` | 1,300,382 | a queue of one, written from a task and from the tick |
+| `QueueSetPolling` | 1,373,606 | a queue set polled with no block time, written by an interrupt |
+| `IntSemTest` | 132,893 | a counting semaphore filled from an interrupt; a *mutex* given from one |
+| `StreamBufferInterrupt` | 113,300 | a string streamed from the tick, read one byte at a time |
+
+The nine from K1 are unchanged, which is the other half of the result:
+turning the tick hook on and adding the whole `FromISR` surface moved no
+existing trace by a line.
+
+| fact | value | method |
+|---|---|---|
+| the gate | `kairos conform --all --ticks 100000` | as K1's, now over thirteen scenarios |
+| offline regression | all thirteen pinned by counters, line count, byte count and an FNV-1a/64 digest of the C kernel's own trace file | `rusty_rtos_demo`'s `tests/conformance.rs` |
+| still to do | `QueueSet`, `TimerDemo`, `EventGroupsDemo`, `StreamBufferDemo`, `MessageBufferDemo`, `MessageBufferAMP` | the first needs no new kernel; the rest need software timers, event groups and the two buffer demos' own machinery |
+| K2's other three gates | Kani harnesses for the CBMC proof list, the no-panic property test, a `cargo mutants` score | not started |
+
+**`IntQueue` is not in this corpus and will not be.** Upstream's own Posix
+demo does not build it either: it needs a port with nested interrupts of
+different priorities, which a signal-driven host port does not have.
+`IntSemTest` covers the from-ISR surface that a single-priority interrupt
+can reach. That is a scope row, not a pass.
+
+### What the interrupt half cost
+
+Four mechanisms, each found by a diff:
+
+1. **The tick hook has to be a seam the kernel can hand itself to.** Six K2
+   scenarios have an interrupt half, and every one of them calls back into
+   the kernel. `Hooks::tick` takes `&self` and cannot; `TickHook<K>` takes
+   the kernel. It is `Copy` and taken by value because the kernel owns it —
+   copy out, run, store back — which is how it borrows the kernel mutably
+   without borrowing itself twice.
+2. **A `FromISR` call costs nothing on this port.**
+   `portSET_INTERRUPT_MASK_FROM_ISR` is an empty function on the Posix
+   port: signals are already blocked in a handler. So the from-ISR half
+   touches neither the nesting count nor the exit count, and a separate
+   `Port` seam says so rather than reusing `enter_critical`.
+3. **An interrupt that discards the woken flag still gets the switch.**
+   `xTaskGenericNotifyFromISR` sets `xYieldPendings[0]` as well as the
+   caller's flag, and `StreamBufferInterrupt` passes NULL for the flag — so
+   the switch comes from the pended yield, on the way out of
+   `xTaskIncrementTick`. That is why the tick hook runs *before* the
+   yield-pending test, and it cost 217 lines of trace to find out.
+4. **A preempted call resumes after the exit that preempted it, not
+   before.** A stream buffer samples its counters inside a critical
+   section; if that section's exit releases a tick that switches the task
+   away, the C's thread stops *inside* the exit. Ours returns and is called
+   again — and must not re-enter the section, because the C already paid
+   for it. The sample the frame took is kept in the TCB, like the queue
+   calls' `WaitFrame`, because the frame it belonged to is gone.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |

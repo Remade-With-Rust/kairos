@@ -617,9 +617,12 @@ package building alone with green CI):
    variants with the ISR token and the "higher priority task woken" return.
    Corpus: `BlockQ`, `GenQTest`, `PollQ`, `QPeek`, `QueueOverwrite`,
    `QueueSet`, `QueueSetPolling`, `semtest`, `countsem`, `recmutex`,
-   `IntQueue`, `IntSemTest`, `TimerDemo`, `EventGroupsDemo`,
+   `IntSemTest`, `TimerDemo`, `EventGroupsDemo`,
    `StreamBufferDemo`, `StreamBufferInterrupt`, `MessageBufferDemo`,
-   `MessageBufferAMP`. **Kill test:** all traces clean for 100 000 ticks; the
+   `MessageBufferAMP`. `IntQueue` is **not** in the corpus: it needs nested
+   interrupts at different priorities, which a signal-driven host port does
+   not have, and upstream's own Posix demo does not build it either.
+   **Kill test:** all traces clean for 100 000 ticks; the
    Kani harnesses for the CBMC `Queue` and `Task` proof list pass; the
    no-panic property test over every API with random handles/ticks passes;
    `cargo mutants` on the scheduler core reports its score in the ledger.
@@ -779,7 +782,7 @@ reused.
 |---|---|---|
 | **K0 family** | a clean clone of any package builds alone and its CI is green; the C oracle produces an identical trace twice | **passed locally 2026-09-09** (8 repos, fleet gate green on the box; `dynamic` trace identical twice); CI green pending the owner's Actions billing and `kairos secrets` |
 | **K1 scheduler on sim** | nine demo scenarios trace-identical to the C kernel for 100 000 ticks; counters equal; Miri green; the arena-list cost row | **passed 2026-09-09** — nine of nine, 8,408,764 lines identical at 100 000 ticks, ticks/yields/exits equal on every one; Miri green over the whole corpus; the cost row taken and **2.08×**, which fires §2.5's revisit condition (`docs/LEDGER.md`) |
-| **K2 IPC + timers** | the remaining demo scenarios trace-identical; Kani harnesses for the CBMC proof list pass; no-panic property test; mutants score ledgered | open |
+| **K2 IPC + timers** | the remaining demo scenarios trace-identical; Kani harnesses for the CBMC proof list pass; no-panic property test; mutants score ledgered | **13 of 18 scenarios passed 2026-09-09** — 11,328,945 lines identical at 100 000 ticks. The from-ISR surface, queue sets, queue lock counts, task notifications and stream buffers are in the kernel. `QueueSet`, `TimerDemo`, `EventGroupsDemo`, `StreamBufferDemo`, `MessageBufferDemo` and `MessageBufferAMP` remain, as do the Kani, no-panic and mutants gates. `IntQueue` is out of scope: upstream's own Posix demo does not build it |
 | **K3 silicon + QEMU** | the full corpus check task passes one hour on M3-qemu, RV32-qemu and a C6; context switch / tick / latency cycle rows vs the C demo; flash + RAM decomposition | open |
 | **K4 heaps** | `heap_4` differential trace matches C; `StaticAllocation` on every cell; RAM table per profile | open |
 | **K5 the Janus joint** | Janus S1 on a Kairos kernel with the same numbers as on esp-rtos; the XIAO S3 Xtensa cell `Verified` | open |
