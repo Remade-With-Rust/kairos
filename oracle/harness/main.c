@@ -29,8 +29,11 @@
 /* The standard demo tasks (FreeRTOS/Demo/Common/include). */
 #include "BlockQ.h"
 #include "GenQTest.h"
+#include "IntSemTest.h"
 #include "PollQ.h"
 #include "QPeek.h"
+#include "QueueOverwrite.h"
+#include "QueueSetPolling.h"
 #include "blocktim.h"
 #include "countsem.h"
 #include "dynamic.h"
@@ -54,6 +57,7 @@ extern unsigned long ulKairosExits;
 #define harnessBLOCKQ_PRIORITY        ( tskIDLE_PRIORITY + 2 )
 #define harnessSEMTEST_PRIORITY       ( tskIDLE_PRIORITY + 1 )
 #define harnessGENQ_PRIORITY          ( tskIDLE_PRIORITY )
+#define harnessQOVERWRITE_PRIORITY    ( tskIDLE_PRIORITY + 1 )
 
 typedef struct
 {
@@ -107,6 +111,21 @@ static void prvStartGenQTest( void )
     vStartGenericQueueTasks( harnessGENQ_PRIORITY );
 }
 
+static void prvStartQueueOverwrite( void )
+{
+    vStartQueueOverwriteTask( harnessQOVERWRITE_PRIORITY );
+}
+
+static void prvStartQueueSetPolling( void )
+{
+    vStartQueueSetPollingTask();
+}
+
+static void prvStartIntSemTest( void )
+{
+    vStartInterruptSemaphoreTasks();
+}
+
 static const Scenario_t xScenarios[] =
 {
     { "dynamic",  prvStartDynamic,  xAreDynamicPriorityTasksStillRunning   },
@@ -118,6 +137,9 @@ static const Scenario_t xScenarios[] =
     { "blocktim", prvStartBlockTim, xAreBlockTimeTestTasksStillRunning     },
     { "QPeek",    prvStartQPeek,    xAreQueuePeekTasksStillRunning         },
     { "GenQTest", prvStartGenQTest, xAreGenericQueueTasksStillRunning      },
+    { "QueueOverwrite", prvStartQueueOverwrite, xIsQueueOverwriteTaskStillRunning },
+    { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
+    { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
 };
 
 static const Scenario_t * pxScenario = NULL;
@@ -198,6 +220,35 @@ void vApplicationIdleHook( void )
 {
     /* The sim contract: one tick per idle pass. */
     vPortKairosTick();
+}
+
+/* The interrupt half of whichever scenario is running.
+ *
+ * Upstream's own Posix demo runs every scenario at once and calls all of
+ * their periodic ISR functions from here (vFullDemoTickHookFunction in
+ * Demo/Posix_GCC/main_full.c). This harness runs one scenario per trace, so
+ * it dispatches to that one and no other: a trace has to be attributable to
+ * the scenario named on the command line. rusty_rtos_demo's TickIsr does the
+ * same, dispatching on the same name. */
+void vApplicationTickHook( void )
+{
+    if( pxScenario == NULL )
+    {
+        return;
+    }
+
+    if( strcmp( pxScenario->pcName, "QueueOverwrite" ) == 0 )
+    {
+        vQueueOverwritePeriodicISRDemo();
+    }
+    else if( strcmp( pxScenario->pcName, "QueueSetPolling" ) == 0 )
+    {
+        vQueueSetPollingInterruptAccess();
+    }
+    else if( strcmp( pxScenario->pcName, "IntSemTest" ) == 0 )
+    {
+        vInterruptSemaphorePeriodicTest();
+    }
 }
 
 void vApplicationMallocFailedHook( void )

@@ -18,7 +18,13 @@
 #define configUSE_TIME_SLICING                     1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION    0
 #define configUSE_IDLE_HOOK                        1
-#define configUSE_TICK_HOOK                        0
+/* The interrupt half of the standard demos runs here: upstream's own Posix
+ * demo sets this too, and several scenarios (QueueOverwrite, QueueSet,
+ * IntSemTest, the stream buffers, the timers) are only exercised from an
+ * interrupt at all. A scenario with no interrupt half leaves the hook
+ * empty, and an empty hook takes no critical section, so it costs no sim
+ * time and moves no trace. */
+#define configUSE_TICK_HOOK                        1
 #define configUSE_DAEMON_TASK_STARTUP_HOOK         0
 #define configTICK_RATE_HZ                         ( 1000 )
 #define configMINIMAL_STACK_SIZE                   ( 256 )  /* The Posix port ignores it; pthreads size their own stacks. */

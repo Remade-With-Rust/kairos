@@ -50,7 +50,7 @@ struct Scenario {
     demo_files: &'static [&'static str],
 }
 
-const SCENARIOS: [Scenario; 9] = [
+const SCENARIOS: [Scenario; 12] = [
     Scenario {
         name: "dynamic",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/dynamic.c"],
@@ -86,6 +86,18 @@ const SCENARIOS: [Scenario; 9] = [
     Scenario {
         name: "GenQTest",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/GenQTest.c"],
+    },
+    Scenario {
+        name: "QueueOverwrite",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/QueueOverwrite.c"],
+    },
+    Scenario {
+        name: "QueueSetPolling",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/QueueSetPolling.c"],
+    },
+    Scenario {
+        name: "IntSemTest",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/IntSemTest.c"],
     },
 ];
 
