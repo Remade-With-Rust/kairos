@@ -662,6 +662,51 @@ then where installers put it), prepends it for the child, and if it cannot
 be found says so as *"the cell did NOT run, so this is not a verdict about
 the code"*. Verified by running the gate with QEMU off `PATH` entirely.
 
+### An hour: the corpus survives one, and one scenario owns the clock
+
+K3 asks that "the full corpus check task passes **one hour**". The sim runs
+`PosixDemoConfig`, whose `TICK_RATE_HZ` is 1000 — the same value as the
+oracle's `FreeRTOSConfig.h`, which is why the corpus can be byte-identical
+to C at all — so one tick is one millisecond and **an hour is 3,600,000
+ticks**, not a round number chosen to be quick.
+
+| fact | value | method |
+|---|---|---|
+| every scenario survives an hour | **17 / 17**, ~125 s | `crates/rusty_rtos_demo-core/tests/soak.rs`, via `kairos check rusty_rtos_demo --soak`. Three checks per scenario, and the third is what stops it being theatre: `pass` (the scenario's own check task), `!runaway`, **and `ticks >= 3,600,000`** — a scenario that ended at tick 5 would report `pass` perfectly happily, having never been asked to survive anything |
+| what it claims | **liveness, not conformance** | there are no C pins at 3,600,000 ticks and getting them means an hour-long instrumented C run per scenario. So this does what the C demo itself does — asks each scenario's own checker — and claims that and nothing more. Conformance is `tests/conformance.rs` and the two QEMU cells, at 2000 ticks against the C trace |
+| it can fail | sizing the step limit for 2,000 ticks instead of an hour | `semtest FAIL ... ran away: the step limit stopped it at tick 52219; stopped early at tick 52219 of 3600000`, and the test fails. Only `semtest` trips it, which is itself the finding below |
+
+Both QEMU cells carry the same hour behind `--features soak` — a feature
+and not a second binary, because `kairos check --qemu` runs a plain
+`cargo run --release` there and a second bin target would make that
+ambiguous. Roughly three hours each, so they are background runs, not
+gates.
+
+**Where the two minutes go, and why the obvious reading is wrong.**
+`semtest` takes **92 of the ~125 seconds**; everything else takes between
+0.3 and 4.1 — while doing *fewer* yields and *fewer* critical-section exits
+than `GenQTest`, which finishes in 4.1. Wall time and work count disagree,
+so a counter had to settle it, and `Verdict::steps` did:
+
+| scenario | steps per exit | ns per step |
+|---|---:|---:|
+| `semtest` | **345.6** | 6.3 |
+| `GenQTest` | 1.0 | 68.4 |
+| `countsem` | 1.5 | 35.2 |
+| `dynamic` | 1.7 | 45.6 |
+
+semtest runs 345 state-machine steps per unit of sim time where the others
+run one or two; its steps are individually *cheap*; and the ratio is 345.6
+at 200,000 ticks and **345.6 at 400,000** — exactly constant, so structural
+rather than a leak. That is `semtest.c`'s polling pair, which takes its
+semaphore with a **zero block time**: the same shape the ledger already
+records for `dynamic`'s SUSP_RX, and the reason the sim contract counts
+critical-section exits rather than yields in the first place. **It is
+faithful to C, so it is a cost and not a defect** — and the first
+hypothesis, that a 22x wall-time outlier meant an algorithmic defect, was
+refuted by measuring the scaling: 0.98 and 1.06 across a 4x tick range, for
+semtest and its neighbours alike. Linear, with a large constant.
+
 ### And the kernel drives it: the scheduler on a Cortex-M3
 
 `rusty_rtos_port/firmware/mps2-an385-qemu-kernel`. The port switches; the

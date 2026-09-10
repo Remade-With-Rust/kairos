@@ -585,6 +585,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_xtensa = has_flag(args, "--xtensa");
     let with_kani = has_flag(args, "--kani");
     let with_qemu = has_flag(args, "--qemu");
+    let with_soak = has_flag(args, "--soak");
     let only: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let mut failures = Vec::new();
     let mut ran = 0usize;
@@ -750,6 +751,43 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                     &[("PATH", joined)],
                 ) {
                     failures.push(format!("{}: qemu cell {name}: {e}", package.name));
+                }
+            }
+        }
+        if with_soak {
+            // The long-run tests, which are `#[ignore]`d precisely so the
+            // ordinary gate stays fast. A test that is ignored by default
+            // and run by nothing is a test that has stopped existing, so
+            // this flag is what keeps them alive.
+            for krate in &package.no_std_crates {
+                if !dir.join("crates").join(krate).join("tests").is_dir() {
+                    continue;
+                }
+                ran += 1;
+                if let Err(e) = run(
+                    false,
+                    &dir,
+                    "cargo",
+                    // `--tests` and not a bare `cargo test`: without it
+                    // `--ignored` also reaches the DOCTEST harness, where
+                    // it means "compile the ```ignore blocks too" — and
+                    // those are marked ignore because they are
+                    // illustrative fragments that were never meant to
+                    // compile. The first run of this flag failed on one,
+                    // which is a gate reporting a fault in its own
+                    // invocation.
+                    &[
+                        "test",
+                        "-p",
+                        krate,
+                        "--release",
+                        "--tests",
+                        "--",
+                        "--ignored",
+                        "--nocapture",
+                    ],
+                ) {
+                    failures.push(format!("{}: soak: {e}", package.name));
                 }
             }
         }
@@ -1175,6 +1213,9 @@ to the format check, the lint, the suites and the dependency policy;
 `--harden` verifies every README's hardening block is current with its plan
 file. `--xtensa` adds each no_std crate on xtensa-esp32s3-none-elf through the
 esp toolchain (`cargo +esp`, `-Z build-std`), a gate CI cannot run.
+`--soak` runs the `#[ignore]`d long-run tests — K3's one-hour clause is one,
+and a test nothing runs is a test that has stopped existing.
+
 `--qemu` runs every firmware cell that needs no hardware: any
 `<package>/firmware/*/` whose own `.cargo/config.toml` names a
 `qemu-system-*` runner. The cells are DISCOVERED rather than listed, and
