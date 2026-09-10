@@ -631,6 +631,49 @@ Six of the seventeen pinned scenarios, chosen to cover different kernel
 paths. The other eleven are host-side only because they are pinned there,
 not because anything stops them running here.
 
+### And the kernel drives it: the scheduler on a Cortex-M3
+
+`rusty_rtos_port/firmware/mps2-an385-qemu-kernel`. The port switches; the
+**kernel chooses**. Same fixed-priority preemptive scheduler the corpus
+proves against C FreeRTOS, on ARMv7-M.
+
+```text
+ticks                 402
+switches              81
+high-priority laps    40   (expected about 40)
+low-priority laps     38273
+woke early            0
+RESULT: PASS        QEMU exit code: 0
+```
+
+| joint | how |
+|---|---|
+| who runs next | `PendSV` -> `Kernel::switch_context` -> `CURRENT_SP_SLOT` |
+| when to switch | `SysTick` -> `Kernel::increment_tick` -> pend a PendSV if it says so |
+| how a task blocks | `Kernel::delay`, then a yield; it resumes on the line after |
+
+**The lap count is the check, not "both tasks ran".** A round robin makes
+both tasks run. **40 laps against 402 ticks and a 10-tick delay** is what
+only a priority scheduler with a working `delay` produces — too many means
+`delay` never blocked, too few that it blocked and was never woken. And
+`woke early == 0` is the task reading the tick either side of its own
+delay. Deleting the one line that asks the kernel anything gives **1 lap
+against an expected 120**, two failures and exit 1.
+
+**Two costs worth more than the feature.**
+
+* **Every task the kernel creates needs a stack, including the two it
+  creates for itself.** `start_scheduler` makes `IDLE` and `Tmr Svc`
+  unconditionally, and `Tmr Svc` sits *above* both application tasks. The
+  first run locked up — `can't escalate 3 to HardFault`, `PC=0` — because
+  the scheduler correctly chose the highest-priority ready task and that
+  task had no stack.
+* **A cell that hangs is worse than one that fails.** The high task ends
+  the run; a broken joint means it never runs again and nothing ends
+  anything, so `kairos check --qemu` would wait forever. The task that
+  always runs now owns a deadline. The poison above *hung* before that
+  existed — which is how the gap was found.
+
 ### The Cortex-M port exists: a real context switch, proven
 
 `rusty_rtos_port-cortex-m`, the first crate in the family to lift the
