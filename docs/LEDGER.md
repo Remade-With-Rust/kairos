@@ -94,17 +94,18 @@ is only the symptom.
 
 ## K2 — the IPC, in progress (2026-09-09)
 
-The conformance corpus is **fifteen scenarios**, every one of them
-trace-identical to the C kernel for 100,000 ticks: **12,688,209 lines**,
-counters included. Six are new since K1, and with them the interrupt half
-of the kernel, the software timers and the event groups.
+The conformance corpus is **sixteen scenarios**, every one of them
+trace-identical to the C kernel for 100,000 ticks: **12,808,722 lines**,
+counters included. Seven are new since K1, and with them the interrupt half
+of the kernel, the software timers, the event groups and the send-completed
+seam.
 
 Counted against K2's own list of eighteen (mission plan section 6), that is
-**thirteen passed** — the other two of the fifteen, `dynamic` and
+**fourteen passed** — the other two of the sixteen, `dynamic` and
 `blocktim`, belong to K1's list. One of the eighteen, `IntQueue`, is out of
-scope for this port. **Four remain**, and every one of them is blocked
-above the kernel rather than by it: `QueueSet`, `StreamBufferDemo`,
-`MessageBufferDemo` and `MessageBufferAMP`.
+scope for this port. **Three remain**, and every one of them is blocked
+above the kernel rather than by it: `QueueSet`, `StreamBufferDemo` and
+`MessageBufferDemo`.
 
 | scenario | lines identical at 100,000 ticks | what it is for |
 |---|---|---|
@@ -114,6 +115,7 @@ above the kernel rather than by it: `QueueSet`, `StreamBufferDemo`,
 | `StreamBufferInterrupt` | 113,299 | a string streamed from the tick, read one byte at a time |
 | `TimerDemo` | 156,491 | twenty-one software timers, the daemon task, and four callbacks — including two an interrupt starts and stops |
 | `EventGroupsDemo` | 1,202,786 | four tasks on one event group: selective bits, bit combinations and a four-way rendezvous, plus an interrupt setting bits through the daemon |
+| `MessageBufferAMP` | 120,513 | two "cores" through three message buffers, with `sbSEND_COMPLETED` replaced so a send wakes its reader the long way round |
 
 The nine from K1 are unchanged, which is the other half of the result:
 turning the tick hook on and adding the whole `FromISR` surface, the timers
@@ -121,13 +123,14 @@ and the event groups moved no existing trace by a line.
 
 | fact | value | method |
 |---|---|---|
-| the gate | `kairos conform --all --ticks 100000` | as K1's, now over fifteen scenarios |
-| offline regression | all fifteen pinned by counters, line count, byte count and an FNV-1a/64 digest of the C kernel's own trace file | `rusty_rtos_demo`'s `tests/conformance.rs` |
-| still to do | `QueueSet`, `StreamBufferDemo`, `MessageBufferDemo`, `MessageBufferAMP` | none of the four needs new kernel: every subsystem they use is in and proved by another scenario. The four rows below say what each is actually blocked on |
+| the gate | `kairos conform --all --ticks 100000` | as K1's, now over sixteen scenarios, from two oracle binaries |
+| offline regression | all sixteen pinned by counters, line count, byte count and an FNV-1a/64 digest of the C kernel's own trace file | `rusty_rtos_demo`'s `tests/conformance.rs` |
+| still to do | `QueueSet`, `StreamBufferDemo`, `MessageBufferDemo` | none of the three needs new kernel: every subsystem they use is in and proved by another scenario. The rows below say what each is actually blocked on |
 | **`MessageBufferDemo` and `StreamBufferDemo` cannot run under sim contract v1** | measured 2026-09-09 | both create a non-blocking sender and receiver at the idle priority, and `xStreamBufferSend` with a zero block time takes **no critical section at all** when the buffer is full: no exit, so no tick, so no time slice, so the sender spins for ever and the receiver never runs. The C oracle hangs on `MessageBufferDemo` at one tick and prints nothing — `timeout 20 ./oracle/build/corpus MessageBufferDemo 1` exits 124 with an empty trace. This is the failure mode `ORACLES.md` already records for `flop` and `integer`: **a task that polls without entering a critical section stops the clock.** Both are contract-v2 scenarios, and the contract is the thing that has to change, not the kernel |
 | the two buffer demos also need `vStreamBufferDelete` with reclamation | **built** | both `MessageBufferDemo` and `StreamBufferDemo` create a buffer and delete it again **on every loop of their echo server** — the C leans on `pvPortMalloc` / `vPortFree` handing back the same block each time. This kernel's byte arena is a bump allocator with no free, so it would run out in a few hundred ticks. It needs a free list over `BYTES` (a contained piece of work, and the only place in the kernel that will have one) before either scenario can run |
 | `QueueSet` cannot be made trace-identical as it stands | needs a decision | it chooses which of its three queues to write with a PRNG that `prvQueueSetSendingTask` seeds from **the address of one of its own stack locals** (`prvSRand( ( size_t ) &ulTaskTxValue )`). That is reproducible on the C side — two oracle runs are byte-identical — and unknowable to any second implementation, and the seed decides every write for the rest of the run. Either the sim contract fixes the seed on both sides, the way it already fixes the tick, or `QueueSet` joins `IntQueue` as out of scope. `QueueSetPolling` already covers the queue-set API; what `QueueSet` adds is contention between three of them and the overwrite-into-a-set corner |
-| `MessageBufferAMP` needs its own oracle binary | not built yet | it works by overriding `sbSEND_COMPLETED` in `FreeRTOSConfig.h`, which is a global macro: with it defined, every other stream-buffer scenario changes behaviour, and `vGenerateCoreBInterrupt` would dereference a control buffer that only exists once the AMP demo has started. One binary cannot serve both, so the oracle build needs a per-scenario config |
+| `MessageBufferAMP` needed its own oracle binary | **built, and the scenario passes** | it works by overriding `sbSEND_COMPLETED` in `FreeRTOSConfig.h`, which is a global macro: with it defined every other stream-buffer scenario changes behaviour, and `vGenerateCoreBInterrupt` would reach a control buffer that only exists once the AMP demo has started. `kairos oracle build` now emits two binaries from the same sources, differing in one `-DKAIROS_AMP=1`, and each scenario says which it comes out of |
+| **a hook that makes several kernel calls needs a program counter, exactly as a task body does** | found by `MessageBufferAMP`, 2026-09-09 | the replaced `sbSEND_COMPLETED` makes three calls in a row — post the handle to a control buffer, read it back, notify — and the C can afford to because it has a stack: a tick that lands inside one of them parks the thread and the rest runs when the task has the CPU back. Ours cannot park; the call returns and the rest ran under the *next* task's name, one exit early. It was trace-identical for 3,063 lines and then diverged at the first tick that landed inside the handler. The fix is the same shape as a task body's: the handler asks after each call whether the current task changed, and what is left is owed and paid on the first step after the sending task is switched back in. This is the general answer for any `TickHook` method that makes more than one kernel call |
 | K2's no-panic gate | **passed** | `rusty_rtos_kernel`'s `tests/no_panic.rs`: 64 independent kernels, 4,000 arbitrary calls each — a quarter of a million over the whole public surface, with handles from other arenas, handles from nowhere, stale handles, indices past the configured end, tick counts at both extremes and lengths larger than the arenas. The generator is a seeded xorshift rather than a property-testing crate, so it needs no dependency and a failure reproduces from the seed it names. It also asserts the calls *landed*: the run must trace more than 100,000 lines, and it traces 131,802. Raising that floor fails the test, so the gate is not vacuous |
 | K2's Kani gate | **seven harnesses green; the started kernel does not converge** | `cargo kani -p rusty_rtos_kernel-core` in WSL (Kani 0.67.0 has no Windows build), harnesses in `src/proofs.rs` named after the `FreeRTOS/Test/CBMC/proofs/{Queue,Task}` directories. Seven verify on unconstrained inputs — **3,965 checks, 0 failed** — the list, the arena and the name, which are the three structures every out-of-range access in this kernel would have to go through, plus three about a kernel before its scheduler starts. `lists_take_any_argument` is 448 checks in 8.2 s; the dearest is `a_name_is_truncated_not_overrun` at 61.9 s, all of it `core::str::from_utf8` over the name buffer. The sixteen harnesses over a *started* kernel do not: CBMC passes 2 GB and 600 s on `task_get_scheduler_state`, which has no symbolic input at all. Bisecting the setup says where the wall is — `Kernel::new` 0.8 s, one task 3.0 s, three tasks 10.2 s, `start_scheduler` never — so it is the setup, not the call under proof, and the way through is to stub the setup rather than build it |
 | K2's mutants gate | **36 of 42 viable mutants caught (86%) with the corpus as the oracle** | `cargo mutants --in-place --file crates/rusty_rtos_kernel-core/src/kernel.rs --test-package rusty_rtos_demo-core --shard 1/8 --timeout 240 -- --manifest-path ../rusty_rtos_demo/Cargo.toml --release`, run from the kernel repo with the demo's `[patch]` table in scope so the mutated kernel is the one the corpus runs. 44 of the shard's 47 mutants completed before the tool wedged: 36 caught, 6 missed, 2 unviable. The mechanism was checked by hand first — a mutation planted in `queue_send_list` fails `every_scenario_reproduces_the_c_kernels_trace_and_counters` in 79 s — because a mutants run that silently tests the wrong binary reports the same shape as one that tests nothing |

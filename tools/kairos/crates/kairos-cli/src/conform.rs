@@ -23,7 +23,7 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 15] = [
+const SCENARIOS: [&str; 16] = [
     "dynamic",
     "PollQ",
     "BlockQ",
@@ -39,6 +39,7 @@ const SCENARIOS: [&str; 15] = [
     "StreamBufferInterrupt",
     "TimerDemo",
     "EventGroupsDemo",
+    "MessageBufferAMP",
 ];
 
 /// The demo package, and the binary inside it.
@@ -98,13 +99,22 @@ fn run_sim(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<Strin
 
 /// Run the C oracle and return its trace.
 fn run_oracle(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<String> {
-    let bin = root.join("oracle").join("build").join("corpus");
+    // `MessageBufferAMP` comes out of the second binary: it redefines
+    // `sbSEND_COMPLETED`, which is global (see `oracle::binary_for`).
+    let bin_name = if scenario == "MessageBufferAMP" {
+        "corpus-amp"
+    } else {
+        "corpus"
+    };
+    let bin = root.join("oracle").join("build").join(bin_name);
     if !bin.is_file() {
-        return fail("oracle/build/corpus is not built; run `kairos oracle build`");
+        return fail(format!(
+            "oracle/build/{bin_name} is not built; run `kairos oracle build`"
+        ));
     }
     let env = if exits { "KAIROS_TRACE_EXITS=1 " } else { "" };
     let script = format!(
-        "ulimit -f 4194304; {env}timeout 900 ./oracle/build/corpus {scenario} {ticks} 2> oracle/traces/{scenario}.oracle; echo exit=$?"
+        "ulimit -f 4194304; {env}timeout 900 ./oracle/build/{bin_name} {scenario} {ticks} 2> oracle/traces/{scenario}.oracle; echo exit=$?"
     );
     let (ok, _stdout, stderr) = crate::oracle::host_shell(root, &script)?;
     if !ok {
