@@ -615,6 +615,22 @@ cell a gate rather than something a person watches.
 | the seam runs on a Kairos target | 9/9, identical numbers to the S3 row | `cargo run --release`; `good_region_size(220 KiB)` -> 196,608 and 63/63 reclaimed to the same address, exactly as on silicon — the geometry is a property of the configuration, not the part |
 | the cell had to change machine | `mps2-an385`, not `lm3s6965evb` | `MIN_REGION` is 65,536 bytes and the LM3S6965 has 65,536 bytes of SRAM **in total**: the smallest region the allocator accepts is the whole chip. Check the part can hold the thing before naming the part |
 
+### The corpus runs on a Cortex-M3, byte-identical to C
+
+`rusty_rtos_demo/firmware/mps2-an385-qemu-corpus`. This is K3's main
+clause, and the headline is that it needed **no context-switching port**.
+
+| fact | value | method |
+|---|---|---|
+| six scenarios on ARMv7-M | **every counter, the digest and the byte count match the host's pins** | dynamic, PollQ, BlockQ, semtest, GenQTest, TimerDemo at 2000 ticks. The pins are the C kernel's — `tests/conformance.rs` diffs them against `oracle/traces/*` — so this is agreement with **C FreeRTOS to the byte on ARM**, not self-consistency |
+| why no port was needed | a scenario is a **state machine** | one `step` per C statement with a `pc`, so a task needs no stack of its own and the kernel needs no context switch to run it. `rusty_rtos_demo-core` is `no_std` with **no `alloc`** and builds for `thumbv7m-none-eabi` unchanged |
+| and that is a consequence, not a trick | the kernel keeps a blocking call's locals in the **TCB**, not on a C stack | which is what lets a call return and be re-entered. **The property that made the corpus provable is the one that makes it portable** — K2's stackless design paying a second time |
+| it can fail | changing `dynamic`'s pinned `exits` by one is caught | `exits` is sim time itself, so anything that changed *when* the scheduler ran moves it long before it moves a digest. The poison reports `exits 21346 want 21347` with every other field matching, and the cell exits non-zero |
+
+Six of the seventeen pinned scenarios, chosen to cover different kernel
+paths. The other eleven are host-side only because they are pinned there,
+not because anything stops them running here.
+
 ### QEMU cannot supply a cycle, a latency, or a work count
 
 Measured six ways, over 1000 / 2000 / 4000 iterations of one loop, with
