@@ -28,6 +28,7 @@
 
 /* The standard demo tasks (FreeRTOS/Demo/Common/include). */
 #include "BlockQ.h"
+#include "EventGroupsDemo.h"
 #include "GenQTest.h"
 #include "IntSemTest.h"
 #include "StreamBufferInterrupt.h"
@@ -134,6 +135,11 @@ static void prvStartStreamBufferInterrupt( void )
     vStartStreamBufferInterruptDemo();
 }
 
+static void prvStartEventGroups( void )
+{
+    vStartEventGroupTasks();
+}
+
 static void prvStartTimerDemo( void )
 {
     vStartTimerDemoTask( harnessTIMER_BASE_PERIOD );
@@ -160,6 +166,7 @@ static const Scenario_t xScenarios[] =
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
     { "StreamBufferInterrupt", prvStartStreamBufferInterrupt, xIsInterruptStreamBufferDemoStillRunning },
     { "TimerDemo", prvStartTimerDemo, prvTimerDemoStillRunning },
+    { "EventGroupsDemo", prvStartEventGroups, xAreEventGroupTasksStillRunning },
 };
 
 static const Scenario_t * pxScenario = NULL;
@@ -276,6 +283,10 @@ void vApplicationTickHook( void )
     else if( strcmp( pxScenario->pcName, "TimerDemo" ) == 0 )
     {
         vTimerPeriodicISRTests();
+    }
+    else if( strcmp( pxScenario->pcName, "EventGroupsDemo" ) == 0 )
+    {
+        vPeriodicEventGroupsProcessing();
     }
 }
 

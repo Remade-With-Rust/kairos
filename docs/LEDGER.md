@@ -94,34 +94,36 @@ is only the symptom.
 
 ## K2 — the IPC, in progress (2026-09-09)
 
-The conformance corpus is **thirteen scenarios**, every one of them
-trace-identical to the C kernel for 100,000 ticks: **11,328,945 lines**,
-counters included. Four are new since K1, and with them the interrupt half
-of the kernel.
+The conformance corpus is **fifteen scenarios**, every one of them
+trace-identical to the C kernel for 100,000 ticks: **12,688,209 lines**,
+counters included. Six are new since K1, and with them the interrupt half
+of the kernel, the software timers and the event groups.
 
 Counted against K2's own list of eighteen (mission plan section 6), that is
-**eleven passed** — the other two of the thirteen, `dynamic` and
+**thirteen passed** — the other two of the fifteen, `dynamic` and
 `blocktim`, belong to K1's list. One of the eighteen, `IntQueue`, is out of
-scope for this port. **Six remain:** `QueueSet`, `TimerDemo`,
-`EventGroupsDemo`, `StreamBufferDemo`, `MessageBufferDemo` and
-`MessageBufferAMP`.
+scope for this port. **Four remain**, and every one of them is blocked
+above the kernel rather than by it: `QueueSet`, `StreamBufferDemo`,
+`MessageBufferDemo` and `MessageBufferAMP`.
 
 | scenario | lines identical at 100,000 ticks | what it is for |
 |---|---|---|
-| `QueueOverwrite` | 1,300,382 | a queue of one, written from a task and from the tick |
-| `QueueSetPolling` | 1,373,606 | a queue set polled with no block time, written by an interrupt |
-| `IntSemTest` | 132,893 | a counting semaphore filled from an interrupt; a *mutex* given from one |
-| `StreamBufferInterrupt` | 113,300 | a string streamed from the tick, read one byte at a time |
+| `QueueOverwrite` | 1,300,381 | a queue of one, written from a task and from the tick |
+| `QueueSetPolling` | 1,373,605 | a queue set polled with no block time, written by an interrupt |
+| `IntSemTest` | 132,892 | a counting semaphore filled from an interrupt; a *mutex* given from one |
+| `StreamBufferInterrupt` | 113,299 | a string streamed from the tick, read one byte at a time |
+| `TimerDemo` | 156,491 | twenty-one software timers, the daemon task, and four callbacks — including two an interrupt starts and stops |
+| `EventGroupsDemo` | 1,202,786 | four tasks on one event group: selective bits, bit combinations and a four-way rendezvous, plus an interrupt setting bits through the daemon |
 
 The nine from K1 are unchanged, which is the other half of the result:
-turning the tick hook on and adding the whole `FromISR` surface moved no
-existing trace by a line.
+turning the tick hook on and adding the whole `FromISR` surface, the timers
+and the event groups moved no existing trace by a line.
 
 | fact | value | method |
 |---|---|---|
-| the gate | `kairos conform --all --ticks 100000` | as K1's, now over thirteen scenarios |
-| offline regression | all thirteen pinned by counters, line count, byte count and an FNV-1a/64 digest of the C kernel's own trace file | `rusty_rtos_demo`'s `tests/conformance.rs` |
-| still to do | `QueueSet`, `TimerDemo`, `EventGroupsDemo`, `StreamBufferDemo`, `MessageBufferDemo`, `MessageBufferAMP` | `QueueSet` and the two buffer demos need no new kernel — the queue-set and stream-buffer subsystems are in. `TimerDemo` needs software timers and the daemon; `EventGroupsDemo` needs event groups *and* the timers, because `xEventGroupSetBitsFromISR` defers to the daemon's pended function call |
+| the gate | `kairos conform --all --ticks 100000` | as K1's, now over fifteen scenarios |
+| offline regression | all fifteen pinned by counters, line count, byte count and an FNV-1a/64 digest of the C kernel's own trace file | `rusty_rtos_demo`'s `tests/conformance.rs` |
+| still to do | `QueueSet`, `StreamBufferDemo`, `MessageBufferDemo`, `MessageBufferAMP` | none of the four needs new kernel: every subsystem they use is in and proved by another scenario. The four rows below say what each is actually blocked on |
 | **`MessageBufferDemo` and `StreamBufferDemo` cannot run under sim contract v1** | measured 2026-09-09 | both create a non-blocking sender and receiver at the idle priority, and `xStreamBufferSend` with a zero block time takes **no critical section at all** when the buffer is full: no exit, so no tick, so no time slice, so the sender spins for ever and the receiver never runs. The C oracle hangs on `MessageBufferDemo` at one tick and prints nothing — `timeout 20 ./oracle/build/corpus MessageBufferDemo 1` exits 124 with an empty trace. This is the failure mode `ORACLES.md` already records for `flop` and `integer`: **a task that polls without entering a critical section stops the clock.** Both are contract-v2 scenarios, and the contract is the thing that has to change, not the kernel |
 | the two buffer demos also need `vStreamBufferDelete` with reclamation | **built** | both `MessageBufferDemo` and `StreamBufferDemo` create a buffer and delete it again **on every loop of their echo server** — the C leans on `pvPortMalloc` / `vPortFree` handing back the same block each time. This kernel's byte arena is a bump allocator with no free, so it would run out in a few hundred ticks. It needs a free list over `BYTES` (a contained piece of work, and the only place in the kernel that will have one) before either scenario can run |
 | `QueueSet` cannot be made trace-identical as it stands | needs a decision | it chooses which of its three queues to write with a PRNG that `prvQueueSetSendingTask` seeds from **the address of one of its own stack locals** (`prvSRand( ( size_t ) &ulTaskTxValue )`). That is reproducible on the C side — two oracle runs are byte-identical — and unknowable to any second implementation, and the seed decides every write for the rest of the run. Either the sim contract fixes the seed on both sides, the way it already fixes the tick, or `QueueSet` joins `IntQueue` as out of scope. `QueueSetPolling` already covers the queue-set API; what `QueueSet` adds is contention between three of them and the overwrite-into-a-set corner |
@@ -163,6 +165,45 @@ Four mechanisms, each found by a diff:
    again — and must not re-enter the section, because the C already paid
    for it. The sample the frame took is kept in the TCB, like the queue
    calls' `WaitFrame`, because the frame it belonged to is gone.
+
+### What the timers and the event groups cost
+
+Five more mechanisms, each one found the same way:
+
+5. **A refused send may not consume the ring slot its message went in.**
+   The timer command queue carries *indices* into a ring of messages, so
+   the ring has to be told what the queue decided. Staging the message
+   before the send let a send the queue refused overwrite a message whose
+   index was still queued — and `TimerDemo`'s first test is exactly that: it
+   starts as many timers as the queue holds and then requires the next to
+   fail. The staged write is now conditional on the queue having room, and
+   only an accepted send advances the pointer.
+6. **A trace macro on the line *after* a kernel call belongs to the
+   resumed frame.** `traceTIMER_COMMAND_SEND` follows `xQueueSendToBack`,
+   and `traceEVENT_GROUP_WAIT_BITS_END` follows `xTaskResumeAll`. When
+   either call hands the CPU to a higher-priority task, the C's line does
+   not run until the sender has it back. `OwedTrace` — built in K2 for the
+   two queue-failure lines — now carries both.
+7. **A hook that runs on the daemon task may not be handed a copy of
+   itself.** `TickHook::tick` runs in interrupt context, where nothing it
+   calls can produce another tick, so a copy is safe. A *timer callback*
+   runs on the daemon task, and `pvTimerGetTimerID` on its first line takes
+   a critical section whose exit can be the one that produces a tick — so
+   the tick hook runs inside it and writes its own state back, and the
+   outer copy then goes over the top. It cost `vTimerPeriodicISRTests` one
+   `uxTick++` and made it fire the same arm twice, a tick apart.
+   `TickHook::timer` and `TickHook::pended` now take the kernel and reach
+   the state through it, one short read-modify-write at a time, the way the
+   C reaches its `static`s.
+8. **`vPortFree` costs an exit too.** Fact 5 above says `pvPortMalloc` does;
+   the same wrapper is around the free, and `vEventGroupDelete` frees. The
+   demo deletes and remakes its event group every cycle, so the missing exit
+   showed up on the second `EVENT_GROUP_CREATE`.
+9. **`xEventGroupSync` has its own two trace points, and the harness hooks
+   neither.** It is `xEventGroupSetBits` and `xEventGroupWaitBits` in one,
+   but it traces `traceEVENT_GROUP_SYNC_BLOCK` / `_SYNC_END`, not the
+   wait-bits pair. The only line a sync leaves in the trace is the set-bits
+   one from inside it.
 
 ## The oracle (2026-09-09)
 
