@@ -94,9 +94,17 @@ is only the symptom.
 
 ## K2 — the IPC, in progress (2026-09-09)
 
-Thirteen of K2's eighteen corpus scenarios now trace identically to the C
-kernel for 100,000 ticks each: **11,328,945 lines**, counters included.
-Four are new since K1, and with them the interrupt half of the kernel.
+The conformance corpus is **thirteen scenarios**, every one of them
+trace-identical to the C kernel for 100,000 ticks: **11,328,945 lines**,
+counters included. Four are new since K1, and with them the interrupt half
+of the kernel.
+
+Counted against K2's own list of eighteen (mission plan section 6), that is
+**eleven passed** — the other two of the thirteen, `dynamic` and
+`blocktim`, belong to K1's list. One of the eighteen, `IntQueue`, is out of
+scope for this port. **Six remain:** `QueueSet`, `TimerDemo`,
+`EventGroupsDemo`, `StreamBufferDemo`, `MessageBufferDemo` and
+`MessageBufferAMP`.
 
 | scenario | lines identical at 100,000 ticks | what it is for |
 |---|---|---|
@@ -113,7 +121,8 @@ existing trace by a line.
 |---|---|---|
 | the gate | `kairos conform --all --ticks 100000` | as K1's, now over thirteen scenarios |
 | offline regression | all thirteen pinned by counters, line count, byte count and an FNV-1a/64 digest of the C kernel's own trace file | `rusty_rtos_demo`'s `tests/conformance.rs` |
-| still to do | `QueueSet`, `TimerDemo`, `EventGroupsDemo`, `StreamBufferDemo`, `MessageBufferDemo`, `MessageBufferAMP` | the first needs no new kernel; the rest need software timers, event groups and the two buffer demos' own machinery |
+| still to do | `QueueSet`, `TimerDemo`, `EventGroupsDemo`, `StreamBufferDemo`, `MessageBufferDemo`, `MessageBufferAMP` | `QueueSet` and the two buffer demos need no new kernel — the queue-set and stream-buffer subsystems are in. `TimerDemo` needs software timers and the daemon; `EventGroupsDemo` needs event groups *and* the timers, because `xEventGroupSetBitsFromISR` defers to the daemon's pended function call |
+| `MessageBufferAMP` needs its own oracle binary | not built yet | it works by overriding `sbSEND_COMPLETED` in `FreeRTOSConfig.h`, which is a global macro: with it defined, every other stream-buffer scenario changes behaviour, and `vGenerateCoreBInterrupt` would dereference a control buffer that only exists once the AMP demo has started. One binary cannot serve both, so the oracle build needs a per-scenario config |
 | K2's other three gates | Kani harnesses for the CBMC proof list, the no-panic property test, a `cargo mutants` score | not started |
 
 **`IntQueue` is not in this corpus and will not be.** Upstream's own Posix
