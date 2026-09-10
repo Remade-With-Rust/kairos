@@ -1066,6 +1066,63 @@ as the report claimed — it was `cargo build --target i686`.
 *never refute a lever on one measurement, and vary the axis that could flip
 the answer*. The axis here was pointer width, and it was held fixed.
 
+### FIXED in rusty_alloc 2.2.0, and the root cause was deeper than the sweep
+
+The periodic-collect reading above was the *proximate* mechanism. The root
+cause is one literal. `page_extend` bounds its batch at 4 KiB of payload as
+`span_shift = 4 + slice_count.trailing_zeros()`, and the `4` is
+`SEGMENT_SLICE_SIZE / 4096` — **correct only at the shipped 64 KiB slice.**
+Under `ra_small_profile` the slice is 4 KiB, so the bound was **256 bytes**;
+for a 512-byte class the batch computes to 0, `.max(1)` clamps it to **ONE**,
+and every page carried `capacity == 1`. With no second block for the fast
+path to find, `malloc_generic` ran on **100% of allocations**.
+
+**That is why this project measured `generic` at exactly 1.0000 per op on
+both routes and wrote it down as "the slow path is universal here."** It was
+the symptom, recorded faithfully and read as a property.
+
+Verified on the S3 at `=2.2.0`, per 10,240 alloc+free pairs:
+
+| size | `generic` 2.1.0 → 2.2.0 | per op | `retired` 2.1.0 → 2.2.0 |
+|---:|---|---:|---|
+| 256 | 10,240 → **640** | 1.0000 → **0.0625** | 20 → **1** |
+| 512 | 10,240 → **1,280** | 1.0000 → **0.1250** | 21 → **4** |
+| 513 | 10,240 → 10,240 | 1.0000 | 0 → 0 |
+| 1024 | 10,240 → 10,240 | 1.0000 | 0 → 0 |
+
+512 lands on **0.1250 generic/op — their host prediction to the digit.**
+
+Timed, cycles per alloc+free: **256 goes 314 → 118, 512 goes 314 → 131.** The
+one-byte step **inverts**: 512→513 was 314→271 (513 cheaper by 14%) and is now
+131→266, so 512 is cheaper by **51%**. The palindrome control still holds.
+
+**And the range Kairos lost is now won.** Against `heap_4` on the same part:
+
+| request | 2.1.0 | 2.2.0 | ratio before → after |
+|---|---:|---:|---|
+| 64 B | 141 | **91** | 1.67x → **2.58x** |
+| 256 B | 298 | **101** | **0.79x (loss)** → **2.33x** |
+| 512 B | 298 | **114** | **0.79x (loss)** → **2.06x** |
+| 1024 B | 255 | 249 | 0.93x → 0.94x |
+
+Fragmented — 512-byte requests against 128 16-byte holes — it is **32.51x**.
+
+**One thing did NOT improve, and it is only visible here.** The bin-peek route
+(513–2048 on a 32-bit target) still enters the generic path on every
+operation. That is `alloc.rs`'s documented behaviour — a tight alloc/free loop
+frees into `local_free`, so the queue front's free list is always dry and the
+peek can never hit — and it churns nothing, so it is a cost and not a defect.
+It is worth reporting because **on a 64-bit host those same sizes are on the
+`direct[]` route** (`SMALL_SIZE_MAX` = 1,024 there), so the bin route below
+1 KiB cannot be isolated on the box the maintainers have. 1024 and 2048
+remain the only sizes where `heap_4` is ahead, by 6%.
+
+**The check was inverted, not deleted.** It asserted that the direct route
+retires ~20 pages per 10,240 ops — true, and the defect. A check written to
+confirm a mechanism becomes a check that defends it; it now fails if the fast
+path stops hitting or the churn comes back. Regression controls: the seam is
+green on all four bare-metal targets and the M3 QEMU cell is still 9/9.
+
 ### The mechanism, counted on 32-bit silicon
 
 Their §8.2 counted it on a host; §8.5 asked for the device, noting the counter
