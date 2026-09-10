@@ -339,7 +339,7 @@ is not a critical section.
 
 ## The topology work, measured (2026-09-10)
 
-K1 left the arena-and-list cost row open at **2.08x** `list.c` and K2.1 left
+K1 left the arena-and-list cost row open at **2.08×** `list.c` and K2.1 left
 "the topology work proper: tasks and queues named by type rather than by
 runtime handle *inside* the kernel, so the arena indirection goes and the
 six harnesses that need a started kernel get cheap too". That one sentence
@@ -358,7 +358,7 @@ end-marker tests to perform two loads.
 
 | fact | value | method |
 |---|---|---|
-| the list against the C it remakes | **34.22 instructions per operation, 1.533x** — from 46.45 and 2.081x | `bench/list-cost/run.sh` unchanged: callgrind, three run lengths, the cost is the slope, and both arms still print checksum `7de9075f4deb23e5` so they are doing the same work |
+| the list against the C it remakes | **34.22 instructions per operation, 1.533×** — from 46.45 and 2.081× | `bench/list-cost/run.sh` unchanged: callgrind, three run lengths, the cost is the slope, and both arms still print checksum `7de9075f4deb23e5` so they are doing the same work |
 | what changed | each node a call touches is read **once** | `next_and_value` and `prev_of` replace `links`, taking only the fields the caller needs; `link_between` takes `after` rather than re-reading `before.next`, which both callers already know; the sorted walk reads one node per step instead of two; `remove` answers with the length it just decremented rather than re-reading the end marker; `next_round_robin` reuses the `ends[list].next` it already took for the wrap |
 | what it cost the corpus | **nothing** | 18 scenarios identical to the C kernel at 100 000 ticks, every arm's ticks, yields, exits and lines the same to the digit. This is the scheduler's own data structure, so that is the gate that matters |
 
@@ -377,8 +377,8 @@ An end marker needs `pxIndex` and `uxNumberOfItems`, which an item does
 not, so making it a `Node` costs it eight bytes and pushes those two into
 a third array. That is worth more than the branch it removes, and the
 slice select is worse again because it materialises two fat pointers where
-the branch materialised none. The row is closed as done at 1.533x, not at
-the 1.25x the plan hoped for; whether 1.533x is worth revisiting is the
+the branch materialised none. The row is closed as done at 1.533×, not at
+the 1.25× the plan hoped for; whether 1.533× is worth revisiting is the
 owner's call, and the remaining gap is bounds checks that `forbid(unsafe)`
 does not allow us to skip.
 
