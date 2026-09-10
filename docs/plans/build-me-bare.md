@@ -345,6 +345,69 @@ job. Two are one bump: `heapless` 0.8 replaced `atomic-polyfill` with
 house's answer for atomics a target lacks. Not Kairos's to schedule; owner
 steps for `spacedb-sdk` and `ffai-core`.
 
+### And the seam RAN, which is the first time it has
+
+Strategy item 5 draws the line at "'bare' means a ledger row from a board",
+and until today the allocator seam had none — `HOUSE-STACK.md` said of it,
+in as many words, "**no board has run it**". Now one has:
+
+```text
+=== rusty_rtos_alloc small-metal seam on ESP32-S3 (xtensa, no_std + alloc) ===
+rusty_alloc      2.1.0
+REGION_ALIGN     16 bytes
+MIN_REGION       65536 bytes
+budget asked     225280 bytes
+region reserved  196608 bytes        <- three whole 64 KiB segments
+give() -> 196608 bytes usable
+second give -> FERR_REGISTERED
+64 rounds of 32768 bytes = 2097152 total
+  served from the region: 64/64
+  landed on the first block's address again: 63/63
+checks passed 9 / 9
+RESULT: PASS -- the seam gave, served and reclaimed on the board
+```
+
+ESP32-S3 revision v0.2, MAC `68:ee:8f:51:74:64` — the same desk and the
+same part as B1 and B2. `firmware/esp32s3-devkit-region` in
+`rusty_rtos_core`, following that repo's `firmware/README.md` convention.
+
+`good_region_size(220 KiB)` answering **196,608** is the seam's own crate
+docs — "three whole 64 KiB segments" — reproduced on silicon rather than
+asserted, and the second `give` answering `FERR_REGISTERED` exercises the
+error surface B3 landed hours earlier.
+
+**Two checks carry this row; the rest is arithmetic a host could do.**
+
+- **`region_contains` on every allocation's address.** "The allocation
+  succeeded" proves nothing: a global allocator quietly falling back to
+  something else prints exactly that. Each address is tested against the
+  base and length the region registered when it was given.
+- **64 rounds of a 32 KiB block against a 192 KiB region** — two megabytes
+  through a region holding a tenth of it, so a heap reclaiming nothing
+  would be exhausted on the sixth round. All 64 served, and 63 of 63 land
+  on the first block's address.
+
+**The first version of that second check could not fail, and saying so is
+the point.** It read `region_stats()` and asserted
+`free_after >= free_before`; it passed with `65536 == 65536`, because that
+field counts extents the allocator has not been handed yet, so dropping a
+`Box` never moves it. That is the same defect as B3's grep — a green check
+that was green by construction — found on the same day, in my own work,
+one section later. It is replaced by the rounds above and the counter is
+printed but labelled.
+
+**This is the S3, not a Kairos target**, the same caveat B1 and B2 carry,
+and it claims **no timing**: the cycle count is K4's and belongs on a
+Kairos part beside the C `heap_4`. **B4 is untouched by this row.** What
+changes is that the seam is no longer un-run: the fixed-region backend,
+`give`, the error codes and reclamation are all real on 32-bit silicon.
+
+Also measured getting there, and worth having written down: the seam
+**compiles for `xtensa-esp32s3-none-elf`** under the two cfgs with
+`-Z build-std=core,alloc`. The house's ESP notes say "rusty_alloc has no
+Xtensa port by default", which is true of its default segment path and not
+of `prim::fixed`.
+
 ## 5. Remaining work and owner steps
 
 - ~~**Owner:** file B1~~ **done 2026-09-09**: fixed upstream in its own
@@ -361,10 +424,12 @@ steps for `spacedb-sdk` and `ffai-core`.
 - ~~**Owner:** B3~~ **done 2026-09-10**: released as `rusty_alloc` **2.1.0**,
   not the 2.0.5 this plan asked for. Pin moved, the seam's re-export list
   completed, all four targets green, and the list poison-tested.
-- **Kairos:** B4 is now the ONLY open brick, and it is the one no upstream
-  release can close: it wants a **board**. It rides K4, and K4 rides K3's
-  QEMU cell. Everything else in this plan is compiled-and-pinned; B4 is the
-  row that turns "ready" into "bare".
+- **Kairos:** B4 is the ONLY open brick, and no upstream release can close
+  it. It rides K4, and K4 rides K3's QEMU cell — `qemu-system-arm` is not
+  installed on this box, which is the first concrete step. Note that B4
+  needs **no hardware**: its kill test is a cycle count from the M3 QEMU
+  cell, so the blocker is the cell, not a part. The S3 row above is as
+  close as an Xtensa board can get and is explicitly not it.
 - **Kairos: B2's consequence is now live.** `rusty_rtos_sntp`'s package plan
   opens with "WRAP the leaf" instead of "REMAKE coreSNTP", and the mission
   plan's §5.5 item 4 is decided by this ledger row. The wrapper needs **no
@@ -398,6 +463,9 @@ steps for `spacedb-sdk` and `ffai-core`.
 | 2026-09-09 | **A gate is not a gate until it has been made to fail.** Both B2 poisons were run (drop the `cfg_attr` -> the appendix's exact `E0463`; restore `std::error::Error` -> `E0433`), then restored to exit 0. Every future row in this plan should carry its poison, not just its pass -- `gate-*` crates are three lines long and a green three-line crate is exactly the shape that can be green for the wrong reason. |
 | 2026-09-09 | The B2 board row parses a **hand-written 48-byte wire image**, not the codec's own `to_bytes` output, and runs the offset arithmetic where `f64` is soft-float. Parsing your own output tests self-consistency; parsing a literal image tests the RFC field offsets. **A board row that only round-trips its own encoder has not tested the wire.** |
 | 2026-09-09 | **The B2 release is 0.2.0, not the 0.1.11 this plan asked for.** Gating the `std`-only modules narrows what `default-features = false` returns, and under Cargo's 0.x rules `0.1.10` and `0.1.11` are COMPATIBLE -- so a consumer on `rusty_time-core = "0.1"` with `default-features = false` (which is exactly what `gate-time` writes) would have been handed the narrower crate by the next `cargo update`, with no version change to notice. A minor bump makes the one breaking arm an explicit choice. **When a fix adds a feature gate, ask which spelling of the dependency gets NARROWER, not just which gets wider.** |
+| 2026-09-10 | **The allocator seam ran on a board for the first time** (ESP32-S3, 9/9). `HOUSE-STACK.md` had said "no board has run it" since it was written. The row is deliberately the S3 caveat again -- it does NOT touch B4, which wants the Cortex-M3 cycle count -- but the fixed-region backend, `give`, the `FERR_*` codes and reclamation are now real on 32-bit silicon. Also measured: the seam **does** compile for `xtensa-esp32s3-none-elf`; the house note "rusty_alloc has no Xtensa port" is true of its default segment path, not of `prim::fixed`. |
+| 2026-09-10 | **My own first version of that board row's reclamation check could not fail** -- `region_stats().free` before and after a drop, which reads 65536 both sides because that field counts extents not yet handed to the allocator. Replaced with 64 rounds of 32 KiB through a 192 KiB region (2 MiB total; a heap reclaiming nothing dies on the sixth), 64/64 served and 63/63 at the same address. **Same defect as B3's grep, same day, one section later.** When a check passes, ask what would have made it fail before believing it. |
+| 2026-09-10 | **B4 needs no hardware.** Its kill test is a cycle count from the M3 QEMU cell, so the blocker is the cell (K3) and `qemu-system-arm`, not a part. Plugging in a board -- any board -- cannot close it, and the S3 is as close as Xtensa gets. |
 | 2026-09-10 | **B3 and B5 closed, both by an upstream release, both verified by running the gate rather than by reading a changelog.** B5 is the plan's cleanest evidence: `gate-erasure` was measured FAILING at `=0.4.0` and passing at `=0.4.1` minutes apart in one session. B3 came out as **2.1.0**, not the 2.0.5 named here — check what the crate actually released, not what the plan asked for. |
 | 2026-09-10 | **B3's kill test could not fail.** `grep -c "arrives with the next"` printed 0 on the UNFIXED tree, because the comment said "arrive with / the next release" — wrong verb form and split over a line break. Replaced with a compile check. **A kill test that greps for prose rots with the prose**; make every row run a compiler. |
 | 2026-09-10 | **Two of the gate's own rungs had never run.** `host/` and `hostgit/` are packages inside a workspace whose `members = ["gate-*"]` does not match them, so cargo refused to build either — while the README recorded times for both. They now carry their own `[workspace]` tables, and `host/` was still pinning the two PRE-FIX versions because nothing had compiled it since. **Run every rung the README lists before believing any of them**, and re-run all three workspaces when a pin moves. |
