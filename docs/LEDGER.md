@@ -682,29 +682,34 @@ and not a second binary, because `kairos check --qemu` runs a plain
 ambiguous. Roughly three hours each, so they are background runs, not
 gates.
 
-**And the hour runs on ARM too — where it turned into something stronger.**
-`mps2-an385-qemu-corpus --features soak`: **17/17 still running after
-3,600,000 ticks on a Cortex-M3 under QEMU**, exit 0. That was the liveness
-clause. But the counters it printed were then diffed against the host soak's,
-by machine rather than by eye:
+**And the hour runs on both QEMU cells too — where it turned into something
+stronger.** `mps2-an385-qemu-corpus --features soak` and
+`riscv32-qemu-corpus --features soak`: **17/17 still running after 3,600,000
+ticks** on each, exit 0. That was the liveness clause. But the counters they
+printed were then diffed against the host soak's, by machine rather than by
+eye:
 
 ```text
-host rows: 17   M3 rows: 17
-IDENTICAL -- all 17 scenarios, ticks+yields+exits, host vs Cortex-M3,
-             at 3,600,000 ticks
+rows: host=17 m3=17 rv32=17
+IDENTICAL across all THREE: host, Cortex-M3, RV32
+             -- 17 scenarios, ticks+yields+exits, at 3,600,000 ticks
 ```
 
-**Every counter agrees, on every scenario, at 1,800x the pinned length.** The
-conformance cells prove agreement with the C kernel at 2,000 ticks; this says
-the ARM build and the host build stay in lockstep for a simulated hour.
+**Every counter agrees, on every scenario, on three architectures, at 1,800x
+the pinned length.** The conformance cells prove agreement with the C kernel
+at 2,000 ticks; this says the x86-64, ARMv7-M and RV32 builds stay in lockstep
+for a simulated hour.
 
 **Say what it is not.** This is our two builds agreeing with each other, not
 with C — there are no C pins at 3,600,000 ticks, which is why the soak claims
 liveness. It is a **cross-architecture determinism** result, and a strong one:
 a divergence anywhere in an hour of scheduling, blocking, timer and queue
 traffic would move `exits`, which is sim time itself. It is recorded as a
-ledger row rather than a gate, because re-checking it costs a three-hour QEMU
-run.
+ledger row rather than a gate, because re-checking it costs a QEMU run of
+hours per architecture.
+
+**K3's one-hour clause is now met on two of its three targets** — M3-qemu and
+RV32-qemu — with the third, a C6, blocked on the same hardware B4b needs.
 
 **Where the two minutes go, and why the obvious reading is wrong.**
 `semtest` takes **92 of the ~125 seconds**; everything else takes between
