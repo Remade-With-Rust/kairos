@@ -302,20 +302,25 @@ That is the same law K2 met six times from six directions, arriving a
 seventh way. It is not a fact about `async`; it is a fact about this
 scheduler, and `async` obeys it once told.
 
-### What K2.2 does not settle
+### The storage question, settled
 
-The **storage** question, which is the one between this prototype and an
-executor. An `async fn`'s future is an anonymous type, and `Runner` holds
-its bodies in a `[Body; TASKS]` of a `Copy` enum, which no future can join.
-`PollQ-async` therefore owns its own kernel and pins its two futures as
-locals, sharing the kernel by `&RefCell` because a future cannot hold
-`&mut SimKernel` across a suspension and still let the driver hand the
-kernel to another task. That is honest for a prototype and it is not an
-executor: a general one needs somewhere for a future of unnameable type to
-live, which is what Embassy's `TaskStorage` is for. **The trace result does
-not depend on that choice** — the suspension points are where the answer
-lives — but the choice is still open, and it is the first thing K3 would
-have to settle if the async face is to be more than one scenario.
+An `async fn`'s future has no nameable type, so it cannot be a field of the
+runner. It does not have to be. `Body::Async` holds a
+`Pin<&mut dyn Future<Output = ()>>`; the caller pins the future as a local
+with [`core::pin::pin!`] and lends it; the runner polls it like any other
+body. **No allocator, no `unsafe`, nothing unstable** — a safe macro and an
+unsized coercion, both stable.
+
+| fact | value | method |
+|---|---|---|
+| `async` is a body kind, not a prototype | `PollQ-async` runs through the same `Runner`, `step_once` and verdict as the other seventeen | there is no bespoke driver left; the arm is a `start` function like any other, taking two pinned futures |
+| it costs no allocator | `pin!`, not `Box::pin` | `tests/conformance.rs::the_async_arm_reproduces_pollqs_trace_exactly` pins on the stack, and so does `kairos-sim` |
+| what it forced | **the kernel and the statics are the caller's, not the runner's** | a future borrows the kernel to make its calls, and a future that borrowed a field of the struct polling it would be self-referential and cannot be written. So the runner borrows a `RefCell` of each instead. The borrow can never conflict — the runner polls one body at a time and holds no borrow of its own while polling an `async` one, which is the one rule `step_once` has to keep |
+| and it moved nothing | all 18 arms still identical at 100 000 ticks | the refactor touched the file that drives the whole corpus, which is exactly why the corpus is the thing that says it was safe |
+
+The cost is one `RefCell` borrow per step — a counter and a branch — and it
+is inside the measurement: the arms' exits did not move, because a borrow
+is not a critical section.
 
 ## The oracle (2026-09-09)
 
