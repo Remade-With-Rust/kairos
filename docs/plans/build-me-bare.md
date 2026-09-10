@@ -73,7 +73,8 @@ proven on both targets by the gate.
 | B1 | ~~`rusty_zstd`: the eight census counters behind `target_has_atomic = "64"`~~ — **closed 2026-09-09, fixed upstream in 0.2.5.** `gate-zstd` at `=0.2.5` exits 0 on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf`; the draft was never filed and is now moot | rusty_zstd (draft: `docs/upstream/rusty_zstd-atomic-u64.md`, resolved) | met | on-chip compression is unblocked; `rusty_rtos_demo`'s trace capture on a board (K3) can store compressed |
 | B2 | ~~`rusty_time-core`: `no_std` leaf~~ — **closed 2026-09-09, fixed upstream in 0.2.0.** `gate-time` at `=0.2.0` exits 0 on both targets; the draft was never filed and is now moot. Original scope: — `cfg_attr(not(std), no_std)`, `ntp.rs` unconditional, `filter`/`discipline`/`select`/`server`/`client`/`config`/`refclock`/`vclock` behind `std`; a CI rung with `--no-default-features`; release 0.2.0 | rusty_time (draft: `docs/upstream/rusty_time-no-std-leaf.md`) | `gate-time` OK on both targets at `=0.2.0`; `NtpPacket::parse` of a 48-byte request round-trips `to_bytes` in a `no_std` test — **both met upstream** (the round trip is `client_request_round_trips_in_48_bytes`, run on the host `no_std` arm AND on the S3); only the registry pin is outstanding | `rusty_rtos_sntp` as a wrapper over the leaf (mission plan §5.5 item 4 flips to "the leaf"); until then the coreSNTP remake |
 | B3 | ~~`rusty_alloc` 2.0.5: `REGION_ALIGN` and a public region error type~~ — **closed 2026-09-10, released as 2.1.0** (not the 2.0.5 this plan named). The seam pins `=2.1.0` and re-exports `REGION_ALIGN`, `PrimError` and the four `FERR_*` codes beside the region API it already had | rusty_alloc | met — see section 6 | the seam's docs and the firmware template: the documented `HEAP.give()?` is now **writable**, which it was not while the error type had no name |
-| B4 | The seam on a board: `Region<{ good_region_size(...) }>` given once in the M3-QEMU cell and on the C6, `heap_3` over it, the K4 allocation-latency row against the C `heap_4` | Kairos (K4; family plan) | the mission plan's K4 kill test | `rusty_alloc` "measured on Cortex-M" (the mission plan's upstream row closes) |
+| B4a | ~~The seam given a `Region` in the M3 cell~~ — **closed 2026-09-10.** `rusty_rtos_core/firmware/mps2-an385-qemu-region`, 9/9 on a Cortex-M3 under QEMU, exit 0. `mps2-an385` and not the `lm3s6965evb` this plan named, because `MIN_REGION` is 65,536 bytes and the LM3S6965 has 65,536 bytes of SRAM in total | Kairos | met | `rusty_alloc` is now run on a Kairos **target** as well as on the S3 |
+| B4b | The K4 allocation-latency row against the C `heap_4` — **and it cannot come from QEMU**, which is the finding B4a produced. See section 4 | Kairos (K4; family plan) | a cycle row from **silicon**: the ESP32-C6 (`riscv32imac`, a Kairos target, real `mcycle`) | `rusty_alloc` "measured on Cortex-M" |
 | B5 | ~~`rusty_erasure-core`: the census counter behind `target_has_atomic = "64"`~~ — **closed 2026-09-10, fixed upstream in 0.4.1**, which is the release this plan asked for by name. `gate-erasure` at `=0.4.1` exits 0 on both targets, a genuine **FAIL → OK**: the rung was still failing at `=0.4.0` in the same session, minutes earlier | rusty_erasure (draft: `docs/upstream/rusty_erasure-atomic-u64.md`, resolved) | met | nothing in Kairos v1; the org's `no-std` label is now true |
 
 Not a brick: `rusty_xml`. No Kairos package will ever parse XML; the gate
@@ -408,6 +409,82 @@ Also measured getting there, and worth having written down: the seam
 Xtensa port by default", which is true of its default segment path and not
 of `prim::fixed`.
 
+### B4a closed -- the seam on a Kairos target, and what that cell cannot measure
+
+`rusty_rtos_core/firmware/mps2-an385-qemu-region`, 9/9, **QEMU exit code
+0**. No hardware: the cell exits with a code from inside the guest, so it
+gates rather than being watched.
+
+```text
+=== rusty_rtos_alloc small-metal seam on Cortex-M3 (mps2-an385, QEMU) ===
+target           thumbv7m-none-eabi   <- a KAIROS target
+region reserved  196608 bytes         <- three whole 64 KiB segments
+give() -> 196608 bytes usable
+second give -> FERR_REGISTERED
+64 rounds of 32768 bytes = 2097152 total
+  served from the region: 64/64
+  landed on the first block's address again: 63/63
+checks passed 9 / 9
+```
+
+Identical numbers to the S3 row, which is the point: the geometry is a
+property of the configuration, not of the part.
+
+**`mps2-an385`, not the `lm3s6965evb` this plan named**, and the reason is
+arithmetic rather than taste:
+
+```text
+MIN_REGION      65536 bytes    one segment at this geometry
+LM3S6965 SRAM   65536 bytes    the whole chip
+```
+
+The smallest region the allocator accepts *is* the entire SRAM, leaving
+nothing for stack, `.data` or `.bss`. The AN385 is the same core with
+megabytes, and FreeRTOS ships a QEMU demo for it too, so the C arm of K3's
+A/B survives. `thumbv7m-none-eabi`, which is **not** the
+`thumbv7em-none-eabihf` every other rung uses -- the M3 has no FPU, and it
+was a separate rustup target.
+
+### The negative result, which re-specifies B4b and half of K3
+
+B4's kill test asked for "a cycle count from the M3 cell". **The M3 cell
+cannot supply one**, and neither can any other QEMU cell here. Measured
+six ways rather than assumed, for 1000 / 2000 / 4000 iterations of one
+loop:
+
+| probe | 1000 | 2000 | 4000 |
+|---|---|---|---|
+| DWT `CYCCNT` | 0 | 0 | 0 |
+| SysTick, plain, run 1 | 688 | 493 | 492 |
+| SysTick, plain, run 2 | 667 | 490 | 317 |
+| SysTick, plain, run 3 | 810 | 585 | 395 |
+| SysTick, `-icount shift=0` | 1 | 0 | 0 |
+| SysTick, `-icount shift=0,sleep=off` | 1 | 0 | 0 |
+
+- DWT is **not implemented** on this machine.
+- SysTick is emulated, and its deltas **shrink as the work grows** -- the
+  opposite of a work counter -- because they track host wall time while
+  TCG's translation cache warms. They also differ run to run.
+- Under `-icount` the virtual clock does not advance for SysTick at all,
+  so the deterministic-time route is closed too.
+- The clock source is pinned to `Core` explicitly: **a negative result
+  taken from a misconfigured peripheral is not a result**, so that was
+  ruled out before the conclusion.
+- TCG plugin support is compiled in but **no plugin library ships** with
+  the Windows QEMU build, so `libinsn` counting is unavailable.
+
+So the division of labour, and it is the repo's existing rule rather than
+a new one: **QEMU cells carry correctness and gate on an exit code; cycle
+and latency rows come from silicon.** The ESP32-C6 is a Kairos target
+(`riscv32imac`) with a real `mcycle`. Flash and RAM decomposition are
+unaffected -- they are properties of the binary, not of execution, so a
+QEMU cell can carry them.
+
+The house already judges the kernel's speed on callgrind instruction
+counts and the corpus rather than on a clock. This is that same rule
+arriving from the other direction: **an emulator can tell you whether
+something is right, and cannot tell you what it costs.**
+
 ## 5. Remaining work and owner steps
 
 - ~~**Owner:** file B1~~ **done 2026-09-09**: fixed upstream in its own
@@ -424,38 +501,30 @@ of `prim::fixed`.
 - ~~**Owner:** B3~~ **done 2026-09-10**: released as `rusty_alloc` **2.1.0**,
   not the 2.0.5 this plan asked for. Pin moved, the seam's re-export list
   completed, all four targets green, and the list poison-tested.
-- **Kairos:** B4 is the ONLY open brick, and no upstream release can close
-  it. It needs **no hardware**: its kill test is a cycle count from the M3
-  QEMU cell, so the blocker is the cell.
+- **Kairos:** B4b is the ONLY open brick, and no upstream release can close
+  it. Its shape changed on 2026-09-10 and the change is the useful part.
 
-  **The tool is no longer the blocker.** QEMU 11.1.0 was installed on
-  2026-09-10 (`winget SoftwareFreedomConservancy.QEMU`, `C:\Program
-  Files\qemu`, on the User PATH) and carries `qemu-system-arm`,
-  `qemu-system-riscv32` and `qemu-system-xtensa` — every cell the mission
-  plan names. `lm3s6965evb` (Cortex-M3) and `virt` (RV32) both present.
+  **The tooling is done.** QEMU 11.1.0 is installed
+  (`winget SoftwareFreedomConservancy.QEMU`, on the User PATH) with
+  `qemu-system-arm`, `-riscv32` and `-xtensa` — every cell the mission
+  plan names — and **B4a is closed**: the seam runs on a Cortex-M3 under
+  it, 9/9, QEMU exit 0, with no hardware at all.
 
-  Proven end to end rather than assumed, because an installed emulator is
-  not a working cell: a `thumbv7m-none-eabi` binary built with
-  `cortex-m-rt` and `cortex-m-semihosting` printed over semihosting and
-  then **exited QEMU with code 0** from `debug::exit(EXIT_SUCCESS)`.
+  **What is left needs hardware after all**, which is the opposite of what
+  this bullet said before the cell was built. B4b is the allocation-latency
+  row against the C `heap_4`, and section 4 shows six ways that QEMU
+  cannot supply a cycle, latency or work number here — DWT unimplemented,
+  SysTick tracking host wall time and *shrinking* as work grows, nothing
+  under `-icount`, no TCG plugin library in the Windows build. So B4b
+  wants the **ESP32-C6**: `riscv32imac`, a Kairos target, with a real
+  `mcycle`. That board is not on this desk (only the S3 is), which makes
+  it the one concrete thing standing between this plan and done.
 
-  ```text
-  qemu-system-arm -cpu cortex-m3 -machine lm3s6965evb -nographic \
-      -semihosting-config enable=on,target=native -kernel <elf>
-  -> M3 cell alive: qemu-system-arm + lm3s6965evb + thumbv7m-none-eabi
-  -> QEMU exit code: 0
-  ```
+  The lesson is worth more than the brick: **build the cell before
+  believing what it can measure.** This plan asserted a cycle count from
+  QEMU for a day and a half, and one afternoon of actually running it
+  turned that into a hardware requirement.
 
-  That exit code is the part that matters: it means an M3 cell can be a
-  **gate** — a thing CI or `kairos check --qemu` runs and reads a verdict
-  from — and not merely a thing someone watches. Note the target is
-  `thumbv7m-none-eabi`; the Cortex-M3 has no FPU and is not the
-  `thumbv7em-none-eabihf` the other rungs use.
-
-  What is left for B4 is now only Kairos's own work: the M3 cell in
-  `rusty_rtos_core/firmware/` (the `firmware/README.md` naming says
-  `lm3s6965-qemu-*`), `heap_3` over `Region`, and the allocation-latency
-  row against the C `heap_4`. That is K4's kill test and it rides K3.
 - **Kairos: B2's consequence is now live.** `rusty_rtos_sntp`'s package plan
   opens with "WRAP the leaf" instead of "REMAKE coreSNTP", and the mission
   plan's §5.5 item 4 is decided by this ledger row. The wrapper needs **no
@@ -469,7 +538,8 @@ of `prim::fixed`.
 | B1 | `cd tools/house-gate && cargo check -p gate-zstd --target thumbv7em-none-eabihf` | **met**: exit 0 at `=0.2.5`, and on `riscv32imac-unknown-none-elf` too |
 | B2 | `cd tools/house-gate && cargo check -p gate-time --target riscv32imac-unknown-none-elf` | **met**: exit 0 at `=0.2.0`, and on `thumbv7em-none-eabihf` too |
 | B3 | `cd rusty_rtos_core && RUSTFLAGS="--cfg ra_single_threaded --cfg ra_small_profile" cargo check -p rusty_rtos_alloc --no-default-features --features small-metal --target thumbv7em-none-eabihf` | **met**: exit 0 at `=2.1.0` with `REGION_ALIGN` and `PrimError` in the re-export list, and on all four targets |
-| B4 | the mission plan's K4 row | a cycle count from the M3 cell in `rusty_rtos_heap/docs/LEDGER.md` |
+| B4a | `cd rusty_rtos_core/firmware/mps2-an385-qemu-region && cargo run --release` | **met**: 9/9 and QEMU exits 0 |
+| B4b | the mission plan's K4 row | a cycle row in `rusty_rtos_heap/docs/LEDGER.md` **from silicon**. It said "from the M3 cell" until 2026-09-10, when the M3 cell was built and measured to have no usable counter at all |
 | B5 | `cd tools/house-gate && cargo check -p gate-erasure --target thumbv7em-none-eabihf` | **met**: exit 0 at `=0.4.1` from the registry with a checksum, and on `riscv32imac-unknown-none-elf` too |
 | **the gate itself** | `sh tools/house-gate/run.sh` | exit 0. This row exists because the four above can all pass while a rung nobody runs is broken: on 2026-09-10 `host/` and `hostgit/` had been unbuildable for a day while the README recorded times for them. The script **discovers** `gate-*` off the filesystem rather than listing them — the README's loop named seven of the eight that exist — and it declares `gate-xml` as an EXPECTED failure, so a rung that starts passing when it should not is red too. Poison-tested both ways: exit 1 when an expectation is wrong, exit 0 when it is right |
 
@@ -492,6 +562,8 @@ of `prim::fixed`.
 | 2026-09-09 | **The B2 release is 0.2.0, not the 0.1.11 this plan asked for.** Gating the `std`-only modules narrows what `default-features = false` returns, and under Cargo's 0.x rules `0.1.10` and `0.1.11` are COMPATIBLE -- so a consumer on `rusty_time-core = "0.1"` with `default-features = false` (which is exactly what `gate-time` writes) would have been handed the narrower crate by the next `cargo update`, with no version change to notice. A minor bump makes the one breaking arm an explicit choice. **When a fix adds a feature gate, ask which spelling of the dependency gets NARROWER, not just which gets wider.** |
 | 2026-09-10 | **Audited the whole document by running it, and found the appendix contradicting the plan**: section 8 still showed `gate-erasure`'s `AtomicU64` error as a live failure while sections 1, 3 and 6 all recorded B5 closed. Every other fixed row had been marked `[HISTORICAL]` and that one was missed. **When a brick closes, grep the whole file for its failure text, not just its row.** |
 | 2026-09-10 | **The gate got a kill test of its own** (`tools/house-gate/run.sh`, exit 0). Per-brick kill tests cannot catch a rung nobody runs, which is what `host/` and `hostgit/` were for a day. The script discovers `gate-*` off the filesystem -- the README's hand-written loop named seven of eight -- and treats `gate-xml` as an EXPECTED failure, so a rung that starts passing when it should not is red as well. Poison-tested in both directions. |
+| 2026-09-10 | **B4a closed: the seam runs on a Cortex-M3.** And the cell had to move machine — `mps2-an385`, not `lm3s6965evb`, because `MIN_REGION` (64 KiB) IS the LM3S6965's entire SRAM. **Check the part can hold the thing before naming the part.** |
+| 2026-09-10 | **B4's kill test asked QEMU for a number it cannot produce, and K3's asks the same.** Measured six ways with the clock source pinned: DWT unimplemented (0/0/0), SysTick deltas that SHRINK as work grows (host wall time while TCG warms) and differ run to run, nothing at all under `-icount`, and no TCG plugin library in the Windows build. So B4b and K3's cycle rows are re-specified to come from the **C6** (`riscv32imac`, real `mcycle`); QEMU cells carry correctness and gate on an exit code. **An emulator can tell you whether something is right and cannot tell you what it costs** — which is the same law the callgrind work already runs on, arriving from the other side. |
 | 2026-09-10 | **QEMU installed and the M3 cell proven runnable**, which retires the tool half of B4's blocker. 11.1.0 via winget; `qemu-system-arm`, `-riscv32` and `-xtensa` all present, `lm3s6965evb` and `virt` both listed. Smoke-tested with a real `thumbv7m-none-eabi` binary: semihosting printed AND `debug::exit(EXIT_SUCCESS)` made **QEMU exit 0**, so a cell can be a gate rather than something to watch. Cortex-M3 is `thumbv7m-none-eabi`, not the `thumbv7em-none-eabihf` the other rungs use -- a separate rustup target. **An installed emulator is not a working cell; run one binary through it before calling the blocker retired.** |
 | 2026-09-10 | **The allocator seam ran on a board for the first time** (ESP32-S3, 9/9). `HOUSE-STACK.md` had said "no board has run it" since it was written. The row is deliberately the S3 caveat again -- it does NOT touch B4, which wants the Cortex-M3 cycle count -- but the fixed-region backend, `give`, the `FERR_*` codes and reclamation are now real on 32-bit silicon. Also measured: the seam **does** compile for `xtensa-esp32s3-none-elf`; the house note "rusty_alloc has no Xtensa port" is true of its default segment path, not of `prim::fixed`. |
 | 2026-09-10 | **My own first version of that board row's reclamation check could not fail** -- `region_stats().free` before and after a drop, which reads 65536 both sides because that field counts extents not yet handed to the allocator. Replaced with 64 rounds of 32 KiB through a 192 KiB region (2 MiB total; a heap reclaiming nothing dies on the sixth), 64/64 served and 63/63 at the same address. **Same defect as B3's grep, same day, one section later.** When a check passes, ask what would have made it fail before believing it. |
