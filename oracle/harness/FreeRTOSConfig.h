@@ -137,4 +137,17 @@ extern void vAssertCalled( const char * const pcFileName, unsigned long ulLine )
 #define traceLOW_POWER_IDLE_BEGIN()                                    kairos_trace_ev( "LOW_POWER_IDLE_BEGIN" )
 #define traceLOW_POWER_IDLE_END()                                      kairos_trace_ev( "LOW_POWER_IDLE_END" )
 
+/* MessageBufferAMP pretends to be two cores by replacing the notification a
+ * completed send would have made with a message on a control buffer and a
+ * call to what stands in for the other core's interrupt handler. The
+ * replacement is this macro, and it is global: with it defined, every other
+ * stream-buffer scenario would behave differently, and `vGenerateCoreBInterrupt`
+ * would reach a control buffer that only exists once the AMP demo has
+ * started. So the AMP demo gets its own binary, built with -DKAIROS_AMP=1,
+ * and this is the only thing that differs between the two. */
+#if defined( KAIROS_AMP )
+    void vGenerateCoreBInterrupt( void * xUpdatedMessageBuffer );
+    #define sbSEND_COMPLETED( pxStreamBuffer )                         vGenerateCoreBInterrupt( ( void * ) ( pxStreamBuffer ) )
+#endif
+
 #endif /* FREERTOS_CONFIG_H */

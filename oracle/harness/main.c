@@ -29,6 +29,9 @@
 /* The standard demo tasks (FreeRTOS/Demo/Common/include). */
 #include "BlockQ.h"
 #include "EventGroupsDemo.h"
+#if defined( KAIROS_AMP )
+    #include "MessageBufferAMP.h"
+#endif
 #include "GenQTest.h"
 #include "IntSemTest.h"
 #include "StreamBufferInterrupt.h"
@@ -140,6 +143,13 @@ static void prvStartEventGroups( void )
     vStartEventGroupTasks();
 }
 
+#if defined( KAIROS_AMP )
+    static void prvStartMessageBufferAMP( void )
+    {
+        vStartMessageBufferAMPTasks( configMINIMAL_STACK_SIZE );
+    }
+#endif
+
 static void prvStartTimerDemo( void )
 {
     vStartTimerDemoTask( harnessTIMER_BASE_PERIOD );
@@ -167,6 +177,11 @@ static const Scenario_t xScenarios[] =
     { "StreamBufferInterrupt", prvStartStreamBufferInterrupt, xIsInterruptStreamBufferDemoStillRunning },
     { "TimerDemo", prvStartTimerDemo, prvTimerDemoStillRunning },
     { "EventGroupsDemo", prvStartEventGroups, xAreEventGroupTasksStillRunning },
+#if defined( KAIROS_AMP )
+    /* Only in the AMP binary: the `sbSEND_COMPLETED` override above is
+     * global, so this scenario and the other fifteen cannot share one. */
+    { "MessageBufferAMP", prvStartMessageBufferAMP, xAreMessageBufferAMPTasksStillRunning },
+#endif
 };
 
 static const Scenario_t * pxScenario = NULL;

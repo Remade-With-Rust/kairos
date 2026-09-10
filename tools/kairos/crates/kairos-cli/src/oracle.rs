@@ -44,79 +44,116 @@ const CLASSIC_SPARSE: [&str; 5] = [
     "FreeRTOS/Test/VeriFast",
 ];
 
-/// A demo scenario: its name and the standard demo files it needs.
+/// A demo scenario: its name, the standard demo files it needs, and
+/// whether it has to come out of the second binary.
 struct Scenario {
     name: &'static str,
     demo_files: &'static [&'static str],
+    /// `MessageBufferAMP` replaces `sbSEND_COMPLETED`, which is a global
+    /// macro: with it defined every other stream-buffer scenario behaves
+    /// differently, so the AMP demo gets a binary of its own.
+    amp: bool,
 }
 
-const SCENARIOS: [Scenario; 15] = [
+const SCENARIOS: [Scenario; 16] = [
     Scenario {
         name: "dynamic",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/dynamic.c"],
+        amp: false,
     },
     Scenario {
         name: "PollQ",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/PollQ.c"],
+        amp: false,
     },
     Scenario {
         name: "BlockQ",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/BlockQ.c"],
+        amp: false,
     },
     Scenario {
         name: "semtest",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/semtest.c"],
+        amp: false,
     },
     Scenario {
         name: "countsem",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/countsem.c"],
+        amp: false,
     },
     Scenario {
         name: "recmutex",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/recmutex.c"],
+        amp: false,
     },
     Scenario {
         name: "blocktim",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/blocktim.c"],
+        amp: false,
     },
     Scenario {
         name: "QPeek",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/QPeek.c"],
+        amp: false,
     },
     Scenario {
         name: "GenQTest",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/GenQTest.c"],
+        amp: false,
     },
     Scenario {
         name: "QueueOverwrite",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/QueueOverwrite.c"],
+        amp: false,
     },
     Scenario {
         name: "QueueSetPolling",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/QueueSetPolling.c"],
+        amp: false,
     },
     Scenario {
         name: "IntSemTest",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/IntSemTest.c"],
+        amp: false,
     },
     Scenario {
         name: "StreamBufferInterrupt",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/StreamBufferInterrupt.c"],
+        amp: false,
     },
     Scenario {
         name: "TimerDemo",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/TimerDemo.c"],
+        amp: false,
     },
     Scenario {
         name: "EventGroupsDemo",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/EventGroupsDemo.c"],
+        amp: false,
+    },
+    Scenario {
+        name: "MessageBufferAMP",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/MessageBufferAMP.c"],
+        amp: true,
     },
 ];
 
 /// One binary serves the whole corpus: the harness's table names every
-/// scenario, so building per scenario would compile the kernel seven times
-/// for seven identical binaries.
+/// scenario, so building per scenario would compile the kernel sixteen
+/// times for sixteen identical binaries.
 const ORACLE_BIN: &str = "corpus";
+
+/// The second binary, built with `-DKAIROS_AMP=1`. See [`Scenario::amp`].
+const ORACLE_BIN_AMP: &str = "corpus-amp";
+
+/// Which binary a scenario has to be run from.
+fn binary_for(name: &str) -> &'static str {
+    if SCENARIOS.iter().any(|s| s.name == name && s.amp) {
+        ORACLE_BIN_AMP
+    } else {
+        ORACLE_BIN
+    }
+}
 
 const KERNEL_SOURCES: [&str; 6] = [
     "tasks.c",
@@ -385,6 +422,41 @@ fn scenario(name: &str) -> Result<&'static Scenario> {
     )
 }
 
+/// One `cc` line, and what it produced.
+fn compile(
+    root: &Path,
+    build_dir: &Path,
+    sources: &[String],
+    includes: &[&str],
+    bin_name: &str,
+    extra: &str,
+    serves: usize,
+) -> Result<()> {
+    let mut cmd = String::from("cc -O0 -g -Wall -Wno-unused-parameter -DprojCOVERAGE_TEST=0");
+    cmd.push_str(extra);
+    for inc in includes {
+        cmd.push_str(&format!(" -I{inc}"));
+    }
+    for s in sources {
+        cmd.push_str(&format!(" {s}"));
+    }
+    cmd.push_str(&format!(" -o oracle/build/{bin_name} -pthread"));
+    println!("$ {cmd}");
+    let (ok, stdout, stderr) = host_shell(root, &cmd)?;
+    print!("{stdout}");
+    if !ok {
+        return fail(format!("the oracle build failed:\n{stderr}"));
+    }
+    if !stderr.trim().is_empty() {
+        println!("{}", stderr.trim_end());
+    }
+    let size = fs::metadata(build_dir.join(bin_name))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    println!("built oracle/build/{bin_name} ({size} bytes), serving {serves} scenario(s)");
+    Ok(())
+}
+
 fn build(root: &Path, name: &str) -> Result<()> {
     let sc = scenario(name)?;
     if !port_c(root).is_file() {
@@ -423,29 +495,21 @@ fn build(root: &Path, name: &str) -> Result<()> {
         "oracle/FreeRTOS-Kernel/portable/ThirdParty/GCC/Posix/utils",
         "oracle/FreeRTOS/FreeRTOS/Demo/Common/include",
     ];
-    let mut cmd = String::from("cc -O0 -g -Wall -Wno-unused-parameter -DprojCOVERAGE_TEST=0");
-    for inc in includes {
-        cmd.push_str(&format!(" -I{inc}"));
+    // Two binaries, identical but for one `-D`: see `Scenario::amp`.
+    let plain = SCENARIOS.iter().filter(|s| !s.amp).count();
+    let amp = SCENARIOS.len().saturating_sub(plain);
+    compile(root, &build_dir, &sources, &includes, ORACLE_BIN, "", plain)?;
+    if amp > 0 {
+        compile(
+            root,
+            &build_dir,
+            &sources,
+            &includes,
+            ORACLE_BIN_AMP,
+            " -DKAIROS_AMP=1",
+            amp,
+        )?;
     }
-    for s in &sources {
-        cmd.push_str(&format!(" {s}"));
-    }
-    cmd.push_str(&format!(" -o oracle/build/{ORACLE_BIN} -pthread"));
-    println!("$ {cmd}");
-    let (ok, stdout, stderr) = host_shell(root, &cmd)?;
-    print!("{stdout}");
-    if !ok {
-        return fail(format!("the oracle build failed:\n{stderr}"));
-    }
-    if !stderr.trim().is_empty() {
-        println!("{}", stderr.trim_end());
-    }
-    let bin = build_dir.join(ORACLE_BIN);
-    let size = fs::metadata(&bin).map(|m| m.len()).unwrap_or(0);
-    println!(
-        "built oracle/build/{ORACLE_BIN} ({size} bytes), serving {} scenario(s)",
-        SCENARIOS.len()
-    );
     Ok(())
 }
 
@@ -453,9 +517,12 @@ fn build(root: &Path, name: &str) -> Result<()> {
 
 fn trace(root: &Path, name: &str, ticks: u64) -> Result<()> {
     scenario(name)?;
-    let bin = root.join("oracle").join("build").join(ORACLE_BIN);
+    let bin_name = binary_for(name);
+    let bin = root.join("oracle").join("build").join(bin_name);
     if !bin.is_file() {
-        return fail("oracle/build/corpus is not built; run `kairos oracle build`");
+        return fail(format!(
+            "oracle/build/{bin_name} is not built; run `kairos oracle build`"
+        ));
     }
     let traces = root.join("oracle").join("traces");
     fs::create_dir_all(&traces)?;
@@ -463,7 +530,7 @@ fn trace(root: &Path, name: &str, ticks: u64) -> Result<()> {
         // `timeout` and `ulimit -f` (1 GiB) keep a scenario that never
         // reaches max_ticks from filling the disk.
         let script = format!(
-            "ulimit -f 1048576; timeout 300 ./oracle/build/{ORACLE_BIN} {name} {ticks} 2> oracle/traces/{name}.trace{suffix}; echo exit=$?"
+            "ulimit -f 1048576; timeout 300 ./oracle/build/{bin_name} {name} {ticks} 2> oracle/traces/{name}.trace{suffix}; echo exit=$?"
         );
         let (ok, stdout, stderr) = host_shell(root, &script)?;
         if !ok {
