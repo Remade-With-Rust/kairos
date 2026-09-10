@@ -38,8 +38,22 @@ cargo deny check                       # the Kairos policy over the whole graph
 a third for the two that come by git URL (`remade-ffmpeg`, the `rff` facade,
 `default-features = false`; `rmap-core` from the private `rusty_maps`, which
 needs `CARGO_NET_GIT_FETCH_WITH_CLI=true` so the gh credentials apply). Both
-compile with `cargo check` on the host (21 s and 54 s on 2026-09-09): nothing
+compile with `cargo check` on the host (26 s and 40 s on 2026-09-10): nothing
 in an RTOS links them, but the pins are proven, not read.
+
+**Each carries its own `[workspace]` table, and must.** They are packages
+inside this directory, and this directory's workspace says
+`members = ["gate-*"]`, which does not match them -- so without that table
+cargo walks up, finds a workspace they are not members of, and refuses to
+build at all. That is exactly what it did until 2026-09-10, and the two
+rungs were silently unrunnable while this README said they passed.
+**A rung nobody runs is not a gate**; re-run all three workspaces when a
+pin moves, not just this one.
+
+`host` also fails `cargo deny check advisories` on three `unmaintained`
+crates arriving through `spacedb-sdk` and `ffai-core` -- see
+`docs/HOUSE-STACK.md`. None is a vulnerability and none is in a bare-metal
+graph, which is why the gate workspace itself is clean.
 
 Verdicts and the date they were taken: `docs/HOUSE-STACK.md`. Re-run the gate
 when a pin moves, and move the pin in one commit with the verdict.

@@ -15,13 +15,13 @@ publish = false
 
 [workspace.dependencies]
 rusty_zstd = { version = "=0.2.5", default-features = false, features = ["alloc"] }
-rusty_erasure-core = { version = "=0.4.0", default-features = false }
+rusty_erasure-core = { version = "=0.4.1", default-features = false }
 rusty_time-core = { version = "=0.2.0", default-features = false }
 rusty_symbols = { version = "=0.1.0", default-features = false }
 thoth = { version = "0.3.0", git = "https://github.com/Remade-With-Rust/thoth", tag = "v0.3.0", default-features = false }
 serde_json = { package = "rusty_json_turbo", version = "0.1.0", git = "https://github.com/Remade-With-Rust/rusty_json_turbo", default-features = false, features = ["alloc"] }
 rusty_xml = { version = "=0.8.1", default-features = false }
-rusty_alloc-api = { version = "=2.0.4", default-features = false }
+rusty_alloc-api = { version = "=2.1.0", default-features = false }
 
 [profile.release]
 overflow-checks = true

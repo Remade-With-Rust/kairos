@@ -24,8 +24,8 @@ or a vendored copy is not done.
 |---|---|---|---|---|---|
 | `rusty_zstd` | `=0.2.5` (was `=0.2.3`) | on-chip OTA payloads and trace capture (K6+); the fleet tool already uses it on the host | **PASS at 0.2.5** (2026-09-09) | was: eight `core::sync::atomic::AtomicU64` **census counters** (`bit.rs` `RELOAD_CALLS`, `RELOAD_REFILLS`; `compressed.rs` `DEC_LIT32`, `DEC_MATCH32`, `DEC_LIT16`, `DEC_LIT64`, `DEC_MATCH16`, `DEC_BAND[..]`). Fixed upstream | none left |
 | `rusty_time-core` | `=0.2.0` (was `=0.1.10`) | `rusty_rtos_sntp` (K7): the NTP packet codec and offset arithmetic as the house leaf instead of a coreSNTP remake | **PASS at 0.2.0** (2026-09-09) | was: no `#![no_std]`; `ntp.rs` needed only `std::error::Error` (one impl, line 159) and `f64` division — no `libm`. Fixed upstream, and the impl became `core::error::Error` rather than being gated away | none left |
-| `rusty_alloc` (`rusty_rtos_alloc` `small-metal`) | `=2.0.4` | the firmware's Rust global allocator behind `heap_3` (K4) | **OK to compile** under `--cfg ra_single_threaded --cfg ra_small_profile`; **no board has run it** on Cortex-M or RV32 (the S3 is the only measured part) | nothing at compile time; `REGION_ALIGN` and a public `PrimError` are not in 2.0.4, so the seam re-exports 2.0.4's surface only | a board day (K4) + one upstream release |
-| `rusty_erasure-core` | `=0.4.0` | nothing in v1 (the mesh is above the RTOS); recorded because its `no-std` label is wrong on 32-bit parts | **FAIL** | `kernel.rs:10` imports `AtomicU64` for `SCALAR_CENSUS_BYTES` and a `census: &'static AtomicU64` field — a census counter again | small |
+| `rusty_alloc` (`rusty_rtos_alloc` `small-metal`) | `=2.1.0` (was `=2.0.4`) | the firmware's Rust global allocator behind `heap_3` (K4) | **OK to compile** on all four targets under `--cfg ra_single_threaded --cfg ra_small_profile`; **no board has run it** on Cortex-M or RV32 (the S3 is the only measured part) | nothing: 2.1.0 added `REGION_ALIGN` and the public `PrimError` the seam was missing, and the seam re-exports them | a board day (K4) — **B3 closed 2026-09-10** |
+| `rusty_erasure-core` | `=0.4.1` (was `=0.4.0`) | nothing in v1 (the mesh is above the RTOS); recorded because its `no-std` label was wrong on 32-bit parts | **PASS at 0.4.1** (2026-09-10) | was: `kernel.rs:10` imported `AtomicU64` for `SCALAR_CENSUS_BYTES` and a `census: &'static AtomicU64` field — the census counter again. Fixed upstream | none left |
 | `rusty_xml` | `=0.8.1` | nothing: no XML in the FreeRTOS portfolio | **FAIL** (`std`-only `-sax`, `-tree`) | not a Kairos want; listed so nobody reads the `no-std` category as a fact | not ours to schedule |
 
 Ready today and not in this plan: `rusty_alloc-api` (compiles, both halves),
@@ -72,9 +72,9 @@ proven on both targets by the gate.
 |---|---|---|---|---|
 | B1 | ~~`rusty_zstd`: the eight census counters behind `target_has_atomic = "64"`~~ — **closed 2026-09-09, fixed upstream in 0.2.5.** `gate-zstd` at `=0.2.5` exits 0 on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf`; the draft was never filed and is now moot | rusty_zstd (draft: `docs/upstream/rusty_zstd-atomic-u64.md`, resolved) | met | on-chip compression is unblocked; `rusty_rtos_demo`'s trace capture on a board (K3) can store compressed |
 | B2 | ~~`rusty_time-core`: `no_std` leaf~~ — **closed 2026-09-09, fixed upstream in 0.2.0.** `gate-time` at `=0.2.0` exits 0 on both targets; the draft was never filed and is now moot. Original scope: — `cfg_attr(not(std), no_std)`, `ntp.rs` unconditional, `filter`/`discipline`/`select`/`server`/`client`/`config`/`refclock`/`vclock` behind `std`; a CI rung with `--no-default-features`; release 0.2.0 | rusty_time (draft: `docs/upstream/rusty_time-no-std-leaf.md`) | `gate-time` OK on both targets at `=0.2.0`; `NtpPacket::parse` of a 48-byte request round-trips `to_bytes` in a `no_std` test — **both met upstream** (the round trip is `client_request_round_trips_in_48_bytes`, run on the host `no_std` arm AND on the S3); only the registry pin is outstanding | `rusty_rtos_sntp` as a wrapper over the leaf (mission plan §5.5 item 4 flips to "the leaf"); until then the coreSNTP remake |
-| B3 | `rusty_alloc` 2.0.5: `REGION_ALIGN` and a public region error type, so `rusty_rtos_alloc::small_metal` re-exports the whole recipe the README documents | rusty_alloc (a doc-only ask; the code is on `main` already) | the seam's re-export list has no "arrives with the next release" comment | the seam's docs and the firmware template |
+| B3 | ~~`rusty_alloc` 2.0.5: `REGION_ALIGN` and a public region error type~~ — **closed 2026-09-10, released as 2.1.0** (not the 2.0.5 this plan named). The seam pins `=2.1.0` and re-exports `REGION_ALIGN`, `PrimError` and the four `FERR_*` codes beside the region API it already had | rusty_alloc | met — see section 6 | the seam's docs and the firmware template: the documented `HEAP.give()?` is now **writable**, which it was not while the error type had no name |
 | B4 | The seam on a board: `Region<{ good_region_size(...) }>` given once in the M3-QEMU cell and on the C6, `heap_3` over it, the K4 allocation-latency row against the C `heap_4` | Kairos (K4; family plan) | the mission plan's K4 kill test | `rusty_alloc` "measured on Cortex-M" (the mission plan's upstream row closes) |
-| B5 | `rusty_erasure-core`: the census counter behind `target_has_atomic = "64"`; a CI rung; release 0.4.1 | rusty_erasure (draft: `docs/upstream/rusty_erasure-atomic-u64.md`) | `gate-erasure` OK on both targets | nothing in Kairos v1; the org's `no-std` label becomes true |
+| B5 | ~~`rusty_erasure-core`: the census counter behind `target_has_atomic = "64"`~~ — **closed 2026-09-10, fixed upstream in 0.4.1**, which is the release this plan asked for by name. `gate-erasure` at `=0.4.1` exits 0 on both targets, a genuine **FAIL → OK**: the rung was still failing at `=0.4.0` in the same session, minutes earlier | rusty_erasure (draft: `docs/upstream/rusty_erasure-atomic-u64.md`, resolved) | met | nothing in Kairos v1; the org's `no-std` label is now true |
 
 Not a brick: `rusty_xml`. No Kairos package will ever parse XML; the gate
 keeps the row so the category is not mistaken for a fact.
@@ -250,6 +250,101 @@ the one to distrust.**
 **This is the S3, not a Kairos target** -- the same caveat B1 carries. It makes
 the leaf real on silicon; the Cortex-M row is still owed and still rides K4.
 
+### B3 closed -- the seam re-exports the whole recipe (released 2.1.0)
+
+`rusty_alloc` 2.1.0 has both things the seam was missing, and the reason
+they matter is in the crate docs rather than in a compile error: the
+documented firmware recipe ends `let usable = HEAP.give()?;`, and `give`
+answers `Result<usize, PrimError>`. **While `PrimError` had no name a
+firmware could reach, that `?` could not be written.** The seam now
+re-exports it and the four `FERR_*` codes it can carry — `PrimError` is a
+`u32`, so the codes are the difference between "the region was refused"
+and knowing which way.
+
+```text
+RUSTFLAGS="--cfg ra_single_threaded --cfg ra_small_profile" \
+  cargo check -p rusty_rtos_alloc --no-default-features --features small-metal \
+  --target thumbv7em-none-eabihf          # exit 0, and on the other three
+```
+
+**The re-export list is itself a gate, and it was made to fail** before the
+pass was believed — section 7's rule from B2:
+
+```text
+add REGION_NOT_A_THING to the list
+  -> error[E0432]: unresolved import `rusty_alloc::prim::fixed::REGION_NOT_A_THING`
+restored
+  -> exit 0
+```
+
+`VERSION` is asserted in the crate's own test (`the_pin_is_what_the_manifest_says`),
+so the manifest pin and the printed constant cannot drift apart.
+
+**B3's old kill test could not fail, and that is the finding worth keeping.**
+It was `grep -c "arrives with the next" ... lib.rs` printing 0 — and it
+printed 0 on the unfixed tree too, because the comment read "`REGION_ALIGN`
+and a public error type arrive with / the next rusty_alloc release": wrong
+verb form, and split across a line break so no single-line grep could match
+it either way. It is replaced with the compile check above. **A kill test
+that greps for prose is a kill test that rots with the prose**; every other
+row in section 6 runs a compiler, and this one now does too.
+
+### B5 closed -- `rusty_erasure-core` builds on both Kairos targets (released 0.4.1)
+
+The release this plan asked for by name, and the cleanest evidence in the
+document: the rung was **failing at `=0.4.0` in the same session, minutes
+before** the pin moved, so this is a measured FAIL → OK rather than a pass
+taken on a tree that was never seen to fail.
+
+```text
+cd tools/house-gate
+cargo check -p gate-erasure --target thumbv7em-none-eabihf         # exit 0
+cargo check -p gate-erasure --target riscv32imac-unknown-none-elf  # exit 0
+
+Cargo.lock: rusty_erasure-core 0.4.1
+  source   = registry+https://github.com/rust-lang/crates.io-index
+  checksum = 61c237be51374ef0b897e4a9205966b9941ce89d063e6e5d63bf96d8611580dc
+```
+
+Registry pin, checksum, no fork and no `[patch]`: strategy item 1 held for
+the third time. Nothing in Kairos v1 links it — the value is that the org's
+`no-std` label is now true for the crate rather than aspirational.
+
+### Two gaps in the gate itself, found by running all of it
+
+**The `host/` and `hostgit/` rungs did not run at all.** Both are packages
+inside `tools/house-gate/`, whose workspace declares
+`members = ["gate-*"]` — which does not match them. Cargo therefore walked
+up, found a workspace they were not members of, and refused:
+
+```text
+error: current package believes it's in a workspace when it's not
+```
+
+Each now carries its own empty `[workspace]` table, which is what the
+README always said they were. They pass in 26 s and 40 s. **A rung nobody
+runs is not a gate**, and this one had a README row claiming a pass it
+could not have produced — the same species as B3's grep, one layer up.
+`host/` was also still pinning `rusty_time-core = "=0.1.10"` and
+`rusty_erasure = "=0.4.0"`, the two pre-fix versions, because nothing had
+been able to compile it since those bricks closed.
+
+**`host` fails `cargo deny check advisories`, and the gate workspace does
+not.** Three `unmaintained` advisories, no vulnerabilities:
+
+| advisory | crate | arrives through |
+|---|---|---|
+| RUSTSEC-2023-0089 | `atomic-polyfill` 1.0.3 | `heapless` 0.7 -> `postcard` -> `spacedb-access`/`-meter` -> **spacedb-sdk** |
+| RUSTSEC-2026-0215 | `smallstr` 0.3.1 | `yrs` -> `spacedb-crdt` -> **spacedb-sdk** |
+| RUSTSEC-2024-0436 | `paste` 1.0.15 | `gemm` -> `candle-core` -> **ffai-core** |
+
+None is in a bare-metal graph, which is exactly why `cargo deny check` in
+the gate workspace is clean and this one is not — the split is doing its
+job. Two are one bump: `heapless` 0.8 replaced `atomic-polyfill` with
+**`portable-atomic`**, the same crate strategy item 3 already names as the
+house's answer for atomics a target lacks. Not Kairos's to schedule; owner
+steps for `spacedb-sdk` and `ffai-core`.
+
 ## 5. Remaining work and owner steps
 
 - ~~**Owner:** file B1~~ **done 2026-09-09**: fixed upstream in its own
@@ -259,10 +354,17 @@ the leaf real on silicon; the Cortex-M row is still owed and still rides K4.
   repository, released as `rusty_time-core` 0.2.0 (breaking, so a minor bump
   and not the 0.1.11 this plan asked for), pin moved here, both gate rungs
   green. The `docs/upstream/` draft was never needed.
-- **Owner:** file B5 from its draft (or hand it to the crate's own plan); cut
-  the release; move the pin here in one commit.
-- **Owner:** B3 is a release of what is already on `rusty_alloc`'s `main`.
-- **Kairos:** B4 rides K4; nothing to do until K3 has a QEMU cell.
+- ~~**Owner:** file B5~~ **done 2026-09-10**: fixed upstream and released as
+  `rusty_erasure-core` 0.4.1 — the version this plan named — pin moved here,
+  both rungs green from the registry. The `docs/upstream/` draft was never
+  needed, which is now three for three.
+- ~~**Owner:** B3~~ **done 2026-09-10**: released as `rusty_alloc` **2.1.0**,
+  not the 2.0.5 this plan asked for. Pin moved, the seam's re-export list
+  completed, all four targets green, and the list poison-tested.
+- **Kairos:** B4 is now the ONLY open brick, and it is the one no upstream
+  release can close: it wants a **board**. It rides K4, and K4 rides K3's
+  QEMU cell. Everything else in this plan is compiled-and-pinned; B4 is the
+  row that turns "ready" into "bare".
 - **Kairos: B2's consequence is now live.** `rusty_rtos_sntp`'s package plan
   opens with "WRAP the leaf" instead of "REMAKE coreSNTP", and the mission
   plan's §5.5 item 4 is decided by this ledger row. The wrapper needs **no
@@ -275,9 +377,9 @@ the leaf real on silicon; the Cortex-M row is still owed and still rides K4.
 |---|---|---|
 | B1 | `cd tools/house-gate && cargo check -p gate-zstd --target thumbv7em-none-eabihf` | **met**: exit 0 at `=0.2.5`, and on `riscv32imac-unknown-none-elf` too |
 | B2 | `cd tools/house-gate && cargo check -p gate-time --target riscv32imac-unknown-none-elf` | **met**: exit 0 at `=0.2.0`, and on `thumbv7em-none-eabihf` too |
-| B3 | `grep -c "arrives with the next" rusty_rtos_core/crates/rusty_rtos_alloc/src/lib.rs` | prints 0 |
+| B3 | `cd rusty_rtos_core && RUSTFLAGS="--cfg ra_single_threaded --cfg ra_small_profile" cargo check -p rusty_rtos_alloc --no-default-features --features small-metal --target thumbv7em-none-eabihf` | **met**: exit 0 at `=2.1.0` with `REGION_ALIGN` and `PrimError` in the re-export list, and on all four targets |
 | B4 | the mission plan's K4 row | a cycle count from the M3 cell in `rusty_rtos_heap/docs/LEDGER.md` |
-| B5 | `cd tools/house-gate && cargo check -p gate-erasure --target thumbv7em-none-eabihf` | exit 0 at a crates.io pin |
+| B5 | `cd tools/house-gate && cargo check -p gate-erasure --target thumbv7em-none-eabihf` | **met**: exit 0 at `=0.4.1` from the registry with a checksum, and on `riscv32imac-unknown-none-elf` too |
 
 ## 7. Decision log
 
@@ -296,6 +398,10 @@ the leaf real on silicon; the Cortex-M row is still owed and still rides K4.
 | 2026-09-09 | **A gate is not a gate until it has been made to fail.** Both B2 poisons were run (drop the `cfg_attr` -> the appendix's exact `E0463`; restore `std::error::Error` -> `E0433`), then restored to exit 0. Every future row in this plan should carry its poison, not just its pass -- `gate-*` crates are three lines long and a green three-line crate is exactly the shape that can be green for the wrong reason. |
 | 2026-09-09 | The B2 board row parses a **hand-written 48-byte wire image**, not the codec's own `to_bytes` output, and runs the offset arithmetic where `f64` is soft-float. Parsing your own output tests self-consistency; parsing a literal image tests the RFC field offsets. **A board row that only round-trips its own encoder has not tested the wire.** |
 | 2026-09-09 | **The B2 release is 0.2.0, not the 0.1.11 this plan asked for.** Gating the `std`-only modules narrows what `default-features = false` returns, and under Cargo's 0.x rules `0.1.10` and `0.1.11` are COMPATIBLE -- so a consumer on `rusty_time-core = "0.1"` with `default-features = false` (which is exactly what `gate-time` writes) would have been handed the narrower crate by the next `cargo update`, with no version change to notice. A minor bump makes the one breaking arm an explicit choice. **When a fix adds a feature gate, ask which spelling of the dependency gets NARROWER, not just which gets wider.** |
+| 2026-09-10 | **B3 and B5 closed, both by an upstream release, both verified by running the gate rather than by reading a changelog.** B5 is the plan's cleanest evidence: `gate-erasure` was measured FAILING at `=0.4.0` and passing at `=0.4.1` minutes apart in one session. B3 came out as **2.1.0**, not the 2.0.5 named here — check what the crate actually released, not what the plan asked for. |
+| 2026-09-10 | **B3's kill test could not fail.** `grep -c "arrives with the next"` printed 0 on the UNFIXED tree, because the comment said "arrive with / the next release" — wrong verb form and split over a line break. Replaced with a compile check. **A kill test that greps for prose rots with the prose**; make every row run a compiler. |
+| 2026-09-10 | **Two of the gate's own rungs had never run.** `host/` and `hostgit/` are packages inside a workspace whose `members = ["gate-*"]` does not match them, so cargo refused to build either — while the README recorded times for both. They now carry their own `[workspace]` tables, and `host/` was still pinning the two PRE-FIX versions because nothing had compiled it since. **Run every rung the README lists before believing any of them**, and re-run all three workspaces when a pin moves. |
+| 2026-09-10 | `host` fails `cargo deny check advisories` on three `unmaintained` crates (`atomic-polyfill`, `smallstr` via **spacedb-sdk**; `paste` via **ffai-core**) and the gate workspace is clean, which is the host/bare-metal split doing its job. Two are one `heapless` 0.8 bump away, because 0.8 replaced `atomic-polyfill` with `portable-atomic` — the crate strategy item 3 already names. Owner steps for those two crates, not Kairos's. |
 | 2026-09-09 | **B2 closed.** Fixed in `rusty_time` itself and released as `rusty_time-core` 0.2.0; the pin here moved in the same act and both rungs are green from the registry. Two bricks in one day (B1, B2) both closed by fixing the crate rather than working around it, and in both cases the `docs/upstream/` draft turned out never to be needed -- **the draft is insurance, not the plan.** Remaining: B3 and B5 need releases, B4 rides K4. |
 
 ## 8. Appendix — the exact failures

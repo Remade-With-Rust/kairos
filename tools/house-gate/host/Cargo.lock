@@ -1573,9 +1573,9 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rusty_erasure"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2274caac1053878f04555d958690540f94880e28b97c4804544b76a2c600ed3"
+checksum = "7e15f06f248d5ad95750326fa0e66f2c6bf214fac258ad3a6024299e52355334"
 dependencies = [
  "rusty_erasure-accel",
  "rusty_erasure-core",
@@ -1583,24 +1583,24 @@ dependencies = [
 
 [[package]]
 name = "rusty_erasure-accel"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29f21ce0fce044cf9fb5dddf430b1f9ed028b61f0415e67d0aa7868f30774b2e"
+checksum = "6e464cb9dc52f251c847210e5d781feeaff14315f2560ffd84b9393350a8fb3d"
 dependencies = [
  "rusty_erasure-core",
 ]
 
 [[package]]
 name = "rusty_erasure-core"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76b9016ab1c9faf02d401b4c2b9c5831ec8cbcaf5a317f051c50bb2386623445"
+checksum = "61c237be51374ef0b897e4a9205966b9941ce89d063e6e5d63bf96d8611580dc"
 
 [[package]]
 name = "rusty_time-core"
-version = "0.1.10"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6ff755ee8df41b0e5d9924645a3ecc38293accfb44863e2908f64a426ffa268"
+checksum = "d019985f57b6328019a09a08644e6f6e4172a700885d966f834a976f72b9beb4"
 
 [[package]]
 name = "rusty_xml"
@@ -1680,9 +1680,9 @@ dependencies = [
 
 [[package]]
 name = "rusty_zstd"
-version = "0.2.3"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f48a9d700940c262e1b51ee0dd3400abc8948d44d36df294944464b4d5f6f600"
+checksum = "cc2318a1441e10cf436f0bf98615216b0a5410b6f546548b50faa170c7b4a1a6"
 
 [[package]]
 name = "ryu"
