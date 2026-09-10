@@ -135,6 +135,87 @@ void kairos_trace_u( const char * pcEvent,
     ulLines++;
 }
 
+/* ---- Timer names, looked up rather than dereferenced. ------------------
+ *
+ * `traceTIMER_COMMAND_SEND` fires AFTER `xQueueSendToBack` has queued the
+ * command (timers.c:486). The daemon runs at a higher priority than most
+ * tasks, so for `tmrCOMMAND_DELETE` it can preempt, process the delete and
+ * `vPortFree` the `Timer_t` before the sending task resumes — at which
+ * point the handle the macro is handed is dangling.
+ *
+ * That is not hypothetical and it is not ours: AddressSanitizer names it
+ * exactly on `TaskNotify`, freed by the timer task in
+ * `prvProcessReceivedCommands` and read back in
+ * `xTimerGenericCommandFromTask`. Upstream never sees it because the
+ * default `traceTIMER_COMMAND_SEND` ignores its arguments; ANY tracer that
+ * dereferences the handle has a use-after-free on delete.
+ *
+ * So this harness never dereferences a timer handle outside creation. The
+ * name is recorded at `traceTIMER_CREATE` and looked up by POINTER VALUE,
+ * which stays a valid key after the object is freed. Output is unchanged,
+ * which `TimerDemo`'s pinned trace proves. */
+#define kairosMAX_TIMERS    64
+
+static struct
+{
+    const void * pvHandle;
+    const char * pcName;
+} xTimerNames[ kairosMAX_TIMERS ];
+
+static size_t xTimerNameCount = 0;
+
+void kairos_trace_timer_create( const void * pvTimer,
+                                const char * pcName )
+{
+    size_t i;
+
+    /* A freed timer's address can be handed straight back by the
+     * allocator, so a repeat handle overwrites rather than duplicates. */
+    for( i = 0; i < xTimerNameCount; i++ )
+    {
+        if( xTimerNames[ i ].pvHandle == pvTimer )
+        {
+            xTimerNames[ i ].pcName = pcName;
+            kairos_trace_task( "TIMER_CREATE", pcName );
+            return;
+        }
+    }
+
+    if( xTimerNameCount < kairosMAX_TIMERS )
+    {
+        xTimerNames[ xTimerNameCount ].pvHandle = pvTimer;
+        xTimerNames[ xTimerNameCount ].pcName = pcName;
+        xTimerNameCount++;
+    }
+
+    kairos_trace_task( "TIMER_CREATE", pcName );
+}
+
+/* The name recorded for `pvTimer`, or a marker that CANNOT be mistaken for
+ * a name — a silently wrong name would corrupt a trace that is compared
+ * byte for byte, so an overflow or an unknown handle has to be visible. */
+static const char * prvTimerName( const void * pvTimer )
+{
+    size_t i;
+
+    for( i = 0; i < xTimerNameCount; i++ )
+    {
+        if( xTimerNames[ i ].pvHandle == pvTimer )
+        {
+            return xTimerNames[ i ].pcName;
+        }
+    }
+
+    return "<UNKNOWN-TIMER>";
+}
+
+void kairos_trace_timer_command( const void * pvTimer,
+                                 long lCommand,
+                                 unsigned long ulValue )
+{
+    kairos_trace_task_iu( "TIMER_COMMAND_SEND", prvTimerName( pvTimer ), lCommand, ulValue );
+}
+
 void kairos_trace_task( const char * pcEvent,
                         const char * pcName )
 {

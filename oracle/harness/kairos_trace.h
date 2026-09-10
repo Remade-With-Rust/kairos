@@ -16,6 +16,10 @@
 void kairos_trace_ev( const char * pcEvent );
 void kairos_trace_u( const char * pcEvent, unsigned long ulArg );
 void kairos_trace_task( const char * pcEvent, const char * pcName );
+/* Timer names are recorded at creation and looked up by pointer, never
+ * dereferenced from a handle that a delete may already have freed. */
+void kairos_trace_timer_create( const void * pvTimer, const char * pcName );
+void kairos_trace_timer_command( const void * pvTimer, long lCommand, unsigned long ulValue );
 void kairos_trace_task_u( const char * pcEvent, const char * pcName, unsigned long ulArg );
 void kairos_trace_task_iu( const char * pcEvent, const char * pcName, long lArg, unsigned long ulArg );
 void kairos_trace_obj( const char * pcEvent, char cKind, const void * pvObject );

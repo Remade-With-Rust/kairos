@@ -124,8 +124,10 @@ extern void vAssertCalled( const char * const pcFileName, unsigned long ulLine )
 #define traceBLOCKING_ON_QUEUE_SEND( pxQueue )                         kairos_trace_obj( "BLOCKING_ON_QUEUE_SEND", 'q', ( const void * ) ( pxQueue ) )
 #define traceBLOCKING_ON_QUEUE_RECEIVE( pxQueue )                      kairos_trace_obj( "BLOCKING_ON_QUEUE_RECEIVE", 'q', ( const void * ) ( pxQueue ) )
 #define traceBLOCKING_ON_QUEUE_PEEK( pxQueue )                         kairos_trace_obj( "BLOCKING_ON_QUEUE_PEEK", 'q', ( const void * ) ( pxQueue ) )
-#define traceTIMER_CREATE( pxNewTimer )                                kairos_trace_task( "TIMER_CREATE", ( pxNewTimer )->pcTimerName )
-#define traceTIMER_COMMAND_SEND( xTimer, xMessageID, xMessageValueValue, xReturn )    kairos_trace_task_iu( "TIMER_COMMAND_SEND", ( xTimer )->pcTimerName, ( long ) ( xMessageID ), ( unsigned long ) ( xMessageValueValue ) )
+#define traceTIMER_CREATE( pxNewTimer )                                kairos_trace_timer_create( ( const void * ) ( pxNewTimer ), ( pxNewTimer )->pcTimerName )
+/* NOT `( xTimer )->pcTimerName`: this hook fires after the command is
+ * queued, so a delete may already have freed the timer. See kairos_trace.c. */
+#define traceTIMER_COMMAND_SEND( xTimer, xMessageID, xMessageValueValue, xReturn )    kairos_trace_timer_command( ( const void * ) ( xTimer ), ( long ) ( xMessageID ), ( unsigned long ) ( xMessageValueValue ) )
 #define traceTIMER_EXPIRED( pxTimer )                                  kairos_trace_task( "TIMER_EXPIRED", ( pxTimer )->pcTimerName )
 #define traceEVENT_GROUP_CREATE( pxEventGroup )                        kairos_trace_obj( "EVENT_GROUP_CREATE", 'g', ( const void * ) ( pxEventGroup ) )
 #define traceEVENT_GROUP_SET_BITS( xEventGroup, uxBitsToSet )          kairos_trace_obj_u( "EVENT_GROUP_SET_BITS", 'g', ( const void * ) ( xEventGroup ), ( unsigned long ) ( uxBitsToSet ) )

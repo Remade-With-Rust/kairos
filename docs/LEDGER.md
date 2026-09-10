@@ -1169,6 +1169,53 @@ The 12-byte gap is printed because it belongs to no section and would
 vanish from a table built from `size -A` alone. It is nothing on a 4 MiB
 part; on a fixed small map that is precisely how a saving gets overstated.
 
+## A use-after-free in the oracle's own tracing, found by adding a scenario (2026-09-10)
+
+Two K1 corpus scenarios the plan lists were never built and never recorded as
+dropped — `TaskNotify` and `AbortDelay` — and the kernel implements what they
+cover (five notification methods, `abort_delay`) with **zero conformance
+coverage**. Registering `TaskNotify` in the oracle harness took three small
+edits and immediately produced a **SIGSEGV between 300 and 600 ticks**.
+
+| fact | value | method |
+|---|---|---|
+| what crashed | `traceTIMER_COMMAND_SEND` reading `( xTimer )->pcTimerName` | `timers.c:486`, reached from `xTimerDelete` at `TaskNotify.c:473` |
+| what it really was | a **heap-use-after-free**, on three distinct threads | ASan: allocated by the task in `xTimerCreate`, **freed by the timer daemon** in `prvProcessReceivedCommands` -> `vPortFree`, read back by the task |
+| why | the hook fires **after** `xQueueSendToBack` | the daemon runs at `configTIMER_TASK_PRIORITY`, above the task, so a `tmrCOMMAND_DELETE` send preempts straight into the free. Upstream never sees it because the default macro ignores its arguments |
+| the fix | never dereference a timer handle outside creation | the name is recorded at `traceTIMER_CREATE` and looked up by **pointer value**, which stays a valid key after the free |
+| the fix is a fix, not a change | **`TimerDemo`'s stored trace is byte-identical** — no git diff on the `.zst` — and `kairos conform TimerDemo` still reports 3,092 lines identical | a pinned scenario over the same hook is the control this needed, and it already existed |
+
+**The first read of the evidence was wrong, and cheaply so.** Under gdb the
+struct looked *intact* — `pxCallbackFunction` and `xTimerPeriodInTicks` were
+correct — with only `pcTimerName` and one list field garbage. That reads as
+"my macro has the wrong offset". It was a glibc tcache header (fd pointer +
+key) written into the first 16 bytes of the freed chunk. **A partial clobber
+looks like a misread struct**; ASan turned a guess into three stacks in one
+run. Written up for the owner at
+`docs/upstream/freertos-timer-trace-uaf.md`.
+
+### And `TaskNotify` still cannot be an oracle — for an unrelated reason
+
+With the crash fixed it runs clean and passes its own check
+(`ticks=2000 yields=220 exits=2803`), and then fails the reproducibility gate:
+
+```text
+run:   3435 lines; ... yields=218 exits=2769
+run.2: 3374 lines; ... yields=206 exits=2725
+error: the trace is NOT deterministic
+```
+
+`TaskNotify.c:124` is `uxNextRand = ( uint32_t ) prvRand;` — a PRNG seeded
+from a **function address** — and lines 557/570 use it to set the notifying
+timer's period. So with PIE/ASLR the demo differs between two runs of the same
+binary, **in C, before any Rust remake is attempted**. Same shape as
+`QueueSet` (seeded from the address of a stack local), and the same owner
+decision: patch the seed to a constant — the `oracle patch` verb already makes
+six exact-anchor edits to `port.c`, so the mechanism exists — or leave the
+scenario out. It stays registered in the oracle's scenario table so the
+finding is one command to reproduce; `conform --all` keeps its own separate
+list of eighteen and is unaffected.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |
