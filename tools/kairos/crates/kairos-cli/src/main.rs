@@ -613,6 +613,31 @@ fn nm_mentions_allocator(rlib: &Path) -> Result<bool> {
     Ok(text.contains("__rust_alloc") || text.contains("__rust_dealloc"))
 }
 
+/// Every cargo project directly under `tools/`.
+fn tool_crates(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir(root.join("tools")) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        // A tool that ships its own runner owns its own pass/fail policy
+        // and is not this gate's business. `house-gate` is the case that
+        // forces it: its workspace deliberately contains an EXPECTED
+        // failure (`gate-xml`, the category nothing in Kairos will ever
+        // parse), so building its members from here would make `check`
+        // fail for ever, on purpose, for the wrong reason.
+        if dir.join("run.sh").is_file() {
+            continue;
+        }
+        if dir.join("Cargo.toml").is_file() {
+            out.push(dir);
+        }
+    }
+    out.sort();
+    out
+}
+
 fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_tests = has_flag(args, "--test");
     let with_clippy = has_flag(args, "--clippy");
@@ -897,6 +922,25 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                     }
                     Err(e) => failures.push(format!("{}: cargo kani: {e}", package.name)),
                 }
+            }
+        }
+    }
+    // The umbrella's own tools, on a full run.
+    //
+    // Nothing built these. `house-gate/run.sh` discovers `gate-*/` inside
+    // its own workspace and `check` walks the manifest's packages, so a
+    // cargo project under `tools/` was covered by neither — which is
+    // exactly how `gate-xml`'s `host/` and `hostgit/` went unbuilt for
+    // weeks. Discovered off the filesystem rather than listed, for the
+    // same reason: a hand-written list is how one gets forgotten.
+    if only.is_empty() {
+        for tool in tool_crates(root) {
+            let name = tool
+                .file_name()
+                .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
+            ran += 1;
+            if let Err(e) = run(false, &tool, "cargo", &["check", "--all-targets"]) {
+                failures.push(format!("tools/{name}: {e}"));
             }
         }
     }
