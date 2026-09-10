@@ -425,11 +425,37 @@ of `prim::fixed`.
   not the 2.0.5 this plan asked for. Pin moved, the seam's re-export list
   completed, all four targets green, and the list poison-tested.
 - **Kairos:** B4 is the ONLY open brick, and no upstream release can close
-  it. It rides K4, and K4 rides K3's QEMU cell — `qemu-system-arm` is not
-  installed on this box, which is the first concrete step. Note that B4
-  needs **no hardware**: its kill test is a cycle count from the M3 QEMU
-  cell, so the blocker is the cell, not a part. The S3 row above is as
-  close as an Xtensa board can get and is explicitly not it.
+  it. It needs **no hardware**: its kill test is a cycle count from the M3
+  QEMU cell, so the blocker is the cell.
+
+  **The tool is no longer the blocker.** QEMU 11.1.0 was installed on
+  2026-09-10 (`winget SoftwareFreedomConservancy.QEMU`, `C:\Program
+  Files\qemu`, on the User PATH) and carries `qemu-system-arm`,
+  `qemu-system-riscv32` and `qemu-system-xtensa` — every cell the mission
+  plan names. `lm3s6965evb` (Cortex-M3) and `virt` (RV32) both present.
+
+  Proven end to end rather than assumed, because an installed emulator is
+  not a working cell: a `thumbv7m-none-eabi` binary built with
+  `cortex-m-rt` and `cortex-m-semihosting` printed over semihosting and
+  then **exited QEMU with code 0** from `debug::exit(EXIT_SUCCESS)`.
+
+  ```text
+  qemu-system-arm -cpu cortex-m3 -machine lm3s6965evb -nographic \
+      -semihosting-config enable=on,target=native -kernel <elf>
+  -> M3 cell alive: qemu-system-arm + lm3s6965evb + thumbv7m-none-eabi
+  -> QEMU exit code: 0
+  ```
+
+  That exit code is the part that matters: it means an M3 cell can be a
+  **gate** — a thing CI or `kairos check --qemu` runs and reads a verdict
+  from — and not merely a thing someone watches. Note the target is
+  `thumbv7m-none-eabi`; the Cortex-M3 has no FPU and is not the
+  `thumbv7em-none-eabihf` the other rungs use.
+
+  What is left for B4 is now only Kairos's own work: the M3 cell in
+  `rusty_rtos_core/firmware/` (the `firmware/README.md` naming says
+  `lm3s6965-qemu-*`), `heap_3` over `Region`, and the allocation-latency
+  row against the C `heap_4`. That is K4's kill test and it rides K3.
 - **Kairos: B2's consequence is now live.** `rusty_rtos_sntp`'s package plan
   opens with "WRAP the leaf" instead of "REMAKE coreSNTP", and the mission
   plan's §5.5 item 4 is decided by this ledger row. The wrapper needs **no
@@ -466,6 +492,7 @@ of `prim::fixed`.
 | 2026-09-09 | **The B2 release is 0.2.0, not the 0.1.11 this plan asked for.** Gating the `std`-only modules narrows what `default-features = false` returns, and under Cargo's 0.x rules `0.1.10` and `0.1.11` are COMPATIBLE -- so a consumer on `rusty_time-core = "0.1"` with `default-features = false` (which is exactly what `gate-time` writes) would have been handed the narrower crate by the next `cargo update`, with no version change to notice. A minor bump makes the one breaking arm an explicit choice. **When a fix adds a feature gate, ask which spelling of the dependency gets NARROWER, not just which gets wider.** |
 | 2026-09-10 | **Audited the whole document by running it, and found the appendix contradicting the plan**: section 8 still showed `gate-erasure`'s `AtomicU64` error as a live failure while sections 1, 3 and 6 all recorded B5 closed. Every other fixed row had been marked `[HISTORICAL]` and that one was missed. **When a brick closes, grep the whole file for its failure text, not just its row.** |
 | 2026-09-10 | **The gate got a kill test of its own** (`tools/house-gate/run.sh`, exit 0). Per-brick kill tests cannot catch a rung nobody runs, which is what `host/` and `hostgit/` were for a day. The script discovers `gate-*` off the filesystem -- the README's hand-written loop named seven of eight -- and treats `gate-xml` as an EXPECTED failure, so a rung that starts passing when it should not is red as well. Poison-tested in both directions. |
+| 2026-09-10 | **QEMU installed and the M3 cell proven runnable**, which retires the tool half of B4's blocker. 11.1.0 via winget; `qemu-system-arm`, `-riscv32` and `-xtensa` all present, `lm3s6965evb` and `virt` both listed. Smoke-tested with a real `thumbv7m-none-eabi` binary: semihosting printed AND `debug::exit(EXIT_SUCCESS)` made **QEMU exit 0**, so a cell can be a gate rather than something to watch. Cortex-M3 is `thumbv7m-none-eabi`, not the `thumbv7em-none-eabihf` the other rungs use -- a separate rustup target. **An installed emulator is not a working cell; run one binary through it before calling the blocker retired.** |
 | 2026-09-10 | **The allocator seam ran on a board for the first time** (ESP32-S3, 9/9). `HOUSE-STACK.md` had said "no board has run it" since it was written. The row is deliberately the S3 caveat again -- it does NOT touch B4, which wants the Cortex-M3 cycle count -- but the fixed-region backend, `give`, the `FERR_*` codes and reclamation are now real on 32-bit silicon. Also measured: the seam **does** compile for `xtensa-esp32s3-none-elf`; the house note "rusty_alloc has no Xtensa port" is true of its default segment path, not of `prim::fixed`. |
 | 2026-09-10 | **My own first version of that board row's reclamation check could not fail** -- `region_stats().free` before and after a drop, which reads 65536 both sides because that field counts extents not yet handed to the allocator. Replaced with 64 rounds of 32 KiB through a 192 KiB region (2 MiB total; a heap reclaiming nothing dies on the sixth), 64/64 served and 63/63 at the same address. **Same defect as B3's grep, same day, one section later.** When a check passes, ask what would have made it fail before believing it. |
 | 2026-09-10 | **B4 needs no hardware.** Its kill test is a cycle count from the M3 QEMU cell, so the blocker is the cell (K3) and `qemu-system-arm`, not a part. Plugging in a board -- any board -- cannot close it, and the S3 is as close as Xtensa gets. |

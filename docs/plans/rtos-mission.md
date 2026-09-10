@@ -94,10 +94,15 @@ number.
 
 **This machine (read 2026-09-09):** Rust 1.98.0 stable; the `esp` toolchain
 (Xtensa via `-Z build-std=core`); targets `riscv32imac/imafc/imc-unknown-none-elf`,
-wasm32, the desktop triples; **no `thumbv*` target yet**; `clang`, `cmake`,
-`ninja` present, **no `gcc`, no `arm-none-eabi-gcc`, no QEMU**; cargo-deny,
-audit, vet, geiger, fuzz, mutants, careful, miri present; **no cargo-kani, no
-nextest, no probe-rs**; espflash 4.5, espup, esp-generate, ldproxy. Boards from
+wasm32, the desktop triples; `thumbv7em-none-eabihf`, `thumbv8m.main-none-eabihf`
+and — since 2026-09-10 — **`thumbv7m-none-eabi`** (the Cortex-M3 of the QEMU
+cell, which has no FPU and is not `thumbv7em`); `clang`, `cmake`, `ninja`
+present, **no `gcc`, no `arm-none-eabi-gcc`**; **QEMU 11.1.0 present since
+2026-09-10** (`qemu-system-arm`, `-riscv32`, `-xtensa`; `lm3s6965evb` and
+`virt` machines confirmed, and an M3 binary run through it exits QEMU with a
+code, so a cell can gate); cargo-deny, audit, vet, geiger, fuzz, mutants,
+careful, miri present; **cargo-kani 0.67 under WSL only**, **no nextest, no
+probe-rs**; espflash 4.6, espup, esp-generate, ldproxy. Boards from
 Janus: a XIAO ESP32-S3 Sense and an AI-Thinker ESP32-CAM in hand; ESP32-C6
 devkits on the purchase list. No Cortex-M board.
 
