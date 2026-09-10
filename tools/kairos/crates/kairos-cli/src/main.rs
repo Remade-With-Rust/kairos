@@ -505,6 +505,31 @@ struct StatusRow {
 /// The ESP32-S3's bare-metal target, checked by `check --xtensa`.
 const XTENSA_S3: &str = "xtensa-esp32s3-none-elf";
 
+/// The firmware cells under `<package>/firmware/` that need no hardware.
+///
+/// Discovered, not listed, for the reason the house-gate runner is:
+/// a cell nobody runs is not a gate, and a hand-written list is how one
+/// gets forgotten. The test is the cell's own runner — a `qemu-system-*`
+/// one needs nothing but this box, while an `espflash` one wants a board
+/// on a serial port and must never be started by a gate.
+fn qemu_cells(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir(dir.join("firmware")) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let cell = entry.path();
+        let config = cell.join(".cargo").join("config.toml");
+        if let Ok(text) = fs::read_to_string(&config) {
+            if text.contains("qemu-system") {
+                out.push(cell);
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
 fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_tests = has_flag(args, "--test");
     let with_clippy = has_flag(args, "--clippy");
@@ -513,6 +538,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_harden = has_flag(args, "--harden");
     let with_xtensa = has_flag(args, "--xtensa");
     let with_kani = has_flag(args, "--kani");
+    let with_qemu = has_flag(args, "--qemu");
     let only: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let mut failures = Vec::new();
     let mut ran = 0usize;
@@ -636,6 +662,22 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                             extra.unwrap_or("none")
                         ));
                     }
+                }
+            }
+        }
+        if with_qemu {
+            for cell in qemu_cells(&dir) {
+                let name = cell
+                    .file_name()
+                    .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
+                println!("$ cargo run --release   ({name})");
+                // The cell's own `.cargo/config.toml` names the runner, so
+                // this is `qemu-system-* -kernel <elf>` and nothing here has
+                // to know which machine. A cell that ends by calling
+                // `debug::exit` gives cargo the guest's verdict as an exit
+                // code, which is the whole reason it can be a gate.
+                if let Err(e) = run(false, &cell, "cargo", &["run", "--release"]) {
+                    failures.push(format!("{}: qemu cell {name}: {e}", package.name));
                 }
             }
         }
@@ -1044,7 +1086,7 @@ const USAGE: &str = "kairos — fleet tool for the Kairos umbrella folder
 
 USAGE
   kairos status [--ci] [--json]
-  kairos check [PACKAGE ...] [--fmt] [--clippy] [--test] [--deny] [--harden] [--xtensa] [--kani]
+  kairos check [PACKAGE ...] [--fmt] [--clippy] [--test] [--deny] [--harden] [--xtensa] [--kani] [--qemu]
   kairos new NAME [--kind function] [--description TEXT] [--tier critical-path|standard|utility] [--date YYYY-MM-DD] [--dry-run]
   kairos patches [--dry-run]
   kairos harden [--all | --plan FILE [--readme FILE]] [--check] [--link URL] [--architect NAME] [--quiet]
@@ -1061,6 +1103,13 @@ to the format check, the lint, the suites and the dependency policy;
 `--harden` verifies every README's hardening block is current with its plan
 file. `--xtensa` adds each no_std crate on xtensa-esp32s3-none-elf through the
 esp toolchain (`cargo +esp`, `-Z build-std`), a gate CI cannot run.
+`--qemu` runs every firmware cell that needs no hardware: any
+`<package>/firmware/*/` whose own `.cargo/config.toml` names a
+`qemu-system-*` runner. The cells are DISCOVERED rather than listed, and
+the runner is the test — an `espflash` cell wants a board on a serial port
+and is never started by a gate. A cell that ends in `debug::exit` hands
+cargo the guest's verdict as an exit code, which is what lets an emulator
+gate at all.
 `--kani` compiles each package's proof harnesses (`cargo kani
 --only-codegen`, under WSL on Windows) without verifying them. They are
 `#[cfg(kani)]`, so no other gate compiles them at all and they can rot
