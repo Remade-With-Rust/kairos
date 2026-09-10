@@ -626,7 +626,54 @@ package building alone with green CI):
    Kani harnesses for the CBMC `Queue` and `Task` proof list pass; the
    no-panic property test over every API with random handles/ticks passes;
    `cargo mutants` on the scheduler core reports its score in the ledger.
-4. **K3 — silicon and an emulator** (bench + QEMU). `-cortex-m` on QEMU
+4. **K2.1 — the Rust face.** The C-shaped API is what the corpus proves;
+   it is not what a Rust application should have to hold. This kiln puts a
+   safe, ownership-typed API on the *same proven kernel*, as a face beside
+   `rusty_rtos-capi`'s C face, so that the conformance corpus keeps gating
+   the scheduler underneath both. Three things, in this order, each one
+   additive and none of them touching the scheduler:
+
+   1. **IPC that moves values.** `Queue<T, N>` transfers ownership instead
+      of copying bytes; `Mutex<T>` *owns* what it protects, so reaching the
+      data without the guard does not compile. This is the delta the C
+      cannot have: a FreeRTOS mutex is an advisory token that protects
+      nothing, and `MessageBufferAMP` — which passes a *pointer* through a
+      message buffer — is the monument to what that costs.
+   2. **The ISR surface as a capability.** A from-ISR call takes a token
+      obtainable only in interrupt context, so calling the wrong half is a
+      missing argument rather than a `configASSERT` at best and silent
+      corruption at worst.
+   3. **Compile-time topology.** Tasks and queues named by type rather than
+      by runtime handle: no create-failure path, exact `.bss` by
+      construction, and — measured in K2, not hoped for — the Kani
+      harnesses converge. Ten of the thirty-two blow up today and both
+      causes are the dynamic layer: `start_scheduler` building state, and a
+      symbolic *handle* forcing the model checker to explore every arena
+      slot it could name.
+
+   **Kill test:** every corpus scenario still trace-identical for 100 000
+   ticks with the Rust face compiled in — the face costs **zero** extra
+   critical-section exits, and the ledger says so by naming the scenario
+   whose exits were counted on both sides; a `typed` demo arm re-implements
+   one scenario against the Rust face and passes its own
+   `xAre...StillRunning()`; the misuse a C caller can commit and a Rust
+   caller cannot is a `trybuild` row per bug class (unguarded shared data,
+   from-ISR from a task, item-size mismatch); the Kani harness count rises
+   with the topology work and the number is in the ledger.
+
+   **What this kiln deliberately does not do:** `async` task bodies. The
+   compiler would write the continuations K2 wrote by hand six times over
+   (`WaitFrame`, `stream_resume`, `owed_exits`, `OwedTrace`, the AMP
+   handler's `stage`, every body's `pc`), and that is the most attractive
+   thing on this list — but it is also where the identity drifts: tasks as
+   futures is nearer Embassy-with-priorities than FreeRTOS, and the corpus
+   may no longer gate it. It is K2.2, behind a one-scenario prototype whose
+   job is to answer whether the await points land exactly where the
+   `Wait::Blocked` points are today. If they do, we keep both and the
+   corpus keeps working. If they do not, that is a decision to take with a
+   number in hand.
+
+5. **K3 — silicon and an emulator** (bench + QEMU). `-cortex-m` on QEMU
    `lm3s6965evb` (FreeRTOS's own QEMU demo is the C arm of the A/B);
    `-riscv` on QEMU `virt` and then on an ESP32-C6 devkit through esp-hal
    (stable Rust, no espup). **Kill test:** the check task of the full corpus
@@ -635,7 +682,7 @@ package building alone with green CI):
    the C demo built from the pinned source, ABBA, null arm, in the ledger;
    flash and RAM decomposed per `footprint-decomposition` beside the C
    build's map file. Cells `M3-qemu`, `RV32-qemu`, `C6` flip to `Verified`.
-5. **K4 — the heaps and the allocator.** `heap_1`, `heap_4`, `heap_5` with
+6. **K4 — the heaps and the allocator.** `heap_1`, `heap_4`, `heap_5` with
    the protector; `heap_3` as the seam over `rusty_alloc` small-metal
    (2.0.4, `prim::fixed::Region<N>`) and `esp-alloc`; static allocation
    first-class (`StaticAllocation` demo). **Kill test:** the `heap_4`
@@ -643,19 +690,19 @@ package building alone with green CI):
    free-block walk, same coalescing — a differential test like rusty_alloc's
    G2); the `StaticAllocation` demo passes on every cell; the RAM table per
    profile is in the ledger.
-6. **K5 — the Janus joint** (bench). `rusty_rtos_port-riscv` and `-xtensa`
+7. **K5 — the Janus joint** (bench). `rusty_rtos_port-riscv` and `-xtensa`
    implement `esp-radio-rtos-driver` 0.4.1; `rusty_esp_signal/firmware/c6-mesh-node`
    is rebuilt on `rusty_rtos` in a sibling firmware dir; then the XIAO S3
    sketch firmware on the Xtensa port. **Kill test:** Janus S1 (two C6s,
    ESP-NOW authenticated link, 1 000 frames each way, counters) passes on
    the Kairos kernel with the same numbers as on `esp-rtos`, recorded in
    both ledgers; the Xtensa cell flips to `Verified` on the XIAO.
-7. **K6 — the C ABI and the unmodified corpus.** `rusty_rtos-capi` +
+8. **K6 — the C ABI and the unmodified corpus.** `rusty_rtos-capi` +
    generated headers. **Kill test:** the 34 C demo task files from
    `Demo/Common/Minimal`, compiled unmodified with clang, link against the
    capi on the Posix port and the check task passes; the same on QEMU M3
    with `arm-none-eabi-gcc`/clang (an owner-only install).
-8. **K7 — the libraries.** In this order, each its own package with its own
+9. **K7 — the libraries.** In this order, each its own package with its own
    external oracle: `json` (JSONTestSuite + coreJSON's own vectors,
    no-panic fuzz), `backoff` (the vectors from the C unit tests),
    `mqtt` (a real broker — Mosquitto — plus coreMQTT's CMock vectors),
@@ -664,7 +711,7 @@ package building alone with green CI):
    interop against the host stack; `iperf`-style throughput rows on the C6).
    **Kill test:** an MQTT session over our TCP on a C6 to a broker for one
    hour with zero lost keep-alives, and the JSON suite at 100 %.
-9. **K8 — SMP, MPU, tickless idle, stats, hardening, 1.0.** `configNUMBER_OF_CORES
+10. **K8 — SMP, MPU, tickless idle, stats, hardening, 1.0.** `configNUMBER_OF_CORES
    > 1` on the ESP32-S3 (two cores) and QEMU; loom models for the SMP ready
    list; `rusty_rtos_mpu` on M33 (`mps2-an505`); tickless idle with the
    pre/post-sleep hooks; run-time stats and the trace facility as products;
@@ -672,7 +719,7 @@ package building alone with green CI):
    **Kill test:** the SMP corpus (`FreeRTOS-SMP-Demos`) traces clean; a
    privileged/unprivileged demo on M33 refuses a bad access; the family
    unsafe census in this plan; 1.0.0 tags.
-10. **K9 — the rest of the portfolio** (`pkcs11`, `cellular`, `fat`, `posix`,
+11. **K9 — the rest of the portfolio** (`pkcs11`, `cellular`, `fat`, `posix`,
     `cli`), each a package with its oracle, after a consumer asks.
 11. **Track A** — IDF-FreeRTOS replaced under esp-idf-svc through the C ABI:
     a decision item, opened only after K6 and only with Janus's owner.
@@ -773,6 +820,17 @@ reused.
 7. **Whether `rusty_rtos_demo` also carries an `embassy` comparison arm** so
    the "why not Embassy" question has a number: an async executor is not an
    RTOS, but a maker will ask; a ledger row beats an argument.
+   **Answered in part 2026-09-10:** K2.1 settles the shape of the question.
+   The family is to be *both* the RTOS you can trust — the C-shaped kernel
+   the corpus proves — and the one the others would want to be: a Rust face
+   over that same kernel where the type system holds the invariants the C
+   only asserts. Embassy is async and cooperative; RTIC is stack-resource
+   policy with no blocking and no dynamic tasks; FreeRTOS is preemptive
+   priority with inheritance, in C. **Preemptive priority scheduling with
+   ownership-typed IPC and compile-time topology, in safe Rust, is empty
+   ground**, and this family is the only one with the proven preemptive
+   core already standing. The comparison arm is still wanted, and K2.2 is
+   where it gets its number.
 
 ---
 
@@ -783,6 +841,8 @@ reused.
 | **K0 family** | a clean clone of any package builds alone and its CI is green; the C oracle produces an identical trace twice | **passed locally 2026-09-09** (8 repos, fleet gate green on the box; `dynamic` trace identical twice); CI green pending the owner's Actions billing and `kairos secrets` |
 | **K1 scheduler on sim** | nine demo scenarios trace-identical to the C kernel for 100 000 ticks; counters equal; Miri green; the arena-list cost row | **passed 2026-09-09** — nine of nine, 8,408,764 lines identical at 100 000 ticks, ticks/yields/exits equal on every one; Miri green over the whole corpus; the cost row taken and **2.08×**, which fires §2.5's revisit condition (`docs/LEDGER.md`) |
 | **K2 IPC + timers** | the remaining demo scenarios trace-identical; Kani harnesses for the CBMC proof list pass; no-panic property test; mutants score ledgered | **14 of 18 passed 2026-09-09.** The corpus is sixteen scenarios in all (the other two are K1's) and 12,808,722 lines identical at 100 000 ticks. In the kernel: the from-ISR surface, queue sets, real queue lock counts, task notifications, stream and message buffers with their own arena, the software timers with their daemon, event groups, and the `sbSEND_COMPLETED` seam. The no-panic gate passes; Kani verifies seven harnesses (3,965 checks) and does not converge over a started kernel; `cargo mutants` with the corpus as the oracle catches 36 of 42 viable mutants in the scheduler core. Of the four not passed, **every one is blocked above the kernel** — `IntQueue` needs nested interrupts this port does not have; `MessageBufferDemo` and `StreamBufferDemo` starve sim contract v1 (a task that polls without entering a critical section stops the clock); `QueueSet` seeds its PRNG from a stack address. All of them and their evidence are ledger rows |
+| **K2.1 the Rust face** | every corpus scenario still trace-identical at 100 000 ticks with the Rust face compiled in, at **zero** extra critical-section exits; a `typed` demo arm passes its own check; one `trybuild` row per bug class the C API cannot refuse; the Kani count after the topology work in the ledger | open |
+| **K2.2 async task bodies** | one scenario re-written as `async fn` whose await points land exactly on today's `Wait::Blocked` points, and the corpus still gates it — or a ledger row saying why it cannot and what that costs | open |
 | **K3 silicon + QEMU** | the full corpus check task passes one hour on M3-qemu, RV32-qemu and a C6; context switch / tick / latency cycle rows vs the C demo; flash + RAM decomposition | open |
 | **K4 heaps** | `heap_4` differential trace matches C; `StaticAllocation` on every cell; RAM table per profile | open |
 | **K5 the Janus joint** | Janus S1 on a Kairos kernel with the same numbers as on esp-rtos; the XIAO S3 Xtensa cell `Verified` | open |

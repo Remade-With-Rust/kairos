@@ -213,6 +213,46 @@ Five more mechanisms, each one found the same way:
    wait-bits pair. The only line a sync leaves in the trace is the set-bits
    one from inside it.
 
+## K2.1 — the Rust face, in progress (2026-09-10)
+
+The C-shaped API is what the corpus proves; it is not what a Rust
+application should have to hold. K2.1 puts a safe, ownership-typed face on
+the *same kernel*, so that both faces are gated by the same 12.8 million
+lines. The first primitive is done and the headline is the cost.
+
+| fact | value | method |
+|---|---|---|
+| **the Rust face costs nothing** | **zero extra critical-section exits** | `PollQ-typed` is `PollQ` written against `Queue<u16, 10>` — a queue that *moves* `u16`s — and it is diffed against **`PollQ`'s own C oracle trace**, not a new one. 117,417 lines identical at 100,000 ticks, `ticks=100051 yields=2056 exits=105608`, every number `PollQ`'s to the digit. `kairos conform PollQ-typed` strips the `-typed` suffix to choose the oracle, so there is no second C arm to disagree with |
+| the same claim, without a C toolchain | the two pinned rows carry the **same digest** | `tests/conformance.rs` pins `PollQ-typed` at `0xf50b_bbbd_22ec_16d1`, 68,195 bytes — character for character `PollQ`'s own pin. The verdict line is the one thing allowed to differ, because it names the scenario; its counters are compared like every other line, so a face that cost one exit would still be caught |
+| how it can be free | the kernel's queue carries a **slot index**, not the item | the pattern the timer command queue already uses. A typed send is one `queue_send` and a typed receive is one `queue_receive` — the same calls in the same order. The only extra work is a non-counting room check (`Raw::raw_queue_has_room`), which is the kernel reading its own queue rather than a task asking it a question, so it takes no critical section |
+| the slot discipline is not optional | a refused send may not claim or write a slot | the same rule, and the same reason, as the timer ring: writing first and sending after is exactly the bug that cost `TimerDemo` its first divergence, where a refused command overwrote a message whose index was still queued |
+
+### What the type system now refuses that the C cannot
+
+Four `compile_fail` doctests on `Queue`, each paired with the working line
+it is one character away from — because a "this must not compile" test that
+fails for the wrong reason is worse than none. The control arm carries the
+same `#![deny(unused_must_use)]` the third refusal relies on, so the
+attribute cannot be what makes that one fail.
+
+| the bug | in C | here |
+|---|---|---|
+| the item size disagrees with the item | `xQueueCreate( n, sizeof( uint16_t ) )` then a send of something else copies the wrong number of bytes | `Queue<u16, N>::send` takes a `u16`; a `u32` does not compile |
+| a receive reads the item as the wrong type | the receive fills a buffer you nominate and nothing checks the type | a `u16` comes out because nothing else could have gone in — no `try_from`, no clamp |
+| a failed send is ignored and the value lost | `xQueueSend`'s `BaseType_t` is as ignorable as any other return | `Sent<T>` is `#[must_use]` and **has no variant that drops the value** — the failure branch cannot be written without saying what happened to it |
+| a queue is sent a pointer to a stack local | legal, and `MessageBufferAMP` in this corpus does it on purpose | the value *moves*; there is no pointer to outlive |
+
+### Still open in K2.1
+
+`Mutex<T>` that owns what it protects, the from-ISR surface as a capability
+token, and compile-time topology. The last of those has a measured
+argument behind it rather than a taste: ten of K2's thirty-two Kani
+harnesses do not converge, and both causes are the dynamic layer —
+`start_scheduler` building state, and a symbolic *handle* forcing the model
+checker to explore every arena slot it could name. Naming tasks and queues
+by type instead of by handle should collapse that, and the Kani count is
+the number that will say whether it did.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |

@@ -23,7 +23,7 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 16] = [
+const SCENARIOS: [&str; 17] = [
     "dynamic",
     "PollQ",
     "BlockQ",
@@ -40,7 +40,18 @@ const SCENARIOS: [&str; 16] = [
     "TimerDemo",
     "EventGroupsDemo",
     "MessageBufferAMP",
+    "PollQ-typed",
 ];
+
+/// A scenario whose C arm is another scenario's.
+///
+/// `PollQ-typed` is `PollQ` written against the Rust face (mission plan,
+/// K2.1). There is no separate C original and there must not be: the point
+/// is that the *same* oracle trace comes out, exits included, so the face
+/// is proved to cost nothing rather than asserted to.
+fn oracle_scenario(scenario: &str) -> &str {
+    scenario.strip_suffix("-typed").unwrap_or(scenario)
+}
 
 /// The demo package, and the binary inside it.
 const DEMO: &str = "rusty_rtos_demo";
@@ -99,6 +110,10 @@ fn run_sim(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<Strin
 
 /// Run the C oracle and return its trace.
 fn run_oracle(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<String> {
+    // A `-typed` arm has no C original: it is another scenario written
+    // against the Rust face, and its whole point is to come out identical
+    // to that scenario's own oracle trace.
+    let scenario = oracle_scenario(scenario);
     // `MessageBufferAMP` comes out of the second binary: it redefines
     // `sbSEND_COMPLETED`, which is global (see `oracle::binary_for`).
     let bin_name = if scenario == "MessageBufferAMP" {
@@ -128,7 +143,16 @@ fn run_oracle(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<St
 }
 
 /// Compare two traces; `Ok(lines)` when they are identical.
+///
+/// A `-typed` arm names itself in its own `KAIROS_RESULT` line, and that
+/// one word is the only thing about it that is allowed to differ: the
+/// counters on that line are compared like every other, so a face that
+/// cost a single critical-section exit would still be caught here.
 fn compare(scenario: &str, ours: &str, theirs: &str) -> Result<usize> {
+    let ours = &ours.replace(
+        &format!("KAIROS_RESULT {scenario} "),
+        &format!("KAIROS_RESULT {} ", oracle_scenario(scenario)),
+    );
     let mut ours_lines = ours.lines();
     let mut theirs_lines = theirs.lines();
     let mut n = 0usize;
