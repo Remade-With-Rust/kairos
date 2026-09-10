@@ -58,6 +58,9 @@ visibility = "private"
 description = "FreeRTOS-Kernel remade in Rust: the fixed-priority preemptive scheduler, task notifications, queues, semaphores, mutexes with priority inheritance, queue sets, software timers, event groups, stream and message buffers — a pure state machine over the Port seam, forbid(unsafe), traced against the C kernel."
 crates = ["rusty_rtos_kernel", "rusty_rtos_kernel-core"]
 no_std_crates = ["rusty_rtos_kernel-core"]
+# The CBMC proof harnesses live here, behind `cfg(kani)`, which nothing but
+# the model checker compiles: `check --kani` is the gate that they still do.
+proofs = ["rusty_rtos_kernel-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
 uses = ["rusty_rtos_core"]
 plan = "docs/plans/rusty_rtos_kernel.md"

@@ -112,6 +112,12 @@ pub(crate) struct Package {
     crates: Vec<String>,
     #[serde(default)]
     no_std_crates: Vec<String>,
+    /// The crates carrying `#[cfg(kani)]` proof harnesses, checked by
+    /// `check --kani`. They need their own gate because nothing else
+    /// compiles them: `cfg(kani)` is set by the model checker, so a
+    /// harness can stop compiling and every other gate stays green.
+    #[serde(default)]
+    proofs: Vec<String>,
     /// `--cfg` flags the no_std rungs are checked under (as `RUSTFLAGS`), for
     /// crates whose `no_std` build must be opted into: rusty_alloc refuses to
     /// build without `ra_single_threaded` and allocates nothing without
@@ -506,6 +512,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_deny = has_flag(args, "--deny");
     let with_harden = has_flag(args, "--harden");
     let with_xtensa = has_flag(args, "--xtensa");
+    let with_kani = has_flag(args, "--kani");
     let only: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let mut failures = Vec::new();
     let mut ran = 0usize;
@@ -629,6 +636,37 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                             extra.unwrap_or("none")
                         ));
                     }
+                }
+            }
+        }
+        if with_kani {
+            for krate in &package.proofs {
+                // Codegen only: this compiles every harness and verifies
+                // none, which is the cheap half and the half that rots.
+                // Its own target directory, because a Windows cargo and a
+                // WSL cargo sharing one is a fight (and Kani is Linux-only).
+                // `host_shell` runs a login shell, which already has cargo
+                // on PATH. Do not set it here: WSL's interop PATH carries
+                // the Windows one, which contains `Program Files (x86)`,
+                // and an unquoted assignment splits on the parentheses.
+                let script = format!(
+                    "CARGO_TARGET_DIR=/tmp/kani-codegen cargo kani --only-codegen -p {krate}"
+                );
+                println!("$ cargo kani --only-codegen -p {krate}");
+                match oracle::host_shell(&dir, &script) {
+                    Ok((true, _, _)) => {}
+                    Ok((false, out, err)) => {
+                        let why = err
+                            .lines()
+                            .chain(out.lines())
+                            .find(|l| l.starts_with("error"))
+                            .unwrap_or("see the output above");
+                        failures.push(format!(
+                            "{}: the {krate} proof harnesses do not compile: {why}",
+                            package.name
+                        ));
+                    }
+                    Err(e) => failures.push(format!("{}: cargo kani: {e}", package.name)),
                 }
             }
         }
@@ -1006,7 +1044,7 @@ const USAGE: &str = "kairos — fleet tool for the Kairos umbrella folder
 
 USAGE
   kairos status [--ci] [--json]
-  kairos check [PACKAGE ...] [--fmt] [--clippy] [--test] [--deny] [--harden] [--xtensa]
+  kairos check [PACKAGE ...] [--fmt] [--clippy] [--test] [--deny] [--harden] [--xtensa] [--kani]
   kairos new NAME [--kind function] [--description TEXT] [--tier critical-path|standard|utility] [--date YYYY-MM-DD] [--dry-run]
   kairos patches [--dry-run]
   kairos harden [--all | --plan FILE [--readme FILE]] [--check] [--link URL] [--architect NAME] [--quiet]
@@ -1023,6 +1061,11 @@ to the format check, the lint, the suites and the dependency policy;
 `--harden` verifies every README's hardening block is current with its plan
 file. `--xtensa` adds each no_std crate on xtensa-esp32s3-none-elf through the
 esp toolchain (`cargo +esp`, `-Z build-std`), a gate CI cannot run.
+`--kani` compiles each package's proof harnesses (`cargo kani
+--only-codegen`, under WSL on Windows) without verifying them. They are
+`#[cfg(kani)]`, so no other gate compiles them at all and they can rot
+while everything stays green — which is what happened when the `Raw` trait
+grew and the symbolic fake did not.
 `patches` writes each package's umbrella-only, gitignored `.cargo/config.toml`
 so the sibling crates it depends on (from `uses`, cross-checked against its
 manifests) resolve to the local checkouts through cargo's `paths` override,

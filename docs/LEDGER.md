@@ -132,7 +132,7 @@ and the event groups moved no existing trace by a line.
 | `MessageBufferAMP` needed its own oracle binary | **built, and the scenario passes** | it works by overriding `sbSEND_COMPLETED` in `FreeRTOSConfig.h`, which is a global macro: with it defined every other stream-buffer scenario changes behaviour, and `vGenerateCoreBInterrupt` would reach a control buffer that only exists once the AMP demo has started. `kairos oracle build` now emits two binaries from the same sources, differing in one `-DKAIROS_AMP=1`, and each scenario says which it comes out of |
 | **a hook that makes several kernel calls needs a program counter, exactly as a task body does** | found by `MessageBufferAMP`, 2026-09-09 | the replaced `sbSEND_COMPLETED` makes three calls in a row — post the handle to a control buffer, read it back, notify — and the C can afford to because it has a stack: a tick that lands inside one of them parks the thread and the rest runs when the task has the CPU back. Ours cannot park; the call returns and the rest ran under the *next* task's name, one exit early. It was trace-identical for 3,063 lines and then diverged at the first tick that landed inside the handler. The fix is the same shape as a task body's: the handler asks after each call whether the current task changed, and what is left is owed and paid on the first step after the sending task is switched back in. This is the general answer for any `TickHook` method that makes more than one kernel call |
 | K2's no-panic gate | **passed** | `rusty_rtos_kernel`'s `tests/no_panic.rs`: 64 independent kernels, 4,000 arbitrary calls each — a quarter of a million over the whole public surface, with handles from other arenas, handles from nowhere, stale handles, indices past the configured end, tick counts at both extremes and lengths larger than the arenas. The generator is a seeded xorshift rather than a property-testing crate, so it needs no dependency and a failure reproduces from the seed it names. It also asserts the calls *landed*: the run must trace more than 100,000 lines, and it traces 131,802. Raising that floor fails the test, so the gate is not vacuous |
-| K2's Kani gate | **22 of 32 harnesses verify — 32,145 checks, 0 failures** | `cargo kani -p rusty_rtos_kernel-core --harness <name>` in WSL (Kani 0.67.0 has no Windows build), harnesses in `src/proofs.rs` named after the `FreeRTOS/Test/CBMC/proofs/{Queue,Task}` directories. Swept one at a time with a 150 s budget each, because one blow-up in a combined run says nothing about the others; most finish in under ten seconds. The ten that do not converge split cleanly in two, and both halves are measurements rather than guesses — see the two rows below |
+| K2's Kani gate | **22 of 32 harnesses verify — 32,145 checks, 0 failures** | `rusty_rtos_kernel/proofs.sh` in WSL (Kani 0.67.0 has no Windows build), harnesses in `src/proofs.rs` named after the `FreeRTOS/Test/CBMC/proofs/{Queue,Task}` directories. Swept one at a time with a 150 s budget each, because one blow-up in a combined run says nothing about the others; most finish in under ten seconds. **`--exact` is not optional** and this row was first taken without it: Kani filters harnesses by substring, so `--harness queue_generic_send` also runs `queue_generic_send_from_isr` and `queue_generic_send_stale_handle` — three harnesses inside one budget, reported as a timeout on the first. The ten that do not converge split cleanly in two, and both halves are measurements rather than guesses — see the two rows below |
 | the six that need a *started* kernel | `start_scheduler` is the wall | `task_get_scheduler_state`, `task_get_current_task_handle`, `task_switch_context`, `task_start_scheduler`, `task_increment_tick`, `task_delay`. Every ingredient of the setup is cheap on its own — `Kernel::new` 0.8 s, one task 3.0 s, three tasks 10.2 s, a task and a queue 3.2 s — but `start_scheduler` with **no user task at all** does not finish in 500 s, and what it adds over the cheap cases is the first switch. Every other harness runs on a kernel that has its tasks but has not started, which is why they finish: the call bodies under proof are the same either side of `vTaskStartScheduler`, and what is given up is the block-and-switch tail of a blocking call |
 | the four that pass a symbolic handle into a kernel call | the space is not the cost | `queue_generic_send_stale_handle`, `task_priority_set_stale_handle`, `task_priority_set`, `queue_take_and_give_mutex_recursive`. The obvious economy was tried and refuted: bounding the symbolic handle's index and generation to the handful of values next to the arena — which is where a real disagreement lives, and what the C proofs do with their pointers — changed nothing, all four still timed out, one of them at 700 s. So it is not the size of the space; it is that a call which walks the arena and the lists with a symbolic handle has to be explored for every slot that handle could name |
 | K2's mutants gate | **36 of 42 viable mutants caught (86%) with the corpus as the oracle** | `cargo mutants --in-place --file crates/rusty_rtos_kernel-core/src/kernel.rs --test-package rusty_rtos_demo-core --shard 1/8 --timeout 240 -- --manifest-path ../rusty_rtos_demo/Cargo.toml --release`, run from the kernel repo with the demo's `[patch]` table in scope so the mutated kernel is the one the corpus runs. 44 of the shard's 47 mutants completed before the tool wedged: 36 caught, 6 missed, 2 unviable. The mechanism was checked by hand first — a mutation planted in `queue_send_list` fails `every_scenario_reproduces_the_c_kernels_trace_and_counters` in 79 s — because a mutants run that silently tests the wrong binary reports the same shape as one that tests nothing |
@@ -263,13 +263,28 @@ rather than returned.
 | what they cost | **1 s, 2 s and 1 s** | 120, 164 and 166 checks. The raw kernel's nearest equivalent, `queue_generic_send_stale_handle`, does not converge in **700 s** |
 | why the difference is the design and not the tool | the state is not there to explore | four of the ten harnesses that do not converge fail because a *symbolic handle* reaches a kernel call and the model checker must then explore every arena slot it could name. Against the typed face those four **cannot be written**: a `Queue<T, N>` is minted by `create` and there is no constructor that invents one. That is compile-time topology stated as something checkable — not "the proof got faster" but "the state the proof was exploring does not exist" |
 
-### Still open in K2.1
+### Still open in K2.1, and now pointed somewhere
 
-The topology work proper: tasks and queues named by type rather than by
-runtime handle *inside the kernel*, so the arena indirection goes and the
-six harnesses that need a started kernel get cheap too. The three above are
-the argument for doing it, not the doing of it — they show the effect at
-the face, where there is no arena, and the kernel is where the arena is.
+The topology work proper. What that sentence used to say — "so the arena
+indirection goes and the six harnesses that need a started kernel get cheap
+too" — turned out to name three unrelated things, and *The topology work,
+measured* takes them apart. What survives of it:
+
+* The **arena indirection** is not worth removing for speed: `Arena::resolve`
+  does not appear in a profile at all. The list was the thing, and the list
+  is done at 1.533×.
+* The **started-kernel** harnesses have nothing to do with types. CBMC
+  cannot afford `start_scheduler` even with no symbolic input, so the fix is
+  to stop it executing that prefix, not to name anything by type.
+* The **symbolic-handle** harnesses are the real topology item, and a token
+  inside the dynamic kernel does not fix them — measured, not argued. The
+  dynamic face must keep accepting a handle that may name nothing, because
+  that is its contract. So the payoff needs the **static** face of plan
+  §5.2 item 3: declared tasks and queues, no create-failure path, exact
+  `.bss` by construction, and the four harnesses unwritable because there is
+  no constructor that invents a handle. That is the shape of the remaining
+  work, and it is an addition to the API rather than a change inside the
+  kernel.
 
 ## K2.2 — `async` task bodies, answered (2026-09-10)
 
@@ -322,6 +337,139 @@ The cost is one `RefCell` borrow per step — a counter and a branch — and it
 is inside the measurement: the arms' exits did not move, because a borrow
 is not a critical section.
 
+## The topology work, measured (2026-09-10)
+
+K1 left the arena-and-list cost row open at **2.08x** `list.c` and K2.1 left
+"the topology work proper: tasks and queues named by type rather than by
+runtime handle *inside* the kernel, so the arena indirection goes and the
+six harnesses that need a started kernel get cheap too". That one sentence
+turned out to name three unrelated problems. Taking them apart is most of
+what this session produced, and two of the fixes it had already written
+down are refuted.
+
+### The list is 26% cheaper, and it was the re-reading
+
+The cost row named the cause: "a branch plus a bounds check on every link
+access, several of them re-validating a handle the same call already
+validated". Measured, the second half was the whole of it. `links()`
+returned all three fields of a node as a tuple, so a caller that wanted
+`before.next` and then `next.value` paid two bounds checks and two
+end-marker tests to perform two loads.
+
+| fact | value | method |
+|---|---|---|
+| the list against the C it remakes | **34.22 instructions per operation, 1.533x** — from 46.45 and 2.081x | `bench/list-cost/run.sh` unchanged: callgrind, three run lengths, the cost is the slope, and both arms still print checksum `7de9075f4deb23e5` so they are doing the same work |
+| what changed | each node a call touches is read **once** | `next_and_value` and `prev_of` replace `links`, taking only the fields the caller needs; `link_between` takes `after` rather than re-reading `before.next`, which both callers already know; the sorted walk reads one node per step instead of two; `remove` answers with the length it just decremented rather than re-reading the end marker; `next_round_robin` reuses the `ends[list].next` it already took for the wrap |
+| what it cost the corpus | **nothing** | 18 scenarios identical to the C kernel at 100 000 ticks, every arm's ticks, yields, exits and lines the same to the digit. This is the scheduler's own data structure, so that is the gate that matters |
+
+**Refuted: end markers in the item array.** The other fix the K1 row named
+— give the end markers the same type as items, the way `list.c`'s embedded
+`MiniListItem_t` already is, so following a link never asks which kind it
+is — makes it **worse**, measured two ways:
+
+| shape | instructions/op |
+|---|---|
+| one array read per node touched (kept) | **34.22** |
+| the same, plus uniform `Node` ends reached by a two-way branch | 42.82 |
+| the same, reached by a slice select | 48.85 |
+
+An end marker needs `pxIndex` and `uxNumberOfItems`, which an item does
+not, so making it a `Node` costs it eight bytes and pushes those two into
+a third array. That is worth more than the branch it removes, and the
+slice select is worse again because it materialises two fat pointers where
+the branch materialised none. The row is closed as done at 1.533x, not at
+the 1.25x the plan hoped for; whether 1.533x is worth revisiting is the
+owner's call, and the remaining gap is bounds checks that `forbid(unsafe)`
+does not allow us to skip.
+
+### The proof gate had been broken, and nothing could have noticed
+
+`proofs.rs` is `#[cfg(kani)]`. `cargo check`, `cargo clippy` and
+`cargo test` therefore never compile a line of it. When K2.1 grew the `Raw`
+trait by three methods for `Mutex<T>`, the symbolic fake in `proofs.rs` was
+not updated, and **the entire proof suite stopped compiling** while every
+gate in the tree stayed green.
+
+    error[E0046]: not all trait items implemented,
+                  missing: `raw_mutex_create`, `raw_mutex_take`, `raw_mutex_give`
+
+So K2.1's "Kani is 25 of 35" was a number taken before that commit and
+carried forward. It happens to be right — see below — but it was not being
+re-taken, and could not have been.
+
+| fact | value | method |
+|---|---|---|
+| the gate that closes it | **`kairos check --kani`** | `cargo kani --only-codegen`, which builds every harness and verifies none: seconds, and it catches exactly the half that rots. Under WSL on Windows, through the same `host_shell` the oracle uses |
+| that it actually catches it | **proven by planting the same break** | renaming one method of the fake makes `check --kani` fail with `the rusty_rtos_kernel-core proof harnesses do not compile`; restoring it passes. A gate nobody has seen fail is not a gate |
+| the fake now models a mutex | rather than stubbing it | a mutex is a binary semaphore here as in the C, and the face under proof may assume only what `Raw` promises — a stub that always succeeds would verify `Mutex::with` on the one path it never has to be right about |
+
+### The sweep itself was measuring the wrong thing
+
+Kani's `--harness` is a **substring** filter. `--harness queue_generic_send`
+also runs `queue_generic_send_from_isr` and
+`queue_generic_send_stale_handle` — three harnesses inside one time budget,
+which reads as a timeout on the first. Every harness whose name is a prefix
+of another was mis-measured. With `--exact`, `queue_generic_send` verifies
+in **8 seconds**.
+
+Re-taken with `--exact`, one harness at a time, 150 s each:
+
+**25 pass, 10 time out, 0 fail, 0 error, of 35** — which reproduces K2.1's
+figure exactly, so that number survives its method being corrected. The ten
+that do not converge, and what actually stops each:
+
+| cause | harnesses | what would fix it |
+|---|---|---|
+| a **started kernel** | `task_increment_tick`, `task_get_scheduler_state`, `task_get_current_task_handle`, `task_switch_context`, `task_start_scheduler` | nothing to do with handles or types. `start_scheduler` is a *concrete* computation — CBMC passes 2 GB on it with no symbolic input at all — so the fix is to stop the model checker executing it, by stubbing or by const-evaluating the initial state. That moves a proof obligation rather than discharging it, which is why it is not done here |
+| a **symbolic handle** | `queue_generic_send_stale_handle`, `task_priority_set_stale_handle`, and `task_priority_set`, `task_delay`, `queue_take_and_give_mutex_recursive` | see below |
+
+### Refuted: validating at the door does not make those proofs converge
+
+`queue_send_generic` and `queue_take` set up the caller's wait frame and
+entered a critical section **before** resolving the handle, so a call with
+a handle that names nothing had already touched the kernel by the time it
+was refused. The hypothesis was that this is what the model checker must
+carry through every slot a symbolic handle could name, and that moving the
+check to the door — where the C's `configASSERT( pxQueue )` is — would make
+the proof trivial.
+
+It does not. With the handle resolved as the first statement,
+`queue_generic_send_stale_handle` still does not converge in **300 s**. The
+cost is not *where* the check is; it is that a symbolic handle meeting an
+arena forces the checker to reason about every slot's generation, and that
+is true wherever the check sits. Three lines tested it, so the 180-site
+refactor it would have justified was not written.
+
+**What that leaves.** K2.1's own finding already had the answer and this
+confirms it from the other side: against the typed face those harnesses
+*cannot be written*, because a `Queue<T, N>` is minted by `create` and
+there is no constructor that invents one. The proof payoff of "named by
+type" therefore needs the **static** face the plan describes in section 5.2
+item 3 — declared tasks and queues, no create-failure path, exact `.bss` by
+construction — and **not** a resolved-handle token inside the dynamic
+kernel, which must keep taking a handle that may name nothing because that
+is its contract. That is a redirection of the remaining K2.1 work, on
+evidence rather than on taste.
+
+One piece of it was worth keeping on its own: the wait frame is now set
+*after* the resolve rather than before, so a refused call leaves the caller
+exactly as it found it. It costs nothing — the resolve was happening anyway
+— and the corpus is unmoved at 100 000 ticks.
+
+### Where the kernel's instructions actually go
+
+Taken before any of the above, because the K2.1 sentence claimed the arena
+indirection was worth removing for speed:
+
+| fact | value | method |
+|---|---|---|
+| `Arena::resolve` in the profile | **does not appear** | callgrind on `kairos-sim BlockQ 20000`. It is inlined into its callers and none of them is large enough to surface it |
+| what the sim actually spends on | **~47% formatting the trace** | `core::fmt::write` 14.6%, `write_str` 10.5%, `pad_integral` 8.4%, `_fmt_inner` 7.9%, `LineTrace::event` 5.5%. The kernel's own functions total ~15%, the largest being `queue_send_generic` at 3.25% |
+
+That is a fact about the harness, not the kernel — firmware has no trace —
+but it does say the arena was not the thing to attack for instructions, and
+that the list was. Which is how the list came to be attacked instead.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |
@@ -351,10 +499,20 @@ plan §8), and why the `trace` verb now runs under `timeout 300` and
 
 ## The arena-and-list cost row (2026-09-09, K1)
 
+> **Superseded on 2026-09-10.** The row below is the measurement as first
+> taken. It has since been cut to **34.22 instructions per operation,
+> 1.533x**, by reading each node once per call; the second fix named at the
+> foot of this section — end markers in the item array — was tried and is
+> **refuted**. See *The topology work, measured* above. The method, the
+> harness and the correctness gate described here are unchanged, which is
+> the only reason the two numbers are comparable.
+
 Mission plan §2.5 chose index-linked lists over pointer-linked ones so the
 core could be `forbid(unsafe)`, and wrote down the price of being wrong: a
 K1 ledger row above **1.25×** the C list cost reopens the decision. Here is
-the row. **It is 2.08×, and the revisit condition has fired.**
+the row as first taken. **It was 2.08×, and the revisit condition fired.**
+It is 1.533× now, which is still above 1.25×, so the decision stays open
+and stays the owner's.
 
 | arm | instructions per list operation | vs C |
 |---|---|---|
