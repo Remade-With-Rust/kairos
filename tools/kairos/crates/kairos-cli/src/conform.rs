@@ -23,7 +23,7 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 17] = [
+const SCENARIOS: [&str; 18] = [
     "dynamic",
     "PollQ",
     "BlockQ",
@@ -41,6 +41,7 @@ const SCENARIOS: [&str; 17] = [
     "EventGroupsDemo",
     "MessageBufferAMP",
     "PollQ-typed",
+    "PollQ-async",
 ];
 
 /// A scenario whose C arm is another scenario's.
@@ -50,7 +51,10 @@ const SCENARIOS: [&str; 17] = [
 /// is that the *same* oracle trace comes out, exits included, so the face
 /// is proved to cost nothing rather than asserted to.
 fn oracle_scenario(scenario: &str) -> &str {
-    scenario.strip_suffix("-typed").unwrap_or(scenario)
+    scenario
+        .strip_suffix("-typed")
+        .or_else(|| scenario.strip_suffix("-async"))
+        .unwrap_or(scenario)
 }
 
 /// The demo package, and the binary inside it.

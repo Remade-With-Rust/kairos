@@ -271,6 +271,52 @@ six harnesses that need a started kernel get cheap too. The three above are
 the argument for doing it, not the doing of it — they show the effect at
 the face, where there is no arena, and the kernel is where the arena is.
 
+## K2.2 — `async` task bodies, answered (2026-09-10)
+
+K2 wrote six continuations by hand — `WaitFrame`, `stream_resume`,
+`owed_exits`, `OwedTrace`, the AMP handler's `stage`, and every body's `pc`
+— because a kernel with no stacks cannot park a call in the middle. Rust
+has a compiler that writes continuations. K2.2 asked one question: **do the
+await points land exactly where the `Wait::Blocked` points are today?**
+
+**No.** And the counterfactual was run rather than reasoned about.
+
+| fact | value | method |
+|---|---|---|
+| awaiting only where the kernel blocks | **hangs — it does not merely diverge** | `PollQ` is the scenario whose whole subject is *not* blocking: a send and a receive at `pollqNO_DELAY`, and a `uxQueueMessagesWaiting` to choose between them. Not one of its calls can answer `Blocked`, so not one `.await` suspends and `poll` never returns. The task runs on past `vTaskDelay` — past the call that took it off the ready list — and keeps sending as a task the scheduler believes is asleep. `kairos-sim PollQ-async 200` does not terminate, and the runaway guard never fires because the loop is *inside a single poll* |
+| awaiting after **every** kernel call | **identical, exits included** | `PollQ-async` against `PollQ`'s own C oracle trace: 117,417 lines at 100,000 ticks, `ticks=100051 yields=2056 exits=105608` — `PollQ`'s numbers to the digit, and the same as `PollQ-typed`'s |
+| the same claim offline | the **same digest** as `PollQ` | `tests/conformance.rs::the_async_arm_reproduces_pollqs_trace_exactly`. It cannot sit in `PINS` because it does not go through `Runner`, but it asserts every pinned number of `PollQ`'s and the FNV-1a/64 of the trace |
+| what it costs in the trace | **nothing** | one extra poll per kernel call, and a poll is not a kernel call. The step counter roughly doubles; ticks, yields, exits and lines do not move |
+
+### The finding
+
+`async` writes the continuations, and it writes them correctly. But **where
+the suspension points go is the scheduler's business, not the compiler's**,
+and deriving them from the kernel's blocking behaviour is precisely wrong.
+A `pc` arm ends after *every* kernel call, not only the blocking ones,
+because a tick can land at any critical-section exit and switch the task
+away — whatever the C would have run next belongs to a frame the scheduler
+has abandoned. An `.await` has to be worth exactly one of those arms.
+
+That is the same law K2 met six times from six directions, arriving a
+seventh way. It is not a fact about `async`; it is a fact about this
+scheduler, and `async` obeys it once told.
+
+### What K2.2 does not settle
+
+The **storage** question, which is the one between this prototype and an
+executor. An `async fn`'s future is an anonymous type, and `Runner` holds
+its bodies in a `[Body; TASKS]` of a `Copy` enum, which no future can join.
+`PollQ-async` therefore owns its own kernel and pins its two futures as
+locals, sharing the kernel by `&RefCell` because a future cannot hold
+`&mut SimKernel` across a suspension and still let the driver hand the
+kernel to another task. That is honest for a prototype and it is not an
+executor: a general one needs somewhere for a future of unnameable type to
+live, which is what Embassy's `TaskStorage` is for. **The trace result does
+not depend on that choice** — the suspension points are where the answer
+lives — but the choice is still open, and it is the first thing K3 would
+have to settle if the async face is to be more than one scenario.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |
