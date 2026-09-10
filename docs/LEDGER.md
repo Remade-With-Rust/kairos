@@ -734,6 +734,62 @@ the same law the kernel's own speed work already runs on, arriving from
 the other side: *an emulator can tell you whether something is right, and
 cannot tell you what it costs.*
 
+### And silicon can: the first cycle numbers the project has had
+
+`rusty_rtos_core/firmware/esp32s3-devkit-alloc-cycles`, on an ESP32-S3
+DevKit over USB. Xtensa **`CCOUNT`** is a real per-cycle counter, which is
+what the section above says QEMU has none of. Cycles for one `alloc` +
+one `free` through the `small-metal` seam: best of 32 rounds of 256 ops,
+8 warm-up rounds, an identical empty round measured the same way and
+subtracted (16 cycles/op of harness), a checksum so removed work is
+visible, and `region_contains` proving the blocks came from the declared
+region.
+
+| size (bytes) | cycles per alloc+free |
+|---:|---:|
+| 16 / 32 / 48 / 64 | 115 / 125 / 146 / 157 |
+| 96, 128 | **209** |
+| 160, 192, 224, 256, 288, 320, 384, 512 | **314** |
+| 768, 1024, 2048 | **271** |
+
+**A step function, and the 768–2048 step is 43 cycles CHEAPER than the
+160–512 step below it** — a larger allocation costing 14% less than a
+smaller one, monotonically on either side of the boundary.
+
+**The finding is the control, not the table.** Sizes 3x apart produce
+totals identical *to the cycle* (160 through 512 all read 84,498), yet
+those are eight distinct bins — so the plateaus are not the size-class
+geometry, and `alloc.rs` says why no geometric model should be expected
+to fit: "a tight alloc/free loop frees into `local_free`, so the queue
+front's `free` list is ALWAYS dry when the next allocation arrives". This
+harness *is* that loop, so its cost is set by the slow collect, whose
+frequency is a property of free-list **state**. That makes "is this a
+function of size, or of history?" a question the table cannot answer
+about itself.
+
+So the cell measures every size **twice, ascending and descending**, and
+fails if a size does not reproduce its own total. **All seventeen sizes
+up to 2048 reproduce to the cycle** — the cost is a function of size, and
+the step-down is real rather than an artefact of sweep order. Three
+models were written down and all three are refuted by the data: bin
+geometry, collect frequency (`FIXED_PAGE`/`good_size` is monotone in size
+and the cost is not), and a per-page cost amortised over blocks (fits
+16…256 at ~0.875 cycles/byte, then breaks at 512). The mechanism is
+inside a house dependency; the reproduction is written up for the owner
+at `docs/upstream/rusty_alloc-size-class-inversion.md`.
+
+**One row is not quoted.** 4,096 is `FIXED_PAGE`, so it cannot come from
+a page and takes the dedicated path; it read **789, 861 and 933**
+cycles/op in three runs differing only in which sizes ran before it. Not
+a function of size, so the cell declares it an expected asymmetry — the
+way the house gate declares its expected failure — and the check keeps
+its teeth for the other seventeen.
+
+**It is ONE ARM, and does not close `build-me-bare` B4b.** B4b wants this
+against the C `heap_4` on a Kairos target — the C6's `mcycle`. An arm is
+not an A/B. It is recorded because the family had no timing number from
+any silicon at all, and because the control makes it admissible.
+
 ### Flash and RAM, decomposed — the part of K3 a cell CAN carry
 
 A footprint is a property of the linked binary, not of execution.
