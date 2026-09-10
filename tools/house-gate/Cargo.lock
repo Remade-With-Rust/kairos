@@ -139,9 +139,9 @@ checksum = "2a9bb508b2555b865bf3d339e44dccf790ba09c54341f3c41058b57e61853e1d"
 
 [[package]]
 name = "rusty_time-core"
-version = "0.1.10"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6ff755ee8df41b0e5d9924645a3ecc38293accfb44863e2908f64a426ffa268"
+checksum = "d019985f57b6328019a09a08644e6f6e4172a700885d966f834a976f72b9beb4"
 
 [[package]]
 name = "rusty_xml"

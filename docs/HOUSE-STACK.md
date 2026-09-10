@@ -32,7 +32,7 @@ package depends on (`ORACLES.md`).
 | **thoth** | git tag `v0.3.0`, `version = "0.3.0"`, `default-features = false` | host; **both bare-metal targets** | the fleet tool's status glyphs (`thoth::status::{OK, CROSS}`) — switched from the split `rusty_symbols` on 2026-09-09 | **ready** |
 | **rusty_json_turbo** | git, `version = "0.1.0"`, lib name `serde_json`; `no_std + alloc` | host; **both bare-metal targets** | `kairos status --json`; `rusty_rtos_json`'s `serde` feature for typed (de)serialization under `alloc` (K7) — the zero-allocation coreJSON validator stays its own engine, one job per parser | **ready** |
 | **rusty_zstd** | `=0.2.5` (`no_std + alloc` via `default-features = false, features = ["alloc"]`); the fleet tool still links `=0.2.3` on the host | host; **both bare-metal targets** — 0.2.5 fixed the `AtomicU64` census counters that failed at 0.2.3 | every stored oracle trace is a zstd frame (`oracle/traces/<scenario>.trace.zst`, level 19, nine of them, decompressed and compared before they are kept; `kairos oracle cat` reads them); on-chip OTA and trace capture are now unblocked | **ready** on host and chip (re-measured 2026-09-09 at 0.2.5: `gate-zstd` exit 0 on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf`). Aligning the fleet tool's pin to 0.2.5 is a follow-up, not a blocker |
-| **rusty_time** (`rusty_time-core`) | `=0.1.10` (crates.io: `-core`, `-api`, `-clock`) | host: yes; bare metal: **not yet** (`std`-only) | the host-side **oracle** for `rusty_rtos_sntp` (K7): the remake's packet codec diffs against `NtpPacket::{parse, write}`; when the `no_std` leaf lands the package wraps it instead | **ready on the host** as an oracle; chip: `build-me-bare` B2 |
+| **rusty_time** (`rusty_time-core`) | `=0.2.0` (crates.io: `-core`, `-api`, `-clock`); bare metal via `default-features = false` | host; **both bare-metal targets** — 0.2.0 added the `no_std` leaf that 0.1.10 lacked | `rusty_rtos_sntp` (K7) **WRAPS the leaf** rather than remaking coreSNTP: `NtpPacket::{parse, write, to_bytes, client_request}`, `NtpTimestamp`, `NtpShort`, `offset_delay`, `extension_fields`. The leaf needs no `alloc`, so the package needs no allocator seam | **ready** on host and chip (measured 2026-09-09 at 0.2.0: `gate-time` exit 0 on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf`; upstream also ran it on an ESP32-S3, 30/30) |
 | **rusty_erasure** (`rusty_erasure-core`) | `=0.4.0` | host: yes; bare metal: **not yet** (one `AtomicU64` census counter) | nothing in Kairos v1 — erasure shards are SpaceDB placement, above the RTOS | **ready on the host**, no call site; chip: `build-me-bare` B5 |
 | **rusty_xml** | `=0.8.1` | host: yes; bare metal: no (`std`-only) | nothing — the FreeRTOS portfolio has no XML | **ready on the host**, no call site, none foreseen |
 | **SpaceDB** (`spacedb-sdk`) | `=0.6.0`, `default-features = false` for a library | host: compiles (21 s with FFAI); closure clean of C, `ring`, `aws-lc-sys` | nothing in v1: a kernel persists no user data; the ledgers and traces are files in git by design; `rusty_rtos_fat` (K9) is where SpaceDB's `ShardStore`/`Transport` seams meet a chip | **ready on the host**, call site deferred to K9 by design |
@@ -55,7 +55,6 @@ blocker today, and the ones Kairos wants there are bricks with kill tests:
 
 | crate | why it fails on 32-bit bare metal | wanted by Kairos on a chip? | brick |
 |---|---|---|---|
-| `rusty_time-core` 0.1.10 | no `#![no_std]`; the packet codec (`ntp.rs`) needs only a `std::error::Error` impl and `f64` division | yes: the SNTP leaf | B2 |
 | `rusty_erasure-core` 0.4.0 | one `AtomicU64` census counter | no (v1) | B5 |
 | `rusty_xml` 0.8.1 | `std`-only sax/tree | no, ever | — |
 
@@ -104,7 +103,9 @@ compile gate proved the ban fires:
   `no_std` ladder (`core`, then `alloc` and `small-metal` where declared).
 - Every `deny.toml` bans the four imposters.
 - `rusty_rtos_json`'s plan records its relation to `rusty_json_turbo`;
-  `rusty_rtos_sntp` (K7) takes `rusty_time-core` as its oracle.
+  `rusty_rtos_sntp` (K7) **wraps** `rusty_time-core`'s `no_std` leaf (0.2.0)
+  rather than remaking coreSNTP -- it keeps the crate as its host-side oracle
+  too, but the chip now runs the house codec itself.
 - `plans/build-me-bare.md` queues the bare-metal bricks; `upstream/` holds
   the three issue drafts; `tools/house-gate` re-takes every verdict here in
   one command (`no_std` gates, `host/`, `hostgit/`).
