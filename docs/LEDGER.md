@@ -601,6 +601,75 @@ the two recordings cover the same program on the same workload, so the
 grand totals are comparable even when the rows are not. `diff.py` now
 prints both and labels which is the verdict.
 
+## K3 — the first cells, and what an emulator can and cannot say (2026-09-10)
+
+### The M3 cell exists and gates
+
+`rusty_rtos_core/firmware/mps2-an385-qemu-region`: the `small-metal` seam
+on a **Cortex-M3**, 9/9, and **QEMU exits 0** because the guest calls
+`debug::exit(EXIT_SUCCESS)`. No hardware. That exit code is what makes a
+cell a gate rather than something a person watches.
+
+| fact | value | method |
+|---|---|---|
+| the seam runs on a Kairos target | 9/9, identical numbers to the S3 row | `cargo run --release`; `good_region_size(220 KiB)` -> 196,608 and 63/63 reclaimed to the same address, exactly as on silicon — the geometry is a property of the configuration, not the part |
+| the cell had to change machine | `mps2-an385`, not `lm3s6965evb` | `MIN_REGION` is 65,536 bytes and the LM3S6965 has 65,536 bytes of SRAM **in total**: the smallest region the allocator accepts is the whole chip. Check the part can hold the thing before naming the part |
+
+### QEMU cannot supply a cycle, a latency, or a work count
+
+Measured six ways, over 1000 / 2000 / 4000 iterations of one loop, with
+the SysTick clock source pinned to `Core` so a misconfigured peripheral
+could not be mistaken for a result:
+
+| probe | 1000 | 2000 | 4000 |
+|---|---:|---:|---:|
+| DWT `CYCCNT` | 0 | 0 | 0 |
+| SysTick, plain, run 1 | 688 | 493 | 492 |
+| SysTick, plain, run 2 | 667 | 490 | 317 |
+| SysTick, plain, run 3 | 810 | 585 | 395 |
+| SysTick, `-icount shift=0` | 1 | 0 | 0 |
+| SysTick, `-icount ...,sleep=off` | 1 | 0 | 0 |
+
+DWT is unimplemented there. SysTick's deltas **shrink as the work grows**
+— the opposite of a work counter — because they track host wall time while
+TCG's translation cache warms, and they differ run to run. Under `-icount`
+the virtual clock does not advance for it at all. TCG plugin support is
+compiled in but the Windows build ships no plugin library, so `libinsn` is
+out too.
+
+**So the division of labour is fixed on evidence:** QEMU cells carry
+correctness and gate on an exit code; **cycle and latency rows need
+silicon** — the ESP32-C6 is a Kairos target with a real `mcycle`. This is
+the same law the kernel's own speed work already runs on, arriving from
+the other side: *an emulator can tell you whether something is right, and
+cannot tell you what it costs.*
+
+### Flash and RAM, decomposed — the part of K3 a cell CAN carry
+
+A footprint is a property of the linked binary, not of execution.
+`llvm-size -A` and `llvm-nm -S` on the linked artifact:
+
+| line | bytes | class |
+|---|---:|---|
+| the declared `Region` | 196,608 | **structure** — it is the declaration |
+| `rusty_alloc`'s `FIRST_HEAP_BOX` | 1,752 | structure |
+| everything else in `.bss` | 312 | — |
+| **= `.bss`** | **198,672** | remainder **0** |
+| `.data` | 4 | |
+| alignment gap, **in no section** | 12 | defect-class in general; harmless here |
+| **static RAM** | **198,688** | |
+| flash (`.vector_table` + `.text` + `.rodata` + init) | **22,992** | |
+
+**The number to quote: 2,080 bytes of RAM and 22.5 KiB of flash** is what
+the allocator seam costs a firmware beyond the heap it declares. The
+region is 98.96% of `.bss`, which is an identity rather than a
+correlation, and it says the only lever on this firmware's RAM is the
+argument to `good_region_size`.
+
+The 12-byte gap is printed because it belongs to no section and would
+vanish from a table built from `size -A` alone. It is nothing on a 4 MiB
+part; on a fixed small map that is precisely how a saving gets overstated.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |
