@@ -55,7 +55,12 @@ struct Scenario {
     amp: bool,
 }
 
-const SCENARIOS: [Scenario; 17] = [
+const SCENARIOS: [Scenario; 18] = [
+    Scenario {
+        name: "AbortDelay",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/AbortDelay.c"],
+        amp: false,
+    },
     Scenario {
         name: "TaskNotify",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/TaskNotify.c"],

@@ -34,6 +34,7 @@
 #endif
 #include "GenQTest.h"
 #include "TaskNotify.h"
+#include "AbortDelay.h"
 #include "IntSemTest.h"
 #include "StreamBufferInterrupt.h"
 #include "TimerDemo.h"
@@ -124,6 +125,11 @@ static void prvStartTaskNotify( void )
     vStartTaskNotifyTask();
 }
 
+static void prvStartAbortDelay( void )
+{
+    vCreateAbortDelayTasks();
+}
+
 static void prvStartQueueOverwrite( void )
 {
     vStartQueueOverwriteTask( harnessQOVERWRITE_PRIORITY );
@@ -178,6 +184,7 @@ static const Scenario_t xScenarios[] =
     { "QPeek",    prvStartQPeek,    xAreQueuePeekTasksStillRunning         },
     { "GenQTest", prvStartGenQTest, xAreGenericQueueTasksStillRunning      },
     { "TaskNotify", prvStartTaskNotify, xAreTaskNotificationTasksStillRunning },
+    { "AbortDelay", prvStartAbortDelay, xAreAbortDelayTestTasksStillRunning },
     { "QueueOverwrite", prvStartQueueOverwrite, xIsQueueOverwriteTaskStillRunning },
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
