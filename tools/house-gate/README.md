@@ -20,18 +20,18 @@ the crate, so a failure names its crate and nothing else:
 | `gate-xml` | `rusty_xml` | `=0.8.1` |
 
 ```sh
-cd tools/house-gate
-for g in symbols thoth json zstd erasure time xml; do
-  for t in thumbv7em-none-eabihf riscv32imac-unknown-none-elf; do
-    cargo check -p gate-$g --target $t && echo "gate-$g @ $t: OK" || echo "gate-$g @ $t: FAIL"
-  done
-done
-RUSTFLAGS="--cfg ra_single_threaded --cfg ra_small_profile" \
-  cargo check -p gate-alloc --target thumbv7em-none-eabihf
-cargo deny check                       # the Kairos policy over the whole graph
-(cd host && cargo check && cargo deny check)             # SpaceDB, FFAI, rusty_time, rusty_xml, rusty_erasure, rusty_zstd on the host
-(cd hostgit && CARGO_NET_GIT_FETCH_WITH_CLI=true cargo check)   # remade-ffmpeg (rff) and rmap-core by git URL
+sh tools/house-gate/run.sh            # everything: all three workspaces
+sh tools/house-gate/run.sh --quick    # bare-metal rungs and deny only
 ```
+
+That script is the gate. It replaced a loop written out here, and the
+reason is worth keeping: the loop named **seven** of the eight `gate-*`
+members that exist, and the two host workspaces below it had been
+unbuildable for a day while this file recorded passing times for them.
+`run.sh` discovers the rungs off the filesystem so a new member cannot be
+forgotten, and it declares `gate-xml` an EXPECTED failure so that a rung
+which starts passing when it should not is red as well. It exits 1 on
+either kind of surprise, and both directions are poison-tested.
 
 `host/` is a second workspace for the crates that only make sense on a host
 (`spacedb-sdk`, `ffai-core`, and the `std` builds of the others); `hostgit/`
