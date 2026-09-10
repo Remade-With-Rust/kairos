@@ -519,7 +519,7 @@ const XTENSA_S3: &str = "xtensa-esp32s3-none-elf";
 /// gets forgotten. The test is the cell's own runner — a `qemu-system-*`
 /// one needs nothing but this box, while an `espflash` one wants a board
 /// on a serial port and must never be started by a gate.
-fn qemu_cells(dir: &Path) -> Vec<PathBuf> {
+fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir(dir.join("firmware")) else {
         return out;
@@ -528,13 +528,52 @@ fn qemu_cells(dir: &Path) -> Vec<PathBuf> {
         let cell = entry.path();
         let config = cell.join(".cargo").join("config.toml");
         if let Ok(text) = fs::read_to_string(&config) {
-            if text.contains("qemu-system") {
-                out.push(cell);
+            // The runner names the emulator, so the cell says which one it
+            // needs and this tool never has to keep a list.
+            if let Some(program) = text
+                .split(|c: char| c.is_whitespace() || c == '"')
+                .find(|word| word.starts_with("qemu-system-"))
+            {
+                out.push((cell, program.to_owned()));
             }
         }
     }
     out.sort();
     out
+}
+
+/// Somewhere `program` can actually be executed from, or `None`.
+///
+/// A cell's runner names `qemu-system-arm` and nothing more, so the gate
+/// inherits whatever `PATH` the operator's shell happened to have. That is
+/// how a gate quietly becomes something that only works in one terminal:
+/// both QEMU cells reported "the cell failed, exit 101" on a clean `PATH`
+/// when the truth was that QEMU was not on it — a tooling failure wearing a
+/// test failure's clothes, which is the most expensive kind.
+///
+/// So look for it. `KAIROS_QEMU_DIR` wins if set, then `PATH`, then the
+/// places an installer puts it.
+fn qemu_dir(program: &str) -> Option<PathBuf> {
+    let exe = format!("{program}{}", std::env::consts::EXE_SUFFIX);
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if let Ok(dir) = std::env::var("KAIROS_QEMU_DIR") {
+        roots.push(PathBuf::from(dir));
+    }
+    if let Ok(path) = std::env::var("PATH") {
+        roots.extend(std::env::split_paths(&path));
+    }
+    roots.extend(
+        [
+            r"C:\Program Files\qemu",
+            r"C:\Program Files (x86)\qemu",
+            "/usr/bin",
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+        ]
+        .iter()
+        .map(PathBuf::from),
+    );
+    roots.into_iter().find(|dir| dir.join(&exe).is_file())
 }
 
 fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
@@ -636,10 +675,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 .collect();
             // A crate with an override is checked on its own list and
             // nothing else; without one it takes the package's.
-            let targets = package
-                .crate_targets
-                .get(krate)
-                .unwrap_or(&package.targets);
+            let targets = package.crate_targets.get(krate).unwrap_or(&package.targets);
             for target in targets {
                 for extra in rungs.iter().copied() {
                     let mut args = vec!["check", "-p", krate, "--no-default-features"];
@@ -679,17 +715,40 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
             }
         }
         if with_qemu {
-            for cell in qemu_cells(&dir) {
+            for (cell, program) in qemu_cells(&dir) {
                 let name = cell
                     .file_name()
                     .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
-                println!("$ cargo run --release   ({name})");
+                // Missing tool and failing cell are different states, and
+                // saying so is the difference between "install QEMU" and an
+                // afternoon reading a kernel diff.
+                let Some(qemu) = qemu_dir(&program) else {
+                    failures.push(format!(
+                        "{}: qemu cell {name}: `{program}` not found. Install QEMU,                          put it on PATH, or set KAIROS_QEMU_DIR to the directory                          holding it. The cell did NOT run, so this is not a verdict                          about the code.",
+                        package.name
+                    ));
+                    continue;
+                };
+                // Prepend rather than replace: the child still needs cargo,
+                // rustc and the linker from the inherited PATH.
+                let path = std::env::var("PATH").unwrap_or_default();
+                let joined =
+                    std::env::join_paths(std::iter::once(qemu).chain(std::env::split_paths(&path)))
+                        .map(|p| p.to_string_lossy().into_owned())
+                        .unwrap_or(path);
+                println!("$ cargo run --release   ({name}, {program})");
                 // The cell's own `.cargo/config.toml` names the runner, so
                 // this is `qemu-system-* -kernel <elf>` and nothing here has
                 // to know which machine. A cell that ends by calling
                 // `debug::exit` gives cargo the guest's verdict as an exit
                 // code, which is the whole reason it can be a gate.
-                if let Err(e) = run(false, &cell, "cargo", &["run", "--release"]) {
+                if let Err(e) = run_env(
+                    false,
+                    &cell,
+                    "cargo",
+                    &["run", "--release"],
+                    &[("PATH", joined)],
+                ) {
                     failures.push(format!("{}: qemu cell {name}: {e}", package.name));
                 }
             }

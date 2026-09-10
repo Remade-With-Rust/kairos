@@ -631,6 +631,37 @@ Six of the seventeen pinned scenarios, chosen to cover different kernel
 paths. The other eleven are host-side only because they are pinned there,
 not because anything stops them running here.
 
+### And on RV32: the same seventeen, on a second architecture
+
+`rusty_rtos_demo/firmware/riscv32-qemu-corpus`, on
+`riscv32imac-unknown-none-elf` under `qemu-system-riscv32 -machine virt`.
+K3 asks for the corpus on M3-qemu **and** RV32-qemu; this is that half.
+
+| fact | value | method |
+|---|---|---|
+| the whole corpus on RISC-V | **all 17 scenarios** match the C kernel's ticks, yields, exits, lines, digest and byte count | 5.4 s, QEMU exit 0. The pins are the C kernel's — the host test diffs them against `oracle/traces/*` — so this is agreement with **C FreeRTOS on RISC-V**, not self-consistency |
+| and the M3 cell now runs all 17 too | up from a chosen six | the subset was never a limit: the whole corpus is 5.6 s under QEMU. So the corpus is byte-identical to C on **three** architectures — the host, ARMv7-M and RV32 |
+| it needed no RISC-V port | a scenario is a **state machine** | the same reason the M3 cell needed no ARM one. **The K2 stackless design has now paid for itself on a second architecture** — a blocking call's locals live in the TCB, so a task needs no stack and the kernel needs no context switch to run one |
+| it can fail | moving `dynamic`'s pinned `exits` by one gives FAIL with **every other field matching** and exit 1 | `exits` is sim time itself, so it moves before a digest does |
+
+**One table, three readers.** The pins, and the FNV-1a/64 sink, now live in
+`rusty_rtos_demo_core::pins`; the host test and both cells read them. They
+were three hand-written copies of seventeen rows of hex, which is a drift
+waiting to happen — and **a cell that silently disagrees with the host is
+worse than no cell**, because it reports PASS against numbers nobody is
+comparing. A pin that moves, moves once, and the poison above proves all
+three see it.
+
+**A gate that only worked in one terminal.** Adding the second cell
+exposed it: `kairos check --qemu` inherits whatever `PATH` the operator's
+shell had, so on a clean `PATH` **both** cells reported "the cell failed,
+exit 101" when the truth was that QEMU was not on it — a tooling failure
+wearing a test failure's clothes, which is the most expensive kind. The
+gate now resolves each cell's emulator (`KAIROS_QEMU_DIR`, then `PATH`,
+then where installers put it), prepends it for the child, and if it cannot
+be found says so as *"the cell did NOT run, so this is not a verdict about
+the code"*. Verified by running the gate with QEMU off `PATH` entirely.
+
 ### And the kernel drives it: the scheduler on a Cortex-M3
 
 `rusty_rtos_port/firmware/mps2-an385-qemu-kernel`. The port switches; the
