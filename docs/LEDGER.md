@@ -1351,6 +1351,101 @@ seventeen scenarios, and `trace.rs` records why. **Making the C's ordinal a
 pure creation count would settle it and requires re-pinning every scenario:
 an owner decision, alongside `QueueSet` and `TaskNotify`.**
 
+## K4 — the heaps (2026-09-10)
+
+### `heap_4` diffed against C, operation for operation
+
+`rusty_rtos_heap-core`'s `Heap4` is `heap_4.c`'s algorithm transcribed, not
+re-designed: address-ordered first fit, split only when the remainder is
+**strictly** larger than twice the header, coalesce with the block before
+and the block after on free, the allocated bit in the top of the size word.
+
+| fact | value | method |
+|---|---|---|
+| 20,000 operations agree | the **offset** first fit chose, the **free bytes** remaining, the **minimum ever** free — every time | `heap4_differential`; the C arm is `heap_4.c` compiled **verbatim** from the pinned kernel by `oracle/run.sh`, and its trace is checked in so the diff needs no C toolchain |
+| offsets, not pointers | a pointer is not comparable across two programs | the C driver sets `configAPPLICATION_ALLOCATED_HEAP` so `ucHeap` is its own aligned array and prints offsets into it; this side's offset 0 is that base |
+| and `forbid(unsafe)` | headers written in-band exactly where the C writes them | the arithmetic, the split points and the coalescing tests are the same arithmetic |
+
+**It passed first time, which is a weaker result than it sounds.** The first
+workload — 32 slots of at most 300 bytes — leaves a steady state of ~2.6 KB
+in 8 KB and **never refused a single request**, so it was agreement about
+the easy half of an allocator.
+`the_workload_reaches_the_branches_that_matter` caught that; 48 slots of at
+most 600 bytes is what it takes, and the agreement above is on **that**
+workload: **2,087 refusals, 784 distinct offsets, minimum-ever free 1,232 of
+8,192**.
+
+### The RAM table is an identity, not a total
+
+`total = arena + bookkeeping`, remainder **0** on every row, and bookkeeping
+is a **fixed 56 bytes** that does not grow with the arena. Per profile means
+per **pointer width**: `heap_4`'s header is one pointer plus one `size_t`,
+so 8 bytes on every Kairos target and 16 on the oracle's host, and the
+minimum block and split threshold move with it.
+
+**A host test cannot measure a target**, so the same identity is a `const`
+assertion in `heap4.rs` that the compiler evaluates for whichever target is
+being built — `kairos check` proves it on ARMv7-M, ARMv8-M, `riscv32imac`
+and `riscv32imafc`. The table's `header/op` and `min blk` columns are the
+target's (const parameters); `total` and `book` are the host's, and the test
+says so rather than letting a reader assume otherwise.
+
+### `StaticAllocation`, in the form this design makes meaningful
+
+The C demo shows a system **can** be built with
+`configSUPPORT_DYNAMIC_ALLOCATION 0`. Here it cannot be built any other way:
+`rusty_rtos_kernel-core` and `rusty_rtos_demo-core` are both gated
+allocation-free on the linked **rlib**, poison-proven both directions, and a
+bare-metal cell that declares no global allocator cannot link an allocation
+at all — also poison-proven.
+
+**A symbol scan of the linked ELF was built, found unsound, and removed.** A
+cell poisoned with a real `#[global_allocator]` and a live `Box::new` still
+carried **zero** allocator symbols, because LTO inlines the shim away: the
+check reported "static allocation only" about a cell that had a heap. The
+rlib is the instrument — there the allocator is an **undefined** symbol and
+cannot be optimised out — and the linked binary is not. Sixth
+check-that-cannot-fail this project has caught, and the fifth of them mine.
+
+### 41.6% fewer instructions, with the differential as the gate
+
+The differential is the ideal gate for speed work: any change must leave
+20,000 operations byte-identical to the C.
+
+| step | Ir | per op | |
+|---|---:|---:|---|
+| baseline | 4,674,633 | 233.7 | |
+| the walk reads each header **once** | 3,145,762 | 157.3 | **−32.7%** |
+| the insert reads each node **once** | 2,730,871 | 136.5 | **−13.2%** |
+| the same move in `alloc`'s tail | 2,776,099 | 138.8 | **+1.7% — REFUTED** |
+
+**−1,943,762 Ir, −41.6%**, checksum identical at every step.
+
+**The profile said where to look, and it was not where anyone would have
+guessed: 30% of the program was `core::num::uint_macros`** — the saturating
+and checked arithmetic written to satisfy the workspace's
+no-bare-arithmetic lint — with another 13% in `copy_from_slice` moving eight
+bytes at a time. Reading a block's 16-byte header once per visit instead of
+as two separately bounds-checked 8-byte reads removed both: `slice/mod.rs`
+and `ptr/mod.rs` left the profile entirely, because `first_chunk` compiles
+to a direct load.
+
+**The third application of the same move LOST**, and is kept in the source
+as a comment rather than deleted: *removing a redundant read wins only when
+the read costs more than the check that avoids it*. In a walk the read is
+per node and the branch is not; in `alloc`'s tail the reads are once per
+call and folding them introduced a merge the unconditional stores did not
+need. The law this project keeps relearning, relearned in its own allocator.
+
+**And the harness was wrong before any of this.** Its first version ran
+`cargo build --target x86_64-unknown-linux-gnu` with stderr discarded; that
+**succeeded**, writing to a target-specific directory, while the script went
+on to profile the stale binary left in `target/release`. It reported an
+instruction count **identical to the digit** across a real source change —
+which is exactly what a stale binary looks like, and exactly what
+`codec-measurement` §10 says to check for. `run.sh` now fails loudly if any
+source is newer than the binary it is about to measure.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |
