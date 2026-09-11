@@ -132,6 +132,12 @@ visibility = "private"
 description = "The FreeRTOS standard demo tasks (Demo/Common/Minimal) remade in Rust as the Kairos conformance corpus: every scenario self-checks like the C original and, on the sim port, diffs its trace against the C kernel's."
 crates = ["rusty_rtos_demo", "rusty_rtos_demo-core"]
 no_std_crates = ["rusty_rtos_demo-core"]
+# The corpus allocates NOTHING: a scenario is a state machine, so a task
+# needs no stack and the runner needs no heap. Checked on the linked rlib,
+# where the allocator is an UNDEFINED symbol -- a linked, LTO'd binary is
+# NOT an instrument for this, as a poisoned cell proved by carrying a real
+# global allocator and zero allocator symbols.
+no_alloc_crates = ["rusty_rtos_demo-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
 uses = ["rusty_rtos_core", "rusty_rtos_kernel", "rusty_rtos_port"]
 plan = "docs/plans/rusty_rtos_demo.md"

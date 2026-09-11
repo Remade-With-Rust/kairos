@@ -529,7 +529,7 @@ const XTENSA_S3: &str = "xtensa-esp32s3-none-elf";
 /// gets forgotten. The test is the cell's own runner — a `qemu-system-*`
 /// one needs nothing but this box, while an `espflash` one wants a board
 /// on a serial port and must never be started by a gate.
-fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String)> {
+fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String, String)> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir(dir.join("firmware")) else {
         return out;
@@ -544,7 +544,15 @@ fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String)> {
                 .split(|c: char| c.is_whitespace() || c == '"')
                 .find(|word| word.starts_with("qemu-system-"))
             {
-                out.push((cell, program.to_owned()));
+                // `[build] target = "<triple>"` names where the ELF lands,
+                // which the static-allocation check below needs.
+                let triple = text
+                    .lines()
+                    .find(|l| l.trim_start().starts_with("target"))
+                    .and_then(|l| l.split('"').nth(1))
+                    .unwrap_or("")
+                    .to_owned();
+                out.push((cell, program.to_owned(), triple));
             }
         }
     }
@@ -778,7 +786,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
             }
         }
         if with_qemu {
-            for (cell, program) in qemu_cells(&dir) {
+            for (cell, program, triple) in qemu_cells(&dir) {
                 let name = cell
                     .file_name()
                     .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
@@ -813,7 +821,33 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                     &[("PATH", joined)],
                 ) {
                     failures.push(format!("{}: qemu cell {name}: {e}", package.name));
+                    continue;
                 }
+
+                // K4's static-allocation clause is NOT checked here, and
+                // the reason is worth more than the check was.
+                //
+                // `nm` on a linked, LTO'd bare-metal ELF cannot answer "does
+                // this contain a heap". A cell was poisoned with a real
+                // `#[global_allocator]` and a live `Box::new`, and the
+                // binary still carried **zero** allocator symbols: the shim
+                // is inlined away. The check reported "static allocation
+                // only" against a cell that had a heap, which is a check
+                // that cannot fail.
+                //
+                // What does hold, and is gated:
+                //
+                // * `no_alloc_crates` reads the same question off an RLIB,
+                //   where the allocator appears as an UNDEFINED symbol and
+                //   cannot be optimised out. Poison-proven both ways.
+                // * A bare-metal binary that declares no global allocator
+                //   cannot link an allocation at all — poisoning a cell with
+                //   `Box::new` and no allocator fails the build, which the
+                //   cell gate already catches.
+                //
+                // Together those are the guarantee; a symbol scan of the ELF
+                // adds nothing to it.
+
             }
         }
         // A crate that claims to allocate nothing is checked on its
