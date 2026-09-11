@@ -89,7 +89,7 @@ plan = "docs/plans/rusty_rtos_port.md"
 [[package]]
 name = "rusty_rtos_heap"
 kind = "function"
-status = "scaffold"
+status = "K4 heap_4"
 visibility = "private"
 description = "FreeRTOS heap_1 / heap_4 / heap_5 remade in Rust behind the Heap seam, with the heap protector; heap_3 as the seam over rusty_alloc small-metal and esp-alloc; static allocation first-class."
 crates = ["rusty_rtos_heap", "rusty_rtos_heap-core"]
