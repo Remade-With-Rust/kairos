@@ -36,7 +36,7 @@ token = "KAIROS_GIT_TOKEN"
 [[package]]
 name = "rusty_rtos_core"
 kind = "foundation"
-status = "K0 types"
+status = "K3 silicon cells"
 visibility = "private"
 description = "The shared vocabulary of the Kairos family (FreeRTOS remade in Rust): ticks, priorities, generational handles, one Copy error, the Config trait, and the Port / Heap / Trace / Hooks seams. No pointers, no allocator, no arch. forbid(unsafe)."
 crates = ["rusty_rtos_core", "rusty_rtos_alloc"]
@@ -53,7 +53,7 @@ plan = "docs/plans/rusty_rtos_core.md"
 [[package]]
 name = "rusty_rtos_kernel"
 kind = "function"
-status = "K1 scheduler"
+status = "K2 IPC + timers"
 visibility = "private"
 description = "FreeRTOS-Kernel remade in Rust: the fixed-priority preemptive scheduler, task notifications, queues, semaphores, mutexes with priority inheritance, queue sets, software timers, event groups, stream and message buffers — a pure state machine over the Port seam, forbid(unsafe), traced against the C kernel."
 crates = ["rusty_rtos_kernel", "rusty_rtos_kernel-core"]
@@ -127,7 +127,7 @@ plan = "docs/plans/rusty_rtos_backoff.md"
 [[package]]
 name = "rusty_rtos_demo"
 kind = "process"
-status = "K1 corpus 1/9"
+status = "K3 corpus 17/17"
 visibility = "private"
 description = "The FreeRTOS standard demo tasks (Demo/Common/Minimal) remade in Rust as the Kairos conformance corpus: every scenario self-checks like the C original and, on the sim port, diffs its trace against the C kernel's."
 crates = ["rusty_rtos_demo", "rusty_rtos_demo-core"]
