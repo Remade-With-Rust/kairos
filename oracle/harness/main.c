@@ -44,6 +44,7 @@
 #include "QueueSetPolling.h"
 #include "blocktim.h"
 #include "countsem.h"
+#include "death.h"
 #include "dynamic.h"
 #include "recmutex.h"
 #include "semtest.h"
@@ -66,6 +67,8 @@ extern unsigned long ulKairosExits;
 #define harnessSEMTEST_PRIORITY       ( tskIDLE_PRIORITY + 1 )
 #define harnessGENQ_PRIORITY          ( tskIDLE_PRIORITY )
 #define harnessQOVERWRITE_PRIORITY    ( tskIDLE_PRIORITY + 1 )
+/* The upstream Posix demo's `mainCREATOR_TASK_PRIORITY`. */
+#define harnessDEATH_PRIORITY         ( tskIDLE_PRIORITY + 3 )
 #define harnessTIMER_BASE_PERIOD      ( 50 )
 
 typedef struct
@@ -130,6 +133,11 @@ static void prvStartAbortDelay( void )
     vCreateAbortDelayTasks();
 }
 
+static void prvStartDeath( void )
+{
+    vCreateSuicidalTasks( harnessDEATH_PRIORITY );
+}
+
 static void prvStartQueueOverwrite( void )
 {
     vStartQueueOverwriteTask( harnessQOVERWRITE_PRIORITY );
@@ -191,6 +199,7 @@ static const Scenario_t xScenarios[] =
     { "StreamBufferInterrupt", prvStartStreamBufferInterrupt, xIsInterruptStreamBufferDemoStillRunning },
     { "TimerDemo", prvStartTimerDemo, prvTimerDemoStillRunning },
     { "EventGroupsDemo", prvStartEventGroups, xAreEventGroupTasksStillRunning },
+    { "death",    prvStartDeath,    xIsCreateTaskStillRunning              },
 #if defined( KAIROS_AMP )
     /* Only in the AMP binary: the `sbSEND_COMPLETED` override above is
      * global, so this scenario and the other fifteen cannot share one. */

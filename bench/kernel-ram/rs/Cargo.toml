@@ -1,0 +1,25 @@
+# The RAM arm of the K3 footprint row. Its own project and its own
+# workspace, like every other cell that builds for a bare-metal target.
+[package]
+name = "kernel-ram-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[lib]
+# A staticlib so the statics below are real linker symbols with real sizes.
+crate-type = ["staticlib"]
+
+[dependencies]
+rusty_rtos_core = { path = "../../../rusty_rtos_core/crates/rusty_rtos_core", default-features = false }
+rusty_rtos_kernel-core = { path = "../../../rusty_rtos_kernel/crates/rusty_rtos_kernel-core", default-features = false }
+rusty_rtos_port-core = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port-core", default-features = false }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[workspace]

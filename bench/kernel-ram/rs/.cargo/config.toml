@@ -1,0 +1,22 @@
+# This cell measures the kernel IN THIS CHECKOUT, so it must not resolve the
+# siblings from their git URLs. It names them by path already, but
+# `rusty_rtos_kernel-core` reaches `rusty_rtos_core` by URL, and without this
+# table cargo builds BOTH -- the local one for us and the published one for
+# the kernel -- and the kernel compiles against a sibling that is missing
+# whatever this session just added to it. That is not a hypothetical: the
+# first build of this cell failed on `Port::COMMITS_SWITCH`, a constant that
+# exists here and not in the published crate.
+#
+# Unlike the per-repo tables `kairos patches` writes, this one is COMMITTED.
+# Those are gitignored because their repos must also resolve standalone from
+# a fresh clone; this cell never does -- it is a measurement of the umbrella
+# working tree and has no meaning outside it.
+
+[patch."https://github.com/Remade-With-Rust/rusty_rtos_core"]
+rusty_rtos_core = { path = "../../../rusty_rtos_core/crates/rusty_rtos_core" }
+
+[patch."https://github.com/Remade-With-Rust/rusty_rtos_kernel"]
+rusty_rtos_kernel-core = { path = "../../../rusty_rtos_kernel/crates/rusty_rtos_kernel-core" }
+
+[patch."https://github.com/Remade-With-Rust/rusty_rtos_port"]
+rusty_rtos_port-core = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port-core" }

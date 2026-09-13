@@ -73,11 +73,11 @@ plan = "docs/plans/rusty_rtos_kernel.md"
 [[package]]
 name = "rusty_rtos_port"
 kind = "function"
-status = "K3 cortex-m switch"
+status = "K3 three switches"
 visibility = "private"
 description = "The FreeRTOS ports remade in Rust: the deterministic sim port (the oracle harness), the Posix host port, and the Cortex-M, RISC-V and Xtensa ports — the only crates in the family with a fenced unsafe block, at the context switch and the vector table."
-crates = ["rusty_rtos_port", "rusty_rtos_port-core", "rusty_rtos_port-cortex-m"]
-no_std_crates = ["rusty_rtos_port-core", "rusty_rtos_port-cortex-m"]
+crates = ["rusty_rtos_port", "rusty_rtos_port-core", "rusty_rtos_port-cortex-m", "rusty_rtos_port-riscv", "rusty_rtos_port-xtensa"]
+no_std_crates = ["rusty_rtos_port-core", "rusty_rtos_port-cortex-m", "rusty_rtos_port-riscv", "rusty_rtos_port-xtensa"]
 # The Cortex-M port is ARMv7-M assembly, so it does not build for RISC-V
 # and the package's whole target list cannot apply to it. Its own QEMU cell
 # is what gates it: `kairos check rusty_rtos_port --qemu`.
@@ -127,7 +127,7 @@ plan = "docs/plans/rusty_rtos_backoff.md"
 [[package]]
 name = "rusty_rtos_demo"
 kind = "process"
-status = "K3 corpus 17/17"
+status = "K5a corpus 18/18"
 visibility = "private"
 description = "The FreeRTOS standard demo tasks (Demo/Common/Minimal) remade in Rust as the Kairos conformance corpus: every scenario self-checks like the C original and, on the sim port, diffs its trace against the C kernel's."
 crates = ["rusty_rtos_demo", "rusty_rtos_demo-core"]

@@ -32,8 +32,11 @@ mod patches;
 use serde::{Deserialize, Serialize};
 use std::{
     env, fmt, fs,
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::{Command, ExitCode},
+    process::{Command, ExitCode, Stdio},
+    sync::{mpsc, Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 #[global_allocator]
@@ -529,7 +532,393 @@ const XTENSA_S3: &str = "xtensa-esp32s3-none-elf";
 /// gets forgotten. The test is the cell's own runner — a `qemu-system-*`
 /// one needs nothing but this box, while an `espflash` one wants a board
 /// on a serial port and must never be started by a gate.
-fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String, String)> {
+/// Firmware cells that need a BOARD on a serial port: their runner is
+/// `espflash`.
+///
+/// Discovered the same way the emulator cells are — by reading the runner
+/// out of the cell's own `.cargo/config.toml` — so this tool never keeps a
+/// list that can fall behind the directory.
+fn board_cells(dir: &Path) -> Vec<(PathBuf, String)> {
+    let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir(dir.join("firmware")) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let cell = entry.path();
+        let config = cell.join(".cargo").join("config.toml");
+        if let Ok(text) = fs::read_to_string(&config) {
+            let runner = text
+                .lines()
+                .find(|l| l.trim_start().starts_with("runner"))
+                .unwrap_or_default();
+            if runner.contains("espflash") {
+                let triple = text
+                    .lines()
+                    .find(|l| l.trim_start().starts_with("target"))
+                    .and_then(|l| l.split('"').nth(1))
+                    .unwrap_or("")
+                    .to_owned();
+                out.push((cell, triple));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// How long a board cell may run before it is judged to have hung.
+/// How long a board cell may go SILENT before it is called hung.
+///
+/// Not how long it may take, and that distinction is the point: the gate's
+/// own word is "hung", and a cell printing progress is not hung however long
+/// it runs. `xiao-s3-signing` legitimately spends **196 seconds** in timed
+/// batches -- it amortises 20,000 rounds because a 1 us clock cannot resolve
+/// microseconds any other way -- and under a flat 300-second budget it passed
+/// one run and missed the next. A flat budget prices the wrong thing.
+///
+/// A genuinely hung cell prints nothing, so it is still caught in two minutes
+/// rather than five.
+const BOARD_SILENCE: Duration = Duration::from_secs(120);
+
+/// An absolute stop, so a cell that chatters for ever cannot hold the gate.
+const BOARD_TIMEOUT: Duration = Duration::from_secs(900);
+
+/// Build, flash and judge one board cell.
+///
+/// # Why the verdict is a printed LINE and not an exit code
+///
+/// An emulator cell ends in `debug::exit` and hands cargo the guest's
+/// verdict, which is what lets `--qemu` gate. A board has no such channel:
+/// the chip keeps running and the monitor never returns. So the contract
+/// here is that a cell prints `RESULT: PASS` or `RESULT: FAIL`, and this
+/// reads it.
+///
+/// **A cell that prints neither before the timeout FAILS.** That is not a
+/// technicality — a hang is precisely how a broken context switch presents,
+/// and a gate that treated silence as success would certify it.
+fn run_board_cell(cell: &Path, triple: &str) -> Result<()> {
+    let name = cell
+        .file_name()
+        .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
+
+    // The cell pins its own toolchain in `rust-toolchain.toml` -- `esp` for
+    // Xtensa, which has no upstream rustc target -- and that pin must be
+    // allowed to win.
+    //
+    // `RUSTUP_TOOLCHAIN` is REMOVED rather than set, and that is the whole
+    // subtlety here: when this tool is itself run through `cargo run`, cargo
+    // exports the toolchain that built it, the child cargo obeys the
+    // environment over the file, and the cell is built with entirely the
+    // wrong compiler. The symptom is a wall of "'esp32s3' is not a
+    // recognized processor for this target", which reads like a broken
+    // toolchain install and is not one. Removing the variable hands the
+    // decision back to the cell, without this tool hardcoding a toolchain
+    // name it would then have to keep in step.
+    println!("$ cargo build --release   ({name}, toolchain from rust-toolchain.toml)");
+    let status = Command::new("cargo")
+        .args(["build", "--release"])
+        .current_dir(cell)
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .status()?;
+    if !status.success() {
+        return fail(format!("board cell {name}: build failed with {status}"));
+    }
+
+    let elf = cell.join("target").join(triple).join("release").join(&name);
+    if !elf.is_file() {
+        return fail(format!(
+            "board cell {name}: built, but no ELF at {}",
+            elf.display()
+        ));
+    }
+
+    // Two attempts, because the first can lose a race that has nothing to do
+    // with the cell. These cells never exit -- they print a verdict and then
+    // spin -- so the monitor has to be killed, and on Windows the COM port is
+    // not always free by the time the next cell asks for it. The symptom is
+    // `Failed to open serial port ... Access is denied`, and before this the
+    // runner threw stderr away and reported it as "the cell HUNG ... a broken
+    // context switch presents exactly this way" -- a confident diagnosis
+    // pointing at the wrong thing. Three cells in a row produced two such
+    // "hangs" that all passed when run singly.
+    let mut last = None;
+    for attempt in 1..=2 {
+        let outcome = flash_and_watch(cell, &elf, &name)?;
+        match outcome.verdict {
+            Some(true) => return Ok(()),
+            Some(false) => return fail(format!("board cell {name}: the cell reported FAIL")),
+            None => {
+                if attempt == 1 && outcome.port_busy() {
+                    println!("  the serial port was busy; letting it settle and retrying once");
+                    std::thread::sleep(Duration::from_secs(5));
+                }
+                last = Some(outcome);
+                if attempt == 2 || !last.as_ref().is_some_and(BoardOutcome::port_busy) {
+                    break;
+                }
+            }
+        }
+    }
+
+    let outcome = last.unwrap_or_default();
+    if outcome.port_busy() {
+        // Say what actually happened. A gate that blames the code for an
+        // environment fault teaches people to ignore the gate.
+        return fail(format!(
+            "board cell {name}: could not open the serial port, twice. This is NOT the \
+             cell hanging -- espflash said: {}{}",
+            outcome.stderr_tail(),
+            outcome.timeline()
+        ));
+    }
+    fail(format!(
+        "board cell {name}: no RESULT line, and {}. The cell HUNG, which is a \
+         failure and not a missing feature -- a broken context switch presents \
+         exactly this way.{}{}",
+        if outcome.went_quiet {
+            format!("it went SILENT for {}s", BOARD_SILENCE.as_secs())
+        } else {
+            format!("it ran past the {}s hard stop", BOARD_TIMEOUT.as_secs())
+        },
+        outcome.stderr_note(),
+        outcome.timeline()
+    ))
+}
+
+/// What one flash-and-watch attempt saw.
+#[derive(Default)]
+struct BoardOutcome {
+    /// `Some` once the cell printed `RESULT: PASS` or `RESULT: FAIL`.
+    verdict: Option<bool>,
+    /// Whatever espflash said on stderr. Kept because the reason a board cell
+    /// produced no verdict is almost never visible on stdout.
+    stderr: String,
+    /// True when the cell stopped SAYING anything, rather than running long.
+    /// The two are different failures and the message says which.
+    went_quiet: bool,
+    /// How many lines the monitor received, of any kind.
+    lines: u64,
+    /// When the first and last of them arrived, from the flash command.
+    first_at: Option<Duration>,
+    last_at: Option<Duration>,
+    /// The longest silence between two consecutive lines, and when it began.
+    ///
+    /// This is the measurement the whole timeline exists for. "The cell
+    /// produced two of eight rounds and then something for 900 seconds" is a
+    /// description; "it went quiet for 412s starting at t=88s" is a fact that
+    /// points at a cause.
+    max_gap: Duration,
+    max_gap_at: Duration,
+    /// Every line, timestamped, written next to the cell's build output.
+    transcript: Option<PathBuf>,
+}
+
+impl BoardOutcome {
+    /// Did this fail because something else held the port, rather than
+    /// because the cell misbehaved?
+    fn port_busy(&self) -> bool {
+        let e = self.stderr.to_ascii_lowercase();
+        e.contains("access is denied")
+            || e.contains("failed to open serial port")
+            || e.contains("device or resource busy")
+            || e.contains("permission denied")
+    }
+
+    fn stderr_tail(&self) -> String {
+        self.stderr
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .next_back()
+            .unwrap_or("(nothing)")
+            .trim()
+            .to_string()
+    }
+
+    /// Appended to a genuine-hang message, so even then the reader gets what
+    /// espflash said rather than nothing.
+    fn stderr_note(&self) -> String {
+        if self.stderr.trim().is_empty() {
+            String::new()
+        } else {
+            format!(" espflash said: {}", self.stderr_tail())
+        }
+    }
+
+    /// What the monitor actually saw, in seconds.
+    ///
+    /// A failing board cell used to report only that it failed. The first
+    /// question anyone then asks is "when did it stop, and what was it
+    /// saying?", and answering it meant re-running by hand and hoping the
+    /// flake recurred. This answers it from the run that failed.
+    fn timeline(&self) -> String {
+        let secs = |d: Duration| format!("{:.1}s", d.as_secs_f64());
+        let mut out = format!("\n      timeline: {} line(s)", self.lines);
+        if let (Some(first), Some(last)) = (self.first_at, self.last_at) {
+            out.push_str(&format!(
+                ", first at {}, last at {}",
+                secs(first),
+                secs(last)
+            ));
+        }
+        if self.max_gap > Duration::from_secs(1) {
+            out.push_str(&format!(
+                "\n      longest silence: {} beginning at {}",
+                secs(self.max_gap),
+                secs(self.max_gap_at)
+            ));
+        }
+        if let Some(path) = &self.transcript {
+            out.push_str(&format!("\n      transcript: {}", path.display()));
+        }
+        out
+    }
+}
+
+/// Flash the cell and watch its output until it reports or the deadline passes.
+///
+/// Every line is timestamped and kept, whether it matched anything or not.
+/// That is the difference between "it emitted something for 900 seconds" and
+/// knowing what, and when it stopped.
+fn flash_and_watch(cell: &Path, elf: &Path, name: &str) -> Result<BoardOutcome> {
+    println!("$ espflash flash --monitor   ({name})");
+    let started = Instant::now();
+    let mut child = Command::new("espflash")
+        .args(["flash", "--monitor", "--non-interactive"])
+        .arg(elf)
+        .current_dir(cell)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        return fail(format!("board cell {name}: no output from espflash"));
+    };
+    let stderr = child.stderr.take();
+
+    let errors = Arc::new(Mutex::new(String::new()));
+    if let Some(stderr) = stderr {
+        let errors = Arc::clone(&errors);
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr)
+                .lines()
+                .map_while(std::result::Result::ok)
+            {
+                if let Ok(mut buf) = errors.lock() {
+                    buf.push_str(&line);
+                    buf.push('\n');
+                }
+            }
+        });
+    }
+
+    // Timestamp in the READER, not in the consumer: the channel is fast but
+    // the consumer wakes on a 2-second tick, and a gap measured there would
+    // be the tick rather than the board.
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout)
+            .lines()
+            .map_while(std::result::Result::ok)
+        {
+            if tx.send((started.elapsed(), line)).is_err() {
+                break;
+            }
+        }
+    });
+
+    let hard_stop = started + BOARD_TIMEOUT;
+    let mut last_output = Instant::now();
+    let mut verdict: Option<bool> = None;
+    let mut transcript: Vec<(Duration, String)> = Vec::new();
+    let mut first_at = None;
+    let mut last_at = None;
+    let mut max_gap = Duration::ZERO;
+    let mut max_gap_at = Duration::ZERO;
+
+    while Instant::now() < hard_stop && last_output.elapsed() < BOARD_SILENCE {
+        match rx.recv_timeout(Duration::from_secs(2)) {
+            Ok((at, line)) => {
+                // Any output at all means the cell is alive. The deadline
+                // measures SILENCE, not duration.
+                last_output = Instant::now();
+                if first_at.is_none() {
+                    first_at = Some(at);
+                }
+                if let Some(previous) = last_at {
+                    let gap = at.saturating_sub(previous);
+                    if gap > max_gap {
+                        max_gap = gap;
+                        max_gap_at = previous;
+                    }
+                }
+                last_at = Some(at);
+                transcript.push((at, line.clone()));
+
+                // The cell's own report, passed through: a reader wants the
+                // counters, not just the verdict.
+                if line.starts_with("RESULT:")
+                    || line.contains(" ok    ")
+                    || line.starts_with("SWITCH ")
+                    || line.starts_with("SIGN ")
+                {
+                    println!("  {}", line.trim_end());
+                }
+                if line.contains("RESULT: PASS") {
+                    verdict = Some(true);
+                    break;
+                }
+                if line.contains("RESULT: FAIL") {
+                    verdict = Some(false);
+                    break;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // espflash can exit early -- a port it cannot open, a board
+                // that went away -- and then there is nothing to wait for.
+                if verdict.is_none() && matches!(child.try_wait(), Ok(Some(_))) {
+                    break;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    // The port is not always free the instant the monitor dies.
+    std::thread::sleep(Duration::from_millis(750));
+
+    // Keep the transcript only when it is wanted: on a pass nobody reads it,
+    // and writing one per cell per run would be litter.
+    let path = cell
+        .join("target")
+        .join(format!("kairos-board-{name}.log"));
+    let transcript_path = if verdict == Some(true) {
+        let _ = fs::remove_file(&path);
+        None
+    } else {
+        let body: String = transcript
+            .iter()
+            .map(|(at, line)| format!("[{:>9.3}s] {line}\n", at.as_secs_f64()))
+            .collect();
+        fs::write(&path, body).ok().map(|()| path)
+    };
+
+    let stderr = errors.lock().map(|b| b.clone()).unwrap_or_default();
+    let went_quiet = last_output.elapsed() >= BOARD_SILENCE;
+    Ok(BoardOutcome {
+        verdict,
+        stderr,
+        went_quiet,
+        lines: transcript.len() as u64,
+        first_at,
+        last_at,
+        max_gap,
+        max_gap_at,
+        transcript: transcript_path,
+    })
+}
+
+fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir(dir.join("firmware")) else {
         return out;
@@ -544,15 +933,13 @@ fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String, String)> {
                 .split(|c: char| c.is_whitespace() || c == '"')
                 .find(|word| word.starts_with("qemu-system-"))
             {
-                // `[build] target = "<triple>"` names where the ELF lands,
-                // which the static-allocation check below needs.
-                let triple = text
-                    .lines()
-                    .find(|l| l.trim_start().starts_with("target"))
-                    .and_then(|l| l.split('"').nth(1))
-                    .unwrap_or("")
-                    .to_owned();
-                out.push((cell, program.to_owned(), triple));
+                // The cell's `[build] target` is deliberately NOT read.
+                // It used to be, to find the linked ELF for a
+                // static-allocation check -- and that check was removed
+                // because it could not fail (see the long note at the
+                // caller). Carrying the triple for a consumer that no
+                // longer exists is how a vestige becomes a warning.
+                out.push((cell, program.to_owned()));
             }
         }
     }
@@ -655,6 +1042,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_xtensa = has_flag(args, "--xtensa");
     let with_kani = has_flag(args, "--kani");
     let with_qemu = has_flag(args, "--qemu");
+    let with_board = has_flag(args, "--board");
     let with_soak = has_flag(args, "--soak");
     let only: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let mut failures = Vec::new();
@@ -785,8 +1173,18 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 }
             }
         }
+        if with_board {
+            // A board cell is never started by the ordinary gate: it wants a
+            // part on a serial port. This flag is how the hardware claims in
+            // `docs/LEDGER.md` are re-run, rather than re-read.
+            for (cell, triple) in board_cells(&dir) {
+                if let Err(e) = run_board_cell(&cell, &triple) {
+                    failures.push(format!("{}: {e}", package.name));
+                }
+            }
+        }
         if with_qemu {
-            for (cell, program, triple) in qemu_cells(&dir) {
+            for (cell, program) in qemu_cells(&dir) {
                 let name = cell
                     .file_name()
                     .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
@@ -847,7 +1245,6 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 //
                 // Together those are the guarantee; a symbol scan of the ELF
                 // adds nothing to it.
-
             }
         }
         // A crate that claims to allocate nothing is checked on its
@@ -958,6 +1355,21 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 }
             }
         }
+        // Restore AGAIN, at the very end of the package.
+        //
+        // The earlier call is not enough, and that was a real defect: the
+        // `--board` cells, the `--qemu` cells, the no-alloc rlib builds and
+        // `--soak` all run cargo AFTER it, each with the umbrella's `[patch]`
+        // in scope, and each rewrites the lockfile the first restore had just
+        // put back. `standalone_lockfile`'s own doc promises the working tree
+        // is always left in the state that should be committed; with those
+        // flags it was not, so a `check --board` left a lockfile that the
+        // NEXT `check` reported as an H-07 failure. A gate whose own run
+        // breaks the next one teaches people to ignore it.
+        //
+        // Idempotent: it compares before writing, so the ordinary path pays
+        // nothing for this.
+        restore_standalone_lockfile(&dir, lock_before.as_ref());
     }
     // The umbrella's own tools, on a full run.
     //
@@ -1355,7 +1767,7 @@ const USAGE: &str = "kairos — fleet tool for the Kairos umbrella folder
 
 USAGE
   kairos status [--ci] [--json]
-  kairos check [PACKAGE ...] [--fmt] [--clippy] [--test] [--deny] [--harden] [--xtensa] [--kani] [--qemu]
+  kairos check [PACKAGE ...] [--fmt] [--clippy] [--test] [--deny] [--harden] [--xtensa] [--kani] [--qemu] [--board]
   kairos new NAME [--kind function] [--description TEXT] [--tier critical-path|standard|utility] [--date YYYY-MM-DD] [--dry-run]
   kairos patches [--dry-run]
   kairos harden [--all | --plan FILE [--readme FILE]] [--check] [--link URL] [--architect NAME] [--quiet]
@@ -1382,6 +1794,14 @@ the runner is the test — an `espflash` cell wants a board on a serial port
 and is never started by a gate. A cell that ends in `debug::exit` hands
 cargo the guest's verdict as an exit code, which is what lets an emulator
 gate at all.
+`--board` runs every firmware cell that needs a PART on a serial port: any
+`<package>/firmware/*/` whose runner is `espflash`. Discovered the same way
+the emulator cells are, so the list cannot fall behind the directory. A board
+has no exit code to hand back, so the contract is that a cell prints
+`RESULT: PASS` or `RESULT: FAIL` and this reads it -- and a cell that prints
+NEITHER before the timeout fails, because a hang is exactly how a broken
+context switch presents. This is how the hardware rows in `docs/LEDGER.md`
+are re-run rather than re-read.
 `--kani` compiles each package's proof harnesses (`cargo kani
 --only-codegen`, under WSL on Windows) without verifying them. They are
 `#[cfg(kani)]`, so no other gate compiles them at all and they can rot

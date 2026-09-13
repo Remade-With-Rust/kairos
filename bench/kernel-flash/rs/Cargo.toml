@@ -1,0 +1,30 @@
+# The flash arm of the K3 footprint row. Its own project and its own
+# workspace, like every other cell that builds for a bare-metal target.
+[package]
+name = "kernel-flash-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[lib]
+# A staticlib so there are real sections for the linker to keep or discard.
+crate-type = ["staticlib"]
+
+[dependencies]
+rusty_rtos_core = { path = "../../../rusty_rtos_core/crates/rusty_rtos_core", default-features = false }
+rusty_rtos_kernel-core = { path = "../../../rusty_rtos_kernel/crates/rusty_rtos_kernel-core", default-features = false }
+rusty_rtos_port-core = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port-core", default-features = false }
+rusty_rtos_port-riscv = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port-riscv", default-features = false }
+
+[profile.release]
+# Matches the C arm's -Os. `lto` and one codegen unit are left OFF on
+# purpose: the C arm is compiled per translation unit with
+# -ffunction-sections and garbage-collected at link, and LTO would give the
+# Rust arm a whole-program optimisation the C arm is not getting.
+opt-level = "s"
+lto = false
+codegen-units = 1
+panic = "abort"
+
+[workspace]

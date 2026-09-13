@@ -23,7 +23,7 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 18] = [
+const SCENARIOS: [&str; 19] = [
     "dynamic",
     "PollQ",
     "BlockQ",
@@ -42,7 +42,31 @@ const SCENARIOS: [&str; 18] = [
     "MessageBufferAMP",
     "PollQ-typed",
     "PollQ-async",
+    "death",
 ];
+
+/// The fewest ticks at which a scenario actually does its job.
+///
+/// The default 2,000 is enough for every scenario whose tasks are all
+/// running by the first tick. `death` is not one of them: its creator waits
+/// a whole second before it even counts the tasks, waits another before it
+/// spawns, and the spawned tasks wait 200 ticks more before killing
+/// anything — so at 2,000 ticks the run ends ON the first creation and
+/// deletes NOTHING. It would pass, and the pass would mean nothing.
+///
+/// A floor rather than a fixed value, so `--ticks` can still be raised.
+const MIN_TICKS: [(&str, u64); 1] = [("death", 4_000)];
+
+/// The ticks a scenario must be run for at least.
+fn min_ticks(scenario: &str) -> u64 {
+    let mut floor = 0;
+    for (name, ticks) in MIN_TICKS {
+        if name == scenario {
+            floor = ticks;
+        }
+    }
+    floor
+}
 
 /// Scenarios that are built and do NOT conform, with the reason.
 ///
@@ -79,13 +103,52 @@ fn build_sim(root: &Path) -> Result<()> {
     if !dir.join("Cargo.toml").is_file() {
         return fail(format!("{DEMO} is not checked out; nothing to conform"));
     }
-    crate::run(
+    // Keep the standalone `Cargo.lock`, exactly as `check` does.
+    //
+    // This build runs with the umbrella's `[patch]` table in scope, which
+    // rewrites the lockfile: every sibling loses its `source = "git+..."`
+    // line and a fresh clone can no longer reproduce the build (H-07).
+    // `check` has snapshotted and restored around its cargo calls for a
+    // while; `conform` did not, and the omission was invisible because
+    // `conform` is usually run alone. It surfaced on 2026-09-11 when a
+    // `conform --all` between two `check --board` runs left the demo's
+    // lockfile rewritten, and the SECOND check reported an H-07 failure
+    // caused by the conform in between.
+    let before = lockfile_if_standalone(&dir);
+    let result = crate::run(
         false,
         &dir,
         "cargo",
         &["build", "--release", "--bin", SIM_BIN],
-    )?;
+    );
+    restore_lockfile(&dir, before.as_ref());
+    result?;
     Ok(())
+}
+
+/// The package's `Cargo.lock`, but only when it is the one a standalone
+/// clone resolves — i.e. it still names a sibling by git URL.
+///
+/// Returning `None` for an already-rewritten lockfile is deliberate and
+/// matches `check`: this restores what was there, it does not invent a
+/// correct lockfile. The tooling is self-protecting, not self-healing.
+fn lockfile_if_standalone(dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join("Cargo.lock")).ok()?;
+    text.contains("source = \"git+").then_some(text)
+}
+
+/// Put back the lockfile cargo rewrote, if it rewrote it.
+fn restore_lockfile(dir: &Path, before: Option<&String>) {
+    let Some(before) = before else {
+        return;
+    };
+    let lock = dir.join("Cargo.lock");
+    if std::fs::read_to_string(&lock).is_ok_and(|now| now == *before) {
+        return;
+    }
+    if std::fs::write(&lock, before).is_ok() {
+        println!("  restored the standalone Cargo.lock (the [patch] table had rewritten it)");
+    }
 }
 
 /// Run the Rust sim and return its trace.
@@ -196,6 +259,9 @@ fn conform_one(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<(
             SCENARIOS.join(", ")
         ));
     }
+    // A scenario run for too few ticks is not a weaker gate, it is a
+    // vacuous one: `death` at 2,000 never reaches a single `vTaskDelete`.
+    let ticks = ticks.max(min_ticks(scenario));
     let ours = run_sim(root, scenario, ticks, exits)?;
     let theirs = run_oracle(root, scenario, ticks, exits)?;
     let verdict = ours

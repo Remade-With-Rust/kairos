@@ -136,7 +136,7 @@ and the event groups moved no existing trace by a line.
 | the six that need a *started* kernel | `start_scheduler` is the wall | `task_get_scheduler_state`, `task_get_current_task_handle`, `task_switch_context`, `task_start_scheduler`, `task_increment_tick`, `task_delay`. Every ingredient of the setup is cheap on its own — `Kernel::new` 0.8 s, one task 3.0 s, three tasks 10.2 s, a task and a queue 3.2 s — but `start_scheduler` with **no user task at all** does not finish in 500 s, and what it adds over the cheap cases is the first switch. Every other harness runs on a kernel that has its tasks but has not started, which is why they finish: the call bodies under proof are the same either side of `vTaskStartScheduler`, and what is given up is the block-and-switch tail of a blocking call |
 | the four that pass a symbolic handle into a kernel call | the space is not the cost | `queue_generic_send_stale_handle`, `task_priority_set_stale_handle`, `task_priority_set`, `queue_take_and_give_mutex_recursive`. The obvious economy was tried and refuted: bounding the symbolic handle's index and generation to the handful of values next to the arena — which is where a real disagreement lives, and what the C proofs do with their pointers — changed nothing, all four still timed out, one of them at 700 s. So it is not the size of the space; it is that a call which walks the arena and the lists with a symbolic handle has to be explored for every slot that handle could name |
 | K2's mutants gate | **36 of 42 viable mutants caught (86%) with the corpus as the oracle** | `cargo mutants --in-place --file crates/rusty_rtos_kernel-core/src/kernel.rs --test-package rusty_rtos_demo-core --shard 1/8 --timeout 240 -- --manifest-path ../rusty_rtos_demo/Cargo.toml --release`, run from the kernel repo with the demo's `[patch]` table in scope so the mutated kernel is the one the corpus runs. 44 of the shard's 47 mutants completed before the tool wedged: 36 caught, 6 missed, 2 unviable. The mechanism was checked by hand first — a mutation planted in `queue_send_list` fails `every_scenario_reproduces_the_c_kernels_trace_and_counters` in 79 s — because a mutants run that silently tests the wrong binary reports the same shape as one that tests nothing |
-| the six that survived are one finding and one equivalent mutant | measured 2026-09-09 | five of the six are the same line: `if self.running && C::USE_PREEMPTION && self.current_priority() < priority` in `prvAddNewTaskToReadyList`, the yield a task creation owes when the new task outranks the running one. **No scenario in the corpus creates a task after the scheduler has started** — every one of the fifteen creates all of its tasks in its `start`, and `Runner::start_common` creates `CHECK` and then starts the scheduler — so the arm is never reached and any mutation of it survives. The corpus's own answer to that is `death.c`, the standard demo whose whole subject is creating and deleting tasks at runtime; it is not on K2's list of eighteen, so this is a K3 row. The sixth, `>` to `>=` in `taskRECORD_READY_PRIORITY`, assigns the same value either way and is an equivalent mutant, not a gap |
+| the six that survived are one finding and one equivalent mutant | measured 2026-09-09 | five of the six are the same line: `if self.running && C::USE_PREEMPTION && self.current_priority() < priority` in `prvAddNewTaskToReadyList`, the yield a task creation owes when the new task outranks the running one. **No scenario in the corpus creates a task after the scheduler has started** — every one of the fifteen creates all of its tasks in its `start`, and `Runner::start_common` creates `CHECK` and then starts the scheduler — so the arm is never reached and any mutation of it survives. The corpus's own answer to that was taken to be `death.c`, the standard demo whose whole subject is creating and deleting tasks at runtime. **`death.c` landed on 2026-09-10 and this row is only partly discharged: it kills two of the six mutations of that line and four survive**, because `vCreateTasks` creates its tasks at its OWN priority, so the arm is reached but never true. Closing this needs a scenario that creates a task that OUTRANKS the running one — see the K5a section. Reachable is not killed. The sixth, `>` to `>=` in `taskRECORD_READY_PRIORITY`, assigns the same value either way and is an equivalent mutant, not a gap |
 | what the kernel's *own* test suite pins | **13 of 342 (4%)** | the same file, mutated the same way, judged by `rusty_rtos_kernel`'s own `cargo test`: 372 mutants in 4 minutes, 13 caught, 328 missed, 30 unviable, 1 timeout. That is not a failure of the suite — `tests/no_panic.rs` was built to prove no call panics, and it proves exactly that and nothing about behaviour. It is the number that says why the corpus has to be the oracle, and why the two repositories being separate cargo workspaces is worth the trouble it costs to bridge |
 
 **`IntQueue` is not in this corpus and will not be.** Upstream's own Posix
@@ -1446,6 +1446,706 @@ which is exactly what a stale binary looks like, and exactly what
 `codec-measurement` §10 says to check for. `run.sh` now fails loudly if any
 source is newer than the binary it is about to measure.
 
+## K5a — task deletion, and the three costs no scenario could see (2026-09-10)
+
+`vTaskDelete` was declared in the trace enum and emitted **zero times**.
+`SchedulerImplementation::schedule_task_deletion` needs it, `death.c` needs
+it, and it was expected to close a measured mutant-coverage gap — one
+feature, three payoffs, which is why it led K5a. **The third payoff is only
+a third delivered, and the measurement below says so.**
+
+The gate is `death.c` remade as a state machine: **4,370 lines byte-identical
+to the C kernel at 4,000 ticks**, counters included, and byte-identical again
+on Cortex-M3 and RV32 under QEMU. It is the nineteenth scenario in `conform`
+and the eighteenth pinned.
+
+| fact | value | method |
+|---|---|---|
+| the gate | `kairos conform death` | 4,370 lines, `ticks=4000 yields=55 exits=3890 lines=4369`, identical on both arms |
+| offline pin | digest `0xec10_62cf_1c36_07ea`, 129,014 bytes | FNV-1a/64 **of the C kernel's own trace**. The method was validated by recomputing `dynamic`'s existing pin from its oracle file first and matching it to the digit, then applied to `death` |
+| two more architectures | Cortex-M3 and RV32, same digest and byte count | `kairos check rusty_rtos_demo --qemu`, `no_std`, no alloc, no per-task stack |
+| poison-proving | 8 of 10 deliberate defects caught | below |
+| one hour of simulated time | `death` survives: `ticks=3600057 yields=57580 exits=3533911` in 0.3 s | `kairos check rusty_rtos_demo --soak`, 18/18. ~1,800 create/kill/self-kill cycles, which is also the evidence that the arena RECLAIMS slots: a deletion that leaked one would exhaust `MAX_TASKS` within seconds |
+
+### Why `death` and not a unit test
+
+`vTaskDelete` has two paths that are not variations on each other. Deleting
+another task frees its TCB inside the call, after the critical section;
+deleting **yourself** cannot, because the caller is still running out of that
+TCB, so the C parks it on `xTasksWaitingTermination` and the idle task frees
+it in `prvCheckTasksWaitingTermination`. `vSuicidalTask` takes both paths
+back to back. A kernel that got the deferred path wrong passes the other
+eighteen scenarios, because **none of them deletes anything**.
+
+### Three costs the whole corpus was blind to
+
+The sim port counts outermost exits **only once the scheduler is running**
+(`exits_are_not_counted_before_the_scheduler_runs`), and every scenario
+before `death` creates all of its tasks before `vTaskStartScheduler`. So
+three real costs had never been charged, and could not have been:
+
+| cost | exits | where the C spends it |
+|---|---|---|
+| `xTaskCreate`'s two allocations | 2 | `pvPortMallocStack` then `pvPortMalloc`, each `vTaskSuspendAll`/`xTaskResumeAll` on heap_3 |
+| `pxPortInitialiseStack` | 1 | the Posix port wraps `pthread_create` in `vPortEnterCritical`/`vPortExitCritical`. A **port** fact, not a kernel one — hence its own `Config::PORT_STACK_INIT_CRITICAL`, default `false`, because a silicon port lays out a register frame and spends nothing |
+| `prvDeleteTCB`'s two frees | 2 | `vPortFreeStack` then `vPortFree`, **outside** the critical section |
+
+A delete therefore costs one exit for its own section plus two for the
+frees, and the trace shows exactly that: `TASK_DELETE SUICID1 #2136` then
+`TASK_DELETE SUICID2 #2139`, on both arms.
+
+### Two findings that only a mid-call preemption could produce
+
+**The reap cannot happen at the switch.** The first design reaped the
+self-deleted task at the top of `vTaskSwitchContext`. The C's own trace
+refutes it: it prints `TASK_SWITCHED_OUT SUICID2` *after* SUICID2 deleted
+itself, because the TCB is still alive until idle runs. Reaping at the
+switch would have read the name out of freed storage and emitted an empty
+one. Found by reading the C trace, not by the corpus — no scenario could
+have caught it.
+
+**`xTaskCreate` can be preempted between its allocations and its trace
+event.** A tick landing on any of those three exits stops the C creator dead:
+`prvAddNewTaskToReadyList` has not run, so the new task is on no ready list
+and `traceTASK_CREATE` has not fired. Our create completed in one
+uninterruptible Rust call and put both events on the wrong side of the
+switch. The fix reuses the kernel's existing `OwedTrace` mechanism — the
+line an abandoned frame had not reached yet — with one new variant that
+carries a ready-list insertion rather than only a trace line.
+
+**A reused task index inherits the dead task's debt.** Our arena hands back
+the same index; the per-index bookkeeping (owed exits, owed yield, owed
+trace) is keyed on the index, not the TCB. A task deleted while it still
+owed the tail of a call bequeathed that debt to its successor, which then
+paid an exit it never incurred. This surfaced 1,100 lines *after* the first
+create/kill/self-kill cycle had matched perfectly. The fix is one line —
+mark the index unstarted — because `hand_over` already empties all three on
+a first switch-in. Clearing them here as well **also worked and was worse**:
+two places that must agree, and a gate that cannot catch either being
+dropped because the other still covers it. That redundancy was found by the
+poison run, not by review.
+
+### Poison-proving: 8 of 10
+
+Every gate must be made to fail on purpose. Caught: the delete's two free
+exits; the idle reap disabled; the self-delete not deferred; the index not
+marked unstarted; reaping at the switch; the port's stack-init exit; the
+create tail not deferred; only one of the two create allocations charged.
+
+**Not caught, with reasons rather than excuses:**
+
+- **`prvResetNextTaskUnblockTime` after a delete.** Provably unobservable,
+  not merely uncovered: removing a task from the delayed list can only make
+  the true next-unblock time *later*, so a stale value is always *earlier*,
+  and an early value costs `xTaskIncrementTick` a scan that finds nothing
+  and self-heals. No trace line can move. No scenario can cover this.
+- **Removing the deleted task's event-list item.** `death` deletes a task
+  sitting on the *delayed* list, never on an event list, so that branch is
+  never reached. This one is a real coverage gap and closing it needs a
+  scenario that deletes a task blocked on a queue or semaphore.
+
+### The mutant gap is NOT closed, and `death.c` cannot close it
+
+K2's mutants row says five of its six survivors are one line —
+`if self.running && C::USE_PREEMPTION && self.current_priority() < priority`
+in `prvAddNewTaskToReadyList` — and names `death.c` as the corpus's answer,
+because no scenario then created a task after the scheduler had started.
+`death` now does. So the claim was testable, and it was tested rather than
+repeated: the line was mutated six ways by hand, the way `cargo mutants`
+would, and each run gated on `kairos conform death`.
+
+| mutation | `death` |
+|---|---|
+| condition → `true` | **killed** |
+| `<` → `<=` | **killed** |
+| condition → `false` | survives |
+| body removed (no yield) | survives |
+| `<` → `>` | survives |
+| `<` → `!=` | survives |
+
+**Two of six.** The reason is precise and was predictable from the
+scenario's own source: `vCreateTasks` creates both suicidal tasks at
+`uxTaskPriorityGet( NULL )` — *its own* priority. The new task therefore
+never outranks the running one, so the guarded `taskYIELD_IF_USING_
+_PREEMPTION` is reached and evaluated but is never TRUE. Mutations that
+make it fire spuriously are caught instantly; mutations that suppress a
+yield which never happens are invisible.
+
+Reachable is not the same as killed, and "the corpus creates tasks at
+runtime now" is not the same as "the arm is exercised". **What actually
+closes this gap is a scenario that creates a HIGHER-priority task while the
+scheduler is running**, which `death.c` never does and no scenario in the
+corpus does. K2's row should be read as still open, with `death` having
+narrowed it from six to four rather than closed it.
+
+### An inconclusive experiment, recorded so it is not re-run
+
+The first poison — charging `create_task` two extra exits — left the corpus
+green, which looked like a hole in the gate. It was not: the build was
+fresh (a deliberate `panic!` in the same function diverged at line 1) and
+the scenario was `dynamic`, whose tasks are all created **before** the
+scheduler starts, where the port counts no exits at all. The poison landed
+in an uncounted region. A poison that cannot fire is not evidence about the
+gate.
+
+## K5a — the corpus on ESP32-S3 silicon, and a plan row corrected (2026-09-10)
+
+**The corpus is byte-identical to C FreeRTOS on a PART, not an emulator.**
+`rusty_rtos_demo/firmware/xiao-s3-corpus`, XIAO ESP32-S3 (esp32s3 rev v0.2,
+8 MB flash): all **18 scenarios**, every counter, the FNV-1a/64 digest and
+the byte count matching the host's pins — which are themselves diffed
+against the C kernel's traces.
+
+| fact | value | method |
+|---|---|---|
+| the cell | `RESULT: PASS -- 18 scenarios byte-identical to the C kernel on ESP32-S3 SILICON` | `cargo +esp run --release`, flashed over `espflash`, captured from reset |
+| app size | 172,704 bytes | `espflash` |
+| poison-proven | `dynamic`'s `exits` 21346 → 21347, rebuilt and reflashed, reports `FAIL ... exits 21346 want 21347` | the same one-exit poison the two QEMU cells use |
+| architectures now | host, ARMv7-M, RV32, **Xtensa LX7** — the last on silicon | four |
+
+### The finding: Xtensa needed no port at all
+
+The K5a plan row assumed the first Xtensa deliverable had to be a context
+switch. **It does not, and the corpus proves it by running without one.** A
+scenario is a state machine driven by `Runner`, one `step` per C statement
+with a `pc`, so a task keeps its locals in the TCB and owns no stack;
+`rusty_rtos_demo-core` is `no_std`, no `alloc`, and builds for
+`xtensa-esp32s3-none-elf` unchanged. A context switch is what you need to
+run tasks that own stacks. It is not what you need to prove this kernel
+schedules identically to C FreeRTOS on this part.
+
+This is the third time the stackless K2 design has paid for itself on a new
+architecture, and the first time it has done so on hardware.
+
+### A false alarm of my own, and what it cost to catch
+
+Working from this box, `rusty_esp_mid/firmware/` is empty, no `rusty_esp_*`
+firmware cell has a single file, and I recorded that K5a's named target —
+`rusty_esp_mid/firmware/xiao-s3-keys` — "does not exist", along with the
+P-256 baseline the plan says it measured.
+
+**That was wrong, and wrong in exactly the way this ledger keeps warning
+about: I checked the local box and concluded about the world.** The `.git`
+directories under `/f/coding/janus/*` are EMPTY — the tree is a scaffold,
+not a checkout. Asking the actual repository settles it in one call:
+
+```
+$ gh api repos/Remade-With-Rust/rusty_esp_mid/contents/firmware/xiao-s3-keys
+.cargo  Cargo.lock  Cargo.toml  rust-toolchain.toml  src
+```
+
+and its own ledger carries the baseline, measured 2026-09-06:
+
+> *M1, the other half: what a P-256 signature costs an ESP32-S3.* A
+> signature is **95 ms** and a verification is **151 ms** at full clock.
+> Method line: `board=xiao-esp32s3-sense opt-level=3 lto=fat
+> metric=in-process-us`.
+
+So **K5a's measurement clause is NOT blocked**: the firmware exists and the
+baseline is real and published. What is missing is only a local checkout.
+
+The transferable rule is the one the campaign already had and I did not
+apply to myself: *an absence observed in one place is not an absence.* The
+check that would have prevented it is the same one that proved `dynamic`'s
+digest method before trusting it on `death` — confirm the instrument against
+something whose answer you already know. An empty directory tree is not an
+instrument.
+
+### The pin drift, now settled with evidence
+
+The plan flagged "esp-hal 1.2.0 vs 1.2.1" as a thing to settle first. It is
+real and it is exactly where the plan said:
+
+| | esp-hal |
+|---|---|
+| `rusty_esp_mid/firmware/xiao-s3-keys` | `=1.2.0` |
+| every Kairos S3 cell, including `xiao-s3-corpus` | `=1.2.1` |
+
+Both also pin `esp-bootloader-esp-idf =0.6.0`, `esp-println =0.18.0` and
+`esp-backtrace =0.20.0` identically, so the drift is one crate wide. Joining
+the two in one firmware means one of them moves, and §2.7's rule is that one
+seam crate owns that pin rather than two.
+
+## K5a — what the kernel costs a real Janus workload (2026-09-11)
+
+**One full scheduling round costs 8,313 ns — 1,995 cycles at 240 MHz — which
+is 88 parts per million of a P-256 signature.** That is K5a's measurement
+clause, answered on the XIAO ESP32-S3.
+
+`rusty_rtos_kernel/firmware/xiao-s3-signing`. The workload is not ours:
+`p256 = "0.13"` (RustCrypto), the same crate and major version
+`rusty_esp_mid-core` signs with, over the same fixed 32-byte prehash.
+
+| fact | value | method |
+|---|---|---|
+| a scheduling round | `per_round_ns=8313 per_round_cycles=1995` | a queue send, a queue receive and two context switches, timed on their own over 20,000 rounds |
+| switches actually taken | `switches=40000 per_round=2` | counted, not assumed |
+| as a share of one signature | **88 ppm** (8,313 ns of 94,349,000 ns) | a small measured number over a large measured one |
+| our P-256 cost on this part | sign 94.3 ms, verify 149.4 ms (minima) | 100 of each, min and median |
+| the Janus baseline it echoes | sign 95 ms, verify 151 ms | `rusty_esp_mid` M1, 2026-09-06 — **cross-binary** (they pin esp-hal `=1.2.0`, we `=1.2.1`), so a reference and never the result |
+| work parity | `bare=100s/100v/100ok scheduled=100s/100v/100ok` | printed every run |
+
+### The headline is a direct measurement because the obvious one does not work
+
+The natural experiment — run the workload with the kernel and without, and
+subtract — **failed, and failed loudly enough to be useful**: the scheduled
+arm came out FASTER than the bare one. Two ~24.5-second batches cannot
+resolve a few microseconds. This is `codec-measurement` §5's "never take a
+differential of two same-sized numbers", met in the wild.
+
+So the kernel is timed on its own — the identical send/yield/receive/yield
+sequence, with the signature removed. The bare-vs-scheduled arms are still
+run, ABBA over four rounds, but as the **work-parity** check rather than the
+result, and the batch delta is printed with an explicit note that it is not
+the overhead figure.
+
+### Three guards, two of which fired
+
+- **Work parity caught a 75x phantom.** The first run had the scheduled arm
+  finishing 75x faster — because it had completed **zero** operations.
+  `TIMER_TASK_PRIORITY` was 3, above the workers at 2, and this firmware
+  steps only the workers' bodies, so the daemon never blocked and starved
+  them. Without the work count that would have been a spectacular and
+  entirely false result.
+- **Asymmetric timed regions.** The bare arm signed once *inside* its batch
+  window and the scheduled arm did not: 101 signatures timed against 100,
+  ~94 ms, enough on its own to make the arm doing MORE work look faster.
+- **Switch counting.** A yield returning to the same task is cheaper than a
+  switch, so a loop that never changed task would report a small number and
+  look fine. Two switches per round, counted.
+
+### Clock resolution, stated
+
+`esp_hal::time::Instant` resolves to 1 µs; a scheduling round is far below
+that. Timing rounds individually would print zeroes and call it proof, so
+20,000 rounds are timed as one 166 ms batch — five orders of magnitude above
+the quantum — and divided. The method line prints the resolution.
+
+### What this does and does not settle
+
+It settles the K5a question *"does the kernel cost anything against the P-256
+baseline?"* with a number: 88 ppm, on the same part, same crate, same clock.
+
+It is **not** `xiao-s3-keys` itself running on a Kairos kernel. That joining
+act lives in a Janus repository and is the owner's; this is the same workload
+measured on our side of the fence.
+
+## K5b — the Xtensa context switch, and why it is needed at all (2026-09-11)
+
+**`rusty_rtos_port-xtensa` switches contexts on an ESP32-S3**: 100 and 99
+resumptions, zero faults, yielding from three call frames deep every time —
+`rusty_rtos_port/firmware/xiao-s3-switch`.
+
+### First, the finding that makes it necessary
+
+`esp-radio-rtos-driver` **0.4.1** (the plan said 0.4.1 and the box had a
+stale 0.3.0; `cargo search` settles it — 0.4.1 is current) declares five
+implementation traits, not four. `SchedulerImplementation::task_create` is
+the one that decides the architecture:
+
+```text
+/// This function is used to create threads.
+/// It should allocate the stack.
+fn task_create(&self, name: &str, task: extern "C" fn(*mut c_void),
+               param: *mut c_void, priority: u32, core_id: Option<u32>,
+               task_stack_size: usize) -> ThreadPtr;
+```
+
+A C function pointer, a stack size, `schedule_task_deletion` documented as
+"the thread stack can be free'ed", and blocking semaphore waits the radio
+blob performs from inside its own call frames. **A stackless kernel cannot
+satisfy this interface**, and no amount of finishing the rest of the traits
+changes that.
+
+So the corpus and the radio joint want opposite things, and both answers are
+now measured rather than assumed:
+
+| | needs a context switch? |
+|---|---|
+| the conformance corpus on this chip | **no** — `xiao-s3-corpus`, 18/18 byte-identical to C, no port at all |
+| the `esp-radio-rtos-driver` joint | **yes** — the interface hands us stacks and C function pointers |
+
+### The design, and the one that failed first
+
+The switch runs **inside a software interrupt**. `xtensa-lx-rt`'s interrupt
+entry has by then spilled every register window and written the whole machine
+into a `Context`, so the switch is two struct copies: trap frame out to the
+outgoing slot, incoming slot in over the trap frame. The exception exit
+restores it.
+
+The first design did it the obvious way — from task context, spilling the
+windows by hand with `xtensa-lx-rt`'s own `SPILL_REGISTERS` sequence. **It
+started a task, ran it, printed from it, and hung** the moment that task
+nested calls deeply enough to need the register file back. It is recorded
+because a shallow probe passed it, and because the fix was not "try harder at
+the spill" but "do it where the context is already saved" — which is what
+FreeRTOS's Xtensa port and Espressif's `esp-rtos` both do.
+
+That is why the test yields from **three frames deep**. A switch that
+mishandles the window file corrupts the *outer* frames specifically, so a
+test that only yielded from the task body would have certified the broken
+version.
+
+### Poison-proving, including one that did not fire
+
+| poison | result |
+|---|---|
+| the outgoing context is not saved (the analogue of deleting `stmdb r0!, {r4-r11}` from the ARM port) | **hangs, never reaches a verdict** — it cannot return to `main`, whose state was never written down |
+| `A12` clobbered in the resumed context | **not detected; still passes** |
+
+The second is recorded because it is a fact about the *test*, not a defect:
+the witnesses the compiler generated are stack-resident, so this cell proves
+**stack and frame integrity across a switch**, not that every individual
+register is preserved. A hundred laps of nested calls is strong evidence the
+restore is complete; it is not the same as asserting it.
+
+### Versions, settled while doing this
+
+`xtensa-lx-rt` is a `links` crate, so its version must match whatever
+`esp-hal` resolves — `=1.2.1` pulls `0.23`, and pinning `0.20` is a hard
+build error rather than a duplicate. The port pins `0.23` for that reason.
+
+## The board gate: `kairos check --board` (2026-09-11)
+
+Four hardware cells landed for K5, and `kairos check --qemu` skips every one
+of them — it discovers cells whose runner is a `qemu-system-*`, and theirs is
+`espflash`. This repository's own doctrine, printed in the tool's help, is
+that **"a test nothing runs is a test that has stopped existing"**. Four
+ungated cells is that failure, freshly created.
+
+`--board` closes it. It discovers cells the same way `--qemu` does — by
+reading the runner out of the cell's own `.cargo/config.toml`, so the list
+cannot fall behind the directory — builds each with the toolchain the cell
+pins, flashes it, and reads its verdict.
+
+```
+$ kairos check rusty_rtos_kernel rusty_rtos_port rusty_rtos_demo --board
+$ espflash flash --monitor   (xiao-s3-signing)
+  RESULT: PASS -- kernel overhead measured, work parity held,
+$ espflash flash --monitor   (xiao-s3-switch)
+  RESULT: PASS -- 100 and 99 resumptions, every witness
+$ espflash flash --monitor   (xiao-s3-corpus)
+  RESULT: PASS -- 18 scenarios byte-identical to the C kernel
+```
+
+**The verdict is a printed line, not an exit code, and silence is failure.**
+An emulator cell ends in `debug::exit` and hands cargo the guest's verdict; a
+board has no such channel, so the contract is that a cell prints `RESULT:
+PASS` or `RESULT: FAIL`. A cell that prints neither within five minutes
+fails — which is not a technicality, because **a hang is exactly how a broken
+context switch presents**, and the first Xtensa port hung precisely that way.
+A gate treating silence as success would have certified it.
+
+`xiao-s3-signing` gained a verdict of its own to be gateable: work parity
+held, two real switches per round, and the kernel's share under 1000 ppm — a
+regression bound, generous against the 88 ppm measured, because the bound is
+not the result.
+
+### The trap that cost the first run
+
+The cell build removes `RUSTUP_TOOLCHAIN` from the child's environment rather
+than setting it. When `kairos` is itself run through `cargo run`, cargo
+exports the toolchain that built *it*; the child cargo obeys the environment
+over the cell's `rust-toolchain.toml`, and the Xtensa cell gets built with an
+x86 compiler. The symptom is a wall of `'esp32s3' is not a recognized
+processor for this target`, which reads like a broken toolchain install and
+is nothing of the kind.
+
+## K5b — the radio seam: it type-checks, and it cannot link yet (2026-09-11)
+
+All five `esp-radio-rtos-driver` 0.4.1 traits are implemented against the
+Kairos kernel and build for `xtensa-esp32s3-none-elf`:
+`rusty_rtos_port/firmware/xiao-s3-radio`. **The open question — can a kernel
+of this shape satisfy the interface at all — is answered yes.**
+
+### What the compile proves, and what `nm` says it does not
+
+`nm` on the built ELF finds **zero `esp_rtos_*` symbols out of 2,295**. LTO
+drops the `#[no_mangle]` registration shims because nothing references them,
+and nothing references them because `esp-radio` is not linked.
+
+So the compile is a **type-check**, not a link proof, and this row says so
+because the ELF does. Checking instead of assuming is the only reason the
+distinction is here at all — the natural thing to write after a green build
+would have been "the seam is wired", and it is not.
+
+### The blocker is a companion set, not a design
+
+| | esp-hal | esp-radio-rtos-driver |
+|---|---|---|
+| `esp-radio 1.0.0-beta.0` — the only published radio | `~1.1.0` | **0.3.0** |
+| every Kairos S3 cell | `=1.2.1` | — |
+| this adapter, and the plan | — | **0.4.1** |
+
+`xtensa-lx-rt` is a `links` crate; `esp-radio` wants `^0.22` and
+`esp-hal 1.2.1` wants `^0.23`, so cargo refuses the pair outright.
+
+**This corrects an earlier row.** The 0.4.1-versus-0.3.0 question was
+"settled" on 2026-09-11 by observing that 0.4.1 is current on crates.io.
+True of the *driver*, misleading about the *stack*: the published radio
+consumes 0.3.0, so the 0.3.0 on this box was never stale — it was the
+matching one. Two versions of the same name are not a newer and an older
+until you check what consumes them.
+
+### The design, for the record
+
+| trait | how |
+|---|---|
+| `SchedulerImplementation` | `Kernel` calls; `task_create` allocates a stack and builds a `Context`; the switch is the port's |
+| `SemaphoreImplementation` | the kernel's counting semaphores and mutexes |
+| `QueueImplementation` | a heap ring guarded by two counting semaphores |
+| `WaitQueueImplementation` | a semaphore plus a waiter count, so `notify` broadcasts |
+| `TimerImplementation` | the cell's own table, serviced on `delay` and a microsecond clock |
+
+Two findings worth keeping:
+
+**A stacked task CAN block on this kernel.** `Wait::Blocked` is documented as
+*"leave the program counter where it is and make the same call again when the
+task next runs"* — a **retry** protocol, which serves both shapes: a corpus
+task returns to its runner, a radio task loops and yields and the switch
+resumes it inside the same call. The join that looked impossible is a loop.
+
+**Queues could not be mapped.** The driver's `create(capacity, item_size)`
+returns a pointer and takes runtime sizes; the kernel's queues are
+`[u64; SLOTS]` behind arena handles fixed at compile time. So the payload is
+the adapter's, and the kernel supplies only the blocking. That is what forced
+the heap, which the owner chose on 2026-09-11.
+
+**This is the one Kairos cell that allocates on purpose.** The gate's
+"allocates nothing (0 allocator symbols)" covers the kernel and the corpus
+and does not cover this adapter.
+
+### Also open
+
+`RadioConfig::TICK_RATE_HZ` is 1000, so sub-millisecond sleeps round **up** —
+early is a wrong answer, late is a slow one. Whether the radio tolerates it
+is a hardware question. And the XIAO was off the serial bus, so nothing here
+has been flashed.
+
+## K5b — the seam runs on silicon, and finds a KERNEL assumption (2026-09-11)
+
+`rusty_rtos_port/firmware/xiao-s3-radio` now boots the Kairos kernel on a
+XIAO ESP32-S3 with a real port, creates tasks **through the driver's own
+`task_create`** — C function pointer, heap stack — and switches into them.
+
+**It reports FAIL, and the failure is the finding.**
+
+| | |
+|---|---|
+| heap | `heap_usable=65536`, `rusty_rtos_alloc` |
+| tasks created through the trait | two, at real heap addresses |
+| `workers_entered` | **1** — a worker's first instruction DID execute on its heap stack |
+| switches | `entries=5 swaps=2` — real context switches happened |
+| laps | **0 and 0** — no worker completed a single hand-off |
+
+So the port is sound (the `xiao-s3-switch` cell proves it separately, 100/99
+resumptions) and the seam type-checks. What does not work is the join.
+
+### The kernel commits the switch itself, and a stacked port cannot allow that
+
+`Kernel::port_yield` is:
+
+```rust
+pub(crate) fn port_yield(&mut self) {
+    self.enter_critical();
+    self.port.count_yield();
+    self.switch_context();   // <-- moves `self.current` HERE
+    self.exit_critical();
+}
+```
+
+On a **stackless** kernel that is correct and complete: changing which task
+the runner steps next *is* the switch, because no task owns a stack. Every
+architecture the corpus runs on relies on it.
+
+On a **stacked** port it is a decision committed before it can be enacted.
+`XtensaPort::yield_now` can only raise the switching interrupt; the CPU
+swaps later, in the handler. Between the two, task code keeps running while
+`Kernel::current` already names somebody else — so a blocking call made in
+that window blocks **the wrong task**.
+
+The instruments caught it saying exactly that:
+
+```
+RADIO after_create  current=3  ready=[1,1,1,0,2,0,0,0]   <- main is index 0
+RADIO main_take0=false current=1 ready=[0,0,0,0,0,0,0,0] <- every list empty
+```
+
+`main` is index 0 and is the code on the CPU; the kernel's current is 3.
+`main`'s `take` therefore parked task 3. Repeat, and every task is blocked
+and no ready list has anything in it — a state the C kernel asserts against
+(`configASSERT( uxTopPriority )`), reached here because the two notions of
+"current" drifted.
+
+### What this is NOT
+
+Not the port: a worker entered and ran on its heap stack, and the switch cell
+passes 100/99 from three frames deep. Not the adapter's trait
+implementations: they compile and the semaphores are valid
+(`a_ok=true b_ok=true done_ok=true`). Not the allocator.
+
+### What it needs
+
+A kernel-level decision, not a cell fix. For a stacked port the commit has
+to happen **inside the switching exception** — the decision and the
+enactment together, the way `mps2-an385-qemu-kernel` has `PendSV` call
+`Kernel::switch_context` and read the slot in the same handler. Either
+`port_yield` stops calling `switch_context` when the port is a stacked one,
+or the port gets a way to say "defer the commit to me".
+
+Until then the cell stands, reports FAIL, and says why. **The three other
+board cells are unaffected and still pass** — corpus 18/18, signing, and the
+switch — re-run on 2026-09-11 after the board came back.
+
+## The commit point: a kernel/port contract fixed, and measured on both (2026-09-11)
+
+**`Port::COMMITS_SWITCH` splits deciding a switch from committing it.** The
+radio seam now runs on silicon — 50 and 50 hand-offs through the driver's own
+traits, zero faults — and the ARM witness reports the window it was built to
+find is closed.
+
+### The defect
+
+`Kernel::port_yield` called `switch_context`, which moves `current`. On a
+**stackless** kernel that IS the switch: no task owns a stack, so changing
+which task the runner steps next is the whole of it, and every architecture
+the corpus runs on depends on it.
+
+A **stacked** port cannot switch there. `yield_now` can only raise its
+switching exception; the registers move later. Between the two, code runs as
+a task the kernel has already moved on from — and a blocking call in that gap
+parks the wrong task.
+
+### Both ports were affected, and the numbers say so
+
+| | before | after |
+|---|---|---|
+| **Xtensa** (`xiao-s3-radio`, silicon) | `laps 0/0`, every ready list empty | **50 and 50**, faults 0, 102 swaps |
+| **ARMv7-M** (`mps2-an385-qemu-preempt`) | window opened **199** of 200 rounds, consumer 199/200 | window opened **0**, consumer **200/200** |
+
+ARM was the surprise. The hypothesis was that ARM shared the defect latently;
+the witness showed the window opening on essentially every round, with the
+harmful sub-case — blocking inside it — landing once in 200 and being rescued
+by the call's own timeout. **Rare is not safe**, and with the const set the
+count is 0 by construction and the consumer stops losing its last token.
+
+### The shape, and why it is that shape
+
+A `const` on `Port`, not a runtime flag:
+
+* **The corpus is the wedge**, so the stackless path had to be the code that
+  runs today, not a re-derivation of it. A const monomorphises — the branch
+  is not compiled — and **19/19 stayed byte-identical** through every step,
+  which is the proof rather than the hope.
+* **The port must not keep its own view of "current".** The first Xtensa
+  attempt reconciled in the handler with a `RUNNING` static: a scheduling
+  primitive re-implemented in a second place, which ADR 0003 is about. It is
+  deleted. The exception calls `switch_context` once — decide and enact
+  together.
+
+### Law 3 arrived first, and paid immediately
+
+`switch_context` had **four** silent `return`s. Now `Kernel::stalls()` counts
+them and `first_stall()` names the first, and `tests/conformance.rs` asserts
+zero across all 18 scenarios — an invariant that cannot move a trace byte,
+since a stall is a path the corpus never takes. Poison-proven: a stall
+recorded on every switch fails the test with `4702 time(s), first:
+NoReadyTask`.
+
+It was written first because the state it reports — every ready list empty,
+kernel quietly carrying on — is what cost a multi-flash hardware hunt the day
+before.
+
+### Two ordering bugs the fix exposed
+
+**No tick.** The radio cell had no timer, so `increment_tick` never ran and no
+timeout could expire. Invisible until the fix, because blocking had not
+previously worked at all; the first run afterwards hung. A 1 kHz systimer now
+drives it.
+
+**The slot must exist before the task can be scheduled.** `task_create`
+registered its context *after* `create_task` returned — and `create_task` can
+preempt, so the exception fired in between, found no context for the task the
+scheduler had just chosen, declined, and reinstated the very drift the fix
+removes. Creation and registration now happen under one interrupt mask.
+
+### Poison-proof
+
+Setting `COMMITS_SWITCH` back to `false` on Xtensa reproduces the original
+failure exactly: `current=3`, `laps 0/0`, FAIL. The const is load-bearing and
+the pass is its consequence.
+
+### Gates after the change
+
+`conform --all` 19/19 byte-identical · host tests 3/3 · three ARM QEMU cells
+PASS · four board cells PASS (corpus 18/18, signing, switch, radio).
+
+## The RISC-V port, and QEMU CAN supply a work counter (2026-09-11)
+
+**`rusty_rtos_port-riscv` exists and switches**: 100 and 99 resumptions,
+zero faults, from three call frames deep — `riscv32-qemu-switch`. That is
+the third port, after Cortex-M and Xtensa, and it leaves the family with
+every architecture the plan names except an untested C6.
+
+### What RISC-V actually costs, and it is not what the plan assumed
+
+The plan calls Xtensa the long pole because of register windows. RISC-V has
+none, so by that measure it should be trivial. It is not trivial for a
+different reason:
+
+| | who saves the callee-saved registers |
+|---|---|
+| Cortex-M | hardware stacks eight; the port adds `r4-r11` |
+| Xtensa | the exception entry spills the whole window file |
+| **RISC-V** | **nobody — a trap saves NOTHING, so the port saves all fourteen** |
+
+And a calling-convention trap that cost one hang: a fresh task must resume
+through a **trampoline**, because the switch restores callee-saved registers
+while a `extern "C"` entry reads its arguments from caller-saved `a0`/`a1`.
+
+### The finding: `-icount` turns QEMU into a work counter
+
+The mission plan says cycle rows come from silicon because *"QEMU can supply
+no cycle, latency or work counter"* — measured six ways on the Cortex-M cell,
+where DWT is unimplemented. **That reasoning is correct for ARM and does not
+carry to RV32.** `mcycle` and `minstret` are architectural CSRs.
+
+Measured rather than assumed, three consecutive runs each:
+
+| | `minstret_total` |
+|---|---|
+| plain QEMU | 1,932,185 / 2,107,644 / 2,320,843 — a **20% spread** |
+| **`-icount shift=0`** | 199,102 / 199,102 / 199,102 — **identical to the instruction** |
+
+Plain, QEMU tracks host time and the counter is a number rather than a
+measurement. Under `-icount` it is exactly reproducible, so the cell's runner
+sets it and the cell is deterministic by construction.
+
+**Stated narrowly**, because this is the kind of claim that gets over-quoted:
+an emulator's cycle count is still not a chip's, and no absolute timing row
+should come from here. What a deterministic retired-instruction count IS good
+for is comparing two builds of the same workload — a **work count**, which
+this family prefers to a clock anyway.
+
+So K3 splits: **absolute cycle rows still need the C6**; comparative work
+rows can come from RV32 QEMU today, reproducibly, with no hardware.
+
+### The number reported is a ROUND TRIP
+
+`per_round_trip instructions=995`. The first version labelled it "per switch"
+and reported ~10,000 instructions for fourteen loads and fourteen stores — a
+figure 250x too large, which is the instrument asking for help rather than a
+slow switch. The bracket spans everything the other task does between the
+switch out and the switch back. Measuring the bare swap needs the counter
+read inside the assembly, and that is a separate job.
+
+### Poison-proof
+
+Deleting the twelve `s0`-`s11` stores makes the cell **hang** without
+reaching a verdict — corrupting the callee-saved set destroys control flow,
+so nothing survives to report a fault. A failure, and the gate treats it as
+one, but a hang rather than a diagnosis. Recorded as such.
+
 ## The oracle (2026-09-09)
 
 | fact | value | method |
@@ -1541,3 +2241,773 @@ the owner's:** the plan's condition has fired, so §2.5's "handles are
 indices, never pointers" gets a decision-log row, either reaffirming it with
 this price attached or funding the two changes above and re-running this
 same script.
+
+
+## K3 — the measurement half, two rows closed (2026-09-11)
+
+K3's kill test has three clauses. This is what moved on the two that were not
+blocked on hardware, and what the third is doing.
+
+### The context switch, ours against theirs, on RV32
+
+`bench/switch-cost/run.sh`. **A Kairos cooperative switch on RV32 is 30
+retired instructions against FreeRTOS's 83** — 2.77× — with both arms counted
+from their own toolchains and neither number typed in by hand.
+
+| | save | restore | total |
+|---|---:|---:|---:|
+| FreeRTOS `portASM.S` (ecall trap) | 42 | 41 | **83** |
+| Kairos `kairos_riscv_switch` | 14 | 16 | **30** |
+
+The number is **retired instructions, not cycles**, and the plan's reason for
+putting cycle rows on the C6 has not changed. What makes it exact rather than
+sampled is that **both paths are straight line** — no loop, no data-dependent
+branch — so the count in the block is the count retired by it. The script
+checks that rather than assuming it: a conditional branch appearing where one
+should not fails the run, because the moment one exists a static count stops
+being a dynamic one.
+
+**The 2.8× is structural, and naming the structure matters more than the
+ratio.** `portYIELD()` on their RISC-V port is `ecall` (`portmacro.h:94`), so
+a yield takes the same trap an interrupt does and saves everything an
+interrupt could have clobbered: all 28 GPRs, `mstatus`, `mepc`, the
+critical-nesting count. Kairos yields at a *call site*, where the C ABI has
+already declared the caller-saved half dead, so its frame is `ra`, `sp` and
+`s0`–`s11`. That is a different function, not the same function tuned — and
+their design buys one handler serving both yields and interrupts.
+
+**The bill comes due under preemption, and is stated rather than hidden.** A
+preemptive Kairos switch also pays `riscv-rt`'s trap entry, 37 instructions,
+so the arms converge to **67 against 83 — and 67 is a LOWER bound**, because
+`_start_trap_rust` spills callee-saved registers of its own that this does not
+count. The preemptive RV32 cell does not exist yet; when it does, that row
+gets a measurement instead of a bound. So the claim is narrow on purpose: on a
+cooperative yield — which is what `taskYIELD` and every blocking call do — our
+port moves 2.8× less register traffic. Not "our context switch is 2.8× faster".
+
+**Poison-proven on the instrument, not just the result.** Assembling the same
+probe with `-D__riscv_32e` drops `x16`–`x31` from both macros and must remove
+exactly sixteen instructions per side: 42 → 26 and 41 → 25, both exact. The
+probe reads their code rather than reporting a constant.
+
+Two method notes worth keeping. The oracle's macros are expanded **alone in
+their own sections** (`bench/switch-cost/c/freertos_probe.S`) rather than
+carved out of one of their four handlers by address range — a section boundary
+is chosen by the assembler, an address range would be chosen by eye. And
+FPU/VPU are off in the C arm because the Kairos port has no FPU save either;
+charging the C arm for a feature we do not implement would not be a comparison.
+
+### The RAM floor, ours against theirs, on RV32
+
+`bench/kernel-ram/run.sh`. The useful output is not a total, it is that **the
+two floors are different FUNCTIONS**:
+
+```
+FreeRTOS:  RAM = 1704 + tasks x (84 + stack + header)
+                      + queues x (72 + storage) + timers x 40 + groups x 28
+                 ^ static                        ^ all of it from the heap
+
+Kairos:    RAM = arenas(TASKS, QUEUES, TIMERS, GROUPS, BUFFERS, BYTES)
+                 ^ all of it static; the heap term is ZERO
+```
+
+FreeRTOS's static cost is 1,704 B and **does not move when a task is added**,
+because the TCB comes from the heap at `xTaskCreate`. Kairos declares arenas,
+so its static cost is the whole budget, every dimension moves it, and nothing
+is left to allocate at run time. Which one is better depends on what is being
+optimised, and saying so is the finding: a system that must know its worst
+case at link time reads our column and is done; a system that creates a few
+tasks and wants the smallest image reads theirs.
+
+Per-unit, each a **slope between two geometries differing in exactly one
+dimension** — never a total divided by a count:
+
+| dimension | bytes | |
+|---|---:|---|
+| a task | 207 | TCB + its two list items, and **no stack** |
+| a queue | 56 | |
+| a timer | 88 | |
+| an event group | 20 | |
+| a stream buffer | 48 | |
+| a notify slot | 8 | one `u64` |
+| a buffer byte | 1 | one byte |
+
+At the config's own `configMINIMAL_STACK_SIZE` of 128 words a C task costs
+**596 B against our 207 B**, 2.9×. The gap is the stack: a blocking Kairos
+call keeps its locals in the TCB (the `WaitFrame`), so a task can be suspended
+mid-call without owning a stack — the same design fact that let the corpus run
+on four architectures before any context-switch port existed.
+
+**The counterweight is part of the row, not a footnote.** This is the *kernel*
+cost. An application still needs somewhere for its own state: ours in a struct
+sized to what it uses, theirs on a stack reserved for the worst case. The
+saving comes from **exact sizing**, not from the state ceasing to exist — a
+task whose state genuinely needs 512 B pays 512 B in either kernel. Quoting
+2.9× without that sentence would be quoting a stack-sizing policy as a kernel
+result.
+
+Both arms are measured **on the target**, because `size_of` on the host is a
+different number: a host `usize` is eight bytes and rv32's is four. The Rust
+figures are the *lengths* of arrays in an rv32 staticlib, read back with
+`llvm-nm -S`, so the size is the symbol's size and there is nothing to decode
+and nothing to run. Two slopes are true by construction — a notification slot
+is a `u64`, a stream-buffer byte is a byte — and the script checks both; they
+are why the other five can be quoted.
+
+**Flash is NOT compared, and the reason is a real blocker.** The C kernel's
+five modules are 13,990 B of `.text` at `-Os`, but object-file `.text`
+includes functions a linker would garbage-collect, and the two arms expose
+different API surfaces. A flash row needs both arms linked from a matched root
+set — which needs `rusty_rtos-capi` to stop being a scaffold, since it is the
+crate that would present FreeRTOS's own symbol names over our kernel.
+
+### The RISC-V port now PREEMPTS — the defect, the fix, and what it costs
+
+`rusty_rtos_port/firmware/riscv32-qemu-preempt` was built to turn the switch
+row's preemptive **lower bound** into a measurement. It first found a defect,
+and then the defect was fixed, so this row ends with a number rather than a
+blocker.
+
+```
+PREEMPT switches=201 want=200
+PREEMPT work_a=224541 work_b=224515
+PREEMPT faults=0
+RESULT: PASS -- 201 preemptive switches between two tasks that
+        never yield, 224541 and 224515 laps of work, zero faults.
+```
+
+Two tasks that never yield, sharing the hart almost exactly evenly, every
+callee-saved register and stack witness intact across 201 switches.
+
+**The defect.** `switch_context` resumes a task by restoring `ra` and
+**returning** (`ret`). That is exactly right at a call site — it is what makes
+a cooperative yield 30 instructions, and what `riscv32-qemu-switch` proves with
+100/99 resumptions three frames deep. Inside a trap it is wrong: a trap is left
+with `mret`, and a task entered any other way keeps running in trap context. On
+the first run the cell reported `switched=1` and then silence: the first
+preemptive switch was also the last.
+
+**The fix**, deliberately kept as a *second* switch rather than a flag on the
+first:
+
+| | resumes by | swaps | instructions |
+|---|---|---|---:|
+| `switch_context` | `ret` | `ra`, `sp`, `s0`–`s11` | **30** |
+| `switch_context_trap` | the task's own `mret` | the same fourteen plus `mepc` and `mstatus` | **37** |
+
+plus `new_task_context_preemptive`, which builds a fresh task so its first
+switch leaves through `mret`: `mepc` is the entry point, `mstatus` carries
+`MPIE`, and the trampoline it returns to only moves the two arguments into
+place and `mret`s. Keeping them apart means **a yield still pays only for what
+a yield needs** — the cooperative row is unchanged and still pinned at 30, and
+`riscv32-qemu-switch` still passes 100/99.
+
+**Poison-proving refuted the first explanation, which is the part worth
+keeping.** Three lines were removed one at a time:
+
+| removed | result |
+|---|---|
+| the `mepc` restore | **hangs** |
+| `mret` in the trampoline (→ `ret`) | **hangs** |
+| the `mstatus` restore | **still passes** |
+
+So `mepc` and the `mret` are load bearing, and the first write-up — which said
+`mstatus` was "the field whose absence made preemption impossible" — **was
+wrong**. The trap entry has already copied the live `MIE` into `MPIE`, so
+`mret` re-enables interrupts without our help. `mstatus` is still saved and
+restored, because a task preempted inside a critical section must come back
+with that section in force; but this cell does not demonstrate that, and the
+port's comment now says so instead of claiming a proof it does not have. Had
+the poison run been skipped, a false mechanism would have shipped attached to a
+true result.
+
+**The measurement the cell was built for:**
+
+```
+    Kairos kairos_riscv_switch_trap      37
+    + riscv-rt default_start_trap        37
+    = a preemptive switch                74   vs FreeRTOS 83   1.12x
+```
+
+Straight line, no conditional branches, so a static count is a retired count —
+and `bench/switch-cost` now pins it alongside the others.
+
+**Both rows are true and they say different things.** A *yield* is 2.77×
+cheaper on our side, because FreeRTOS routes yields through the interrupt trap
+(`portYIELD()` is `ecall`) and we do not. A *preemptive switch* is **near
+parity**, because there both kernels must write down what an interrupt could
+have clobbered. Quoting only the first would be quoting the easy half — which
+is exactly what the row said before the preemptive path existed to check it
+against.
+
+### The ARM control, which changes how the RISC-V switch row reads
+
+The RISC-V row above says a Kairos cooperative switch is 2.77× cheaper. On its
+own that reads as a win. **It is not one, and the Cortex-M3 arm is what shows
+that** — added to `bench/switch-cost/run.sh` on 2026-09-11:
+
+| Cortex-M3, both arms the PendSV handler | instructions |
+|---|---:|
+| FreeRTOS `xPortPendSVHandler` | **19** |
+| Kairos `PendSV` | **19** |
+
+Exact parity. On ARM both kernels reach the switch the same way — their
+`portYIELD()` pends `PendSV` and so does ours — so the shapes match and so do
+the counts. The RISC-V gap is therefore about **where a yield is taken**, not
+about one kernel moving registers more cheaply: their `portYIELD()` is `ecall`,
+which takes the interrupt trap and must save everything an interrupt could
+have clobbered.
+
+Read together, the two rows say: *the two kernels cost the same to switch; the
+RISC-V port differs because FreeRTOS routes yields through a trap there and we
+do not.* Read alone, the RISC-V row claims a win we did not earn, and that is
+why the ARM arm was built.
+
+Two method notes. Neither ARM arm is straight line, and they spend their guards
+differently — ours has four `cbz` for the null-slot cases, theirs four
+instructions of `basepri` masking, same count and different work. And the ARM
+handlers are counted **up to `bx lr`**, because what follows in the block is
+the literal pool and alignment padding; counting those read 21 where the answer
+is 19.
+
+**Counts do not compare across architectures** and the script says so: one
+`stmdb` moves eight registers where RISC-V needs eight `sw`. Only
+ours-against-theirs within an architecture means anything.
+
+**Xtensa is absent, and the blocker is specific rather than assumed.** The
+oracle does carry an Xtensa port
+(`portable/ThirdParty/GCC/Xtensa_ESP32/portasm.S`) and the box does have
+`xtensa-esp-elf-gcc`. What is missing is that the port is **not
+self-contained**: `portasm.S` includes `sdkconfig.h` and `esp_idf_version.h`,
+and its headers reach on into `soc/spinlock.h`, `esp_timer.h`, `hal/cpu_hal.h`
+and `esp32s3/rom/ets_sys.h`. Those are ESP-IDF's, and `sdkconfig.h` is
+generated. Stubbing them would be worse than not measuring, because the port's
+`#if`s key off `CONFIG_FREERTOS_*` — a stubbed config emits *different*
+assembly from a real build, and the number would be of our own construction.
+
+### The flash half of the footprint row, and two instrument faults
+
+`bench/kernel-flash/run.sh`. **Kairos is 1.15× the C kernel's flash** —
+16,008 bytes against 13,924 (15,950 until 2026-09-11; see the note below), both on rv32 at `-Os`, both dead-code-eliminated
+by `ld.lld --gc-sections` from the same root set. 2,026 bytes more.
+
+That is a loss, and a modest one. It completes the K3 footprint clause, whose
+RAM half is above.
+
+**The root set is the corpus, and that is the whole argument.**
+`docs/API-MAP.md` lists 341 FreeRTOS entry points, nearly all still `planned`
+here. Linking the C kernel against all of them and Kairos against the forty it
+implements would price a feature gap rather than a kernel. The operations
+rooted are the ones the corpus exercises — the one place the two are known to
+do the same work — and both arms name them with `-u`, so the roots are the
+kernels' own symbols and neither arm is charged for a harness.
+
+Where the C arm's 13,924 bytes are: `tasks.c` 6,408 · `queue.c` 3,032 ·
+`stream_buffer.c` 1,474 · `timers.c` 1,122 · `event_groups.c` 778 · `heap_4.c`
+646 · `portASM.S` 194 · `port.c` 144 · `list.c` 126. `heap_4.c` is included
+because FreeRTOS genuinely needs a heap to create a task where Kairos
+allocates from arenas inside the kernel; excluding it would charge Kairos for
+a facility and let the C arm have it free.
+
+**Two instrument faults, both caught, and they leaned opposite ways.**
+
+1. **31,524 bytes, against us.** The first Rust probe called every operation
+   from one function. The optimiser inlined most of the kernel into it, the map
+   attributed **13,314 bytes to "the probe"**, and the total came out at 2.3×.
+   One call site is not how a kernel is used. Giving each operation its own
+   `extern "C"` entry point — which is what the C arm has — took the Rust arm
+   from 31,524 to 16,556. *A number roughly twice what it should be is the
+   instrument asking for help in whichever direction it leans*, and the
+   temptation to bank the unflattering one and move on is the same failure as
+   banking a flattering one.
+2. **596 bytes, in our favour.** The C arm was first pinned with a table of
+   function addresses, and that table's own code counted as kernel.
+3. **150 bytes, against us.** The Rust root set globbed `^kairos_`, which also
+   caught the port's own assembly symbols, while the C arm's roots pull in
+   neither of *its* context switches. Invisible until the preemptive switch
+   moved the total; fixing it took the pin **down**, 16,064 → 15,950. The
+   switch is measured exactly and on both sides by `bench/switch-cost`.
+
+**A tick-width asymmetry that could NOT be matched, so it is reported.** Kairos
+uses a `u64` tick; the FreeRTOS RISC-V port does
+`typedef portUBASE_TYPE TickType_t` (`portmacro.h:68`), so on rv32 the tick is
+32-bit and **`configTICK_TYPE_WIDTH_IN_BITS` is not honoured by that port at
+all**. Setting it to 64 was tried, because matching the configuration is what
+these benches do: the type stayed `unsigned int` and clang reported
+`eventUNBLOCKED_DUE_TO_BIT_SET` truncating to 0 — a broken build, not a matched
+one. So part of the 2,026-byte gap is a tick that never wraps, including 492
+bytes of `compiler_builtins` 64-bit helpers already excluded from the total.
+`compiler_builtins` comes out because the C arm's `memcpy` and 64-bit helpers
+are unresolved and uncounted too.
+
+**Also corrected while matching configurations:** `INCLUDE_eTaskGetState`,
+`INCLUDE_xTaskAbortDelay` and `INCLUDE_xTaskGetHandle` were off in the template
+config though Kairos implements all three and the corpus exercises them. Turning
+them on grows the C kernel's `tasks.c` from 7,134 to 7,786 bytes and leaves the
+TCB at 84 — `ucDelayAborted` packs into padding that was already there — so it
+moved the flash row and not the RAM one.
+
+**Instrument check.** A linker that discards nothing measures nothing, so each
+arm is linked twice, with and without `--gc-sections`, and the run fails if the
+two agree. It removes 4,660 bytes from the C arm and 368,372 from the Rust one
+(a staticlib carries every codegen unit until the linker prunes it).
+
+### Four defects in the gate itself, found by running it (2026-09-11)
+
+`kairos check --board` is how the hardware claims in this ledger are re-run
+rather than re-read. It was run to confirm K5a still held after the day's port
+changes, and it failed six times — none of them because the kernel was wrong.
+All three have the same shape: **the gate named the code for something that was
+not the code.**
+
+| said | was |
+|---|---|
+| "a broken context switch presents exactly this way" | `Access is denied` on the serial port |
+| "Cargo.lock is not the standalone one" | the previous gate run wrote it |
+| "The cell HUNG" | the cell was working, and takes 196 s |
+
+**It passes**: `check: 5 package(s) passed`, five board cells PASS, and the
+three lockfiles intact both before and after — so a run no longer breaks the
+next one.
+
+**One flake is NOT resolved, and is recorded rather than waved past.** A later
+run had `xiao-s3-signing` produce one of its four rounds and then emit
+non-matching output until the 900-second hard stop. The same binary gives 8/8
+arms and a PASS standalone, repeatedly, and gave 8/8 in the run that passed. So
+the cell is sound and something about the gate context destabilises the longest
+one — most likely board state after the previous cell's monitor is killed, but
+that is a hypothesis and has not been tested. The next diagnostic is obvious:
+timestamp each line the monitor receives, so the stall point is visible instead
+of inferred.
+
+**1. `stderr` was discarded, so a busy serial port was reported as a hung
+cell.** `run_board_cell` spawned `espflash` with `stderr(Stdio::null())`. These
+cells never exit — they print a verdict and spin — so the monitor has to be
+killed, and on Windows the COM port is not reliably free by the time the next
+cell asks for it. The next cell then got `Failed to open serial port ...
+Access is denied`, the gate saw only silence, and it said:
+
+> The cell HUNG, which is a failure and not a missing feature — **a broken
+> context switch presents exactly this way.**
+
+That sentence is well meant and, here, confidently wrong: it points at the
+context switch when the fault is a serial port. It cost a session one wrong
+statement about K5a before the pattern gave it away — **the hangs rotated**.
+`xiao-s3-switch` hung in one run and passed in the next; both "hung" cells
+passed when run singly. A cell that fails for a different reason each run is
+not a broken cell.
+
+Fixed: stderr is captured and quoted in every failure; a port-busy failure is
+named as one instead of blamed on the cell; one retry after a settle; a short
+delay after killing each monitor; and espflash exiting early is noticed rather
+than waited out for the full 300 s.
+
+**2. The lockfile restore ran too early, so the gate broke its own next run.**
+`check` snapshots the standalone `Cargo.lock` before running cargo and restores
+it after, because the umbrella's `[patch]` rewrites it (H-07).
+`standalone_lockfile`'s doc promises *"the working tree is always left in the
+state that should be committed"*. It was not: `--board`, `--qemu`, the no-alloc
+rlib builds and `--soak` all run cargo **after** the restore, each rewriting the
+lockfile the restore had just put back. So a `check --board` left a lockfile
+that the **next** `check` reported as an H-07 failure.
+
+Fixed with a second, idempotent restore at the end of the package iteration.
+
+**3. A flat timeout priced duration when it meant to price silence.**
+`BOARD_TIMEOUT` was 300 seconds for every cell. `xiao-s3-signing` legitimately
+spends **196 of them in timed batches** — measured: nine batches, plus the
+kernel-only phase, plus flashing and key setup — because it amortises 20,000
+rounds, a 1 us clock being unable to resolve a microsecond any other way. So it
+passed one run and missed the next, a coin flip on a cell that was working.
+
+It was caught only because defect 1 had already been fixed: the message now
+carried `espflash said: Flashing has completed!`, which rules out the port and
+points at the cell's duration. Before that it read as another anonymous hang.
+
+Raising the number would have been the wrong repair — it papers over the flake
+and makes every genuine hang cost ten minutes. The gate's own word is *hung*,
+and a cell printing `SIGN` lines throughout is not hung however long it runs.
+So the deadline now measures **silence**: `BOARD_SILENCE` of 120 s, reset by any
+output, with `BOARD_TIMEOUT` kept as a 900-second absolute stop. A genuinely
+hung cell prints nothing and is caught in two minutes rather than five; a slow
+one is never punished for being slow. The message says which of the two
+happened.
+
+**4. `conform` rewrote lockfiles and never restored them.** `check` has
+snapshotted and restored around its cargo calls for a while.
+`kairos conform` builds `kairos-sim` inside `rusty_rtos_demo` with the same
+`[patch]` table in scope and did not, which was invisible because `conform` is
+normally run alone. It surfaced when a `conform --all` run *between* two
+`check --board` runs left the demo's lockfile rewritten, and the second check
+reported an H-07 failure caused by the conform in between — the same
+break-the-next-run shape as defect 2, in a different command. Fixed with the
+same snapshot-and-restore, and verified: 5 git sources before, 5 after, working
+tree clean.
+
+**And one that was not the gate's fault, but is worth knowing.**
+`standalone_lockfile` only snapshots when the lockfile is *already* clean, so
+the protection exists only if you start clean. This session had damaged three
+lockfiles with bench builds before running the gate, which is why the first run
+flagged two of them. **The gate is self-protecting; it is not self-healing.**
+
+The general lesson is the one this ledger keeps relearning from the other
+direction: a gate that fails for environmental reasons trains people to ignore
+it, and is worse than no gate. Every one of these failures was real in the
+sense that something was wrong — and none of them was wrong in the thing the
+message named.
+
+### K3's cycle rows, measured on silicon (2026-09-11)
+
+`rusty_rtos_kernel/firmware/xiao-s3-cycles`, on a XIAO ESP32-S3 over USB.
+The clause names three rows — context switch, tick, latency — and these are
+them, in **cycles on a real part**:
+
+| row | cycles | at 240 MHz |
+|---|---:|---:|
+| tick, two ready tasks | **131** | 545 ns |
+| tick, one ready + one delayed | **129** | 537 ns |
+| switch | **623** | 2,595 ns |
+| ISR-API wake → the task holds the value | **949** | 3,954 ns |
+
+Stable across four consecutive flashes (tick 131 every time; switch 621–623).
+
+**Why this can exist where the QEMU cells' cannot.** Xtensa's `ccount` is a
+real cycle counter with **one cycle of resolution**. `esp_hal::time::Instant`
+has one microsecond — 240 cycles, larger than every number above — which is why
+the sibling `xiao-s3-signing` had to amortise 20,000 rounds to say anything.
+The plan's reason for putting cycle rows on a part rather than QEMU is intact;
+this is the part.
+
+**The instrument measures itself first.** An empty `ccount` pair costs **1
+cycle**, measured the same way and subtracted from every row. A row that did
+not exceed that tax would be reported as *below resolution* rather than given a
+number. Medians with min and max, never means — a chip's interrupts add time
+and never remove it, and the `max` column is exactly those: 3,901 on the idle
+tick against 201 on the delayed one, same work, fewer interruptions landing in
+the window.
+
+**The refuted check is the most interesting line in the cell.** It originally
+asserted `tick_delayed >= tick`, on the obvious reasoning that a non-empty
+delayed list can only add work. The board said **129 against 131** — the
+assumption was the thing that was wrong, so the check was replaced and the
+number kept. Blocking a task takes it *off the ready list*, so the tick stops
+making a time-slice round-robin decision between two runnable tasks at one
+priority; that saving exceeds the cost of looking at one delayed entry whose
+wake time is far away. The two figures are therefore not "idle vs loaded" but
+"two ready tasks" vs "one ready and one delayed", and ready-list population
+dominates.
+
+**A cross-check against the sibling cell, which is worth as much as either
+number.** `xiao-s3-signing` measured a scheduling round — queue send, receive,
+two switches — at **1,995 cycles** by amortising 20,000 of them through a 1 µs
+clock. These rows predict roughly `2 x 623 + (949 - 623) ~ 1,570` for the same
+shape: same order, ~20% apart, by two different instruments on two different
+arrangements. A factor-of-several disagreement would have meant one of them was
+measuring something else.
+
+**What is still open, and it is half the clause.** K3 asks for these rows
+*against the C demo*, and there is **no C arm**. Building FreeRTOS for the S3
+needs the ESP-IDF header tree and a generated `sdkconfig.h`, and its Xtensa
+port's `#if`s key off `CONFIG_FREERTOS_*` — a stubbed build would not be the
+kernel anyone runs, so the comparison number would be of our own construction.
+The same wall blocks the Xtensa arm of `bench/switch-cost`. These are our
+numbers on silicon; the comparison is not done.
+
+**The ISR row is deliberately named "ISR-API", and the qualification is load
+bearing.** No interrupt is taken: `queue_send_from_isr` is the API an ISR would
+call, invoked inline. So the row is the *kernel's share* of a wake and excludes
+the vector entry and exit a real interrupt pays either side of it. The clause
+names "latency"; this is not the whole of it, and the name says so rather than
+letting the number be quoted as something it is not.
+
+Also not claimed: a register-file swap. Kairos tasks are stackless, so `switch`
+here is the scheduler choosing and committing the next task. The register cost
+is `bench/switch-cost`'s row — 30 instructions on RV32, 19 on ARM.
+
+### The packaging defect bit again, and this time a compiler caught it
+
+The first build of the RAM probe failed on `Port::COMMITS_SWITCH` — a constant
+that exists in this working tree and not in the published `rusty_rtos_core`.
+The cell named its siblings by path, but `rusty_rtos_kernel-core` reaches
+`rusty_rtos_core` by **git URL**, so cargo built *both*: the local one for the
+cell and the published one for the kernel. This is the same hazard the plan
+already records for `firmware/*` (`kairos patches` scans only `crates/*`), and
+it is worth noting that here it surfaced as a **compile error only because
+this session had just added a constant**. Had the local edits been to a
+function body rather than a trait surface, it would have built green against
+the wrong code and every number above would have been wrong.
+`bench/kernel-ram/rs/.cargo/config.toml` is committed for exactly that reason.
+
+### Clause 1, the one-hour soak: the host closes it, the emulators are slow, and one claim was withdrawn on the way
+
+An earlier version of this section claimed the **emulator** hour was 18/18.
+**That claim was wrong and is withdrawn.** It rested on `death` passing at
+3,600,000 ticks plus a 17/17 row this session had not re-run. Re-running is
+what found the problem, and then what explained it.
+
+**The host closes the clause outright.** `cargo test -p rusty_rtos_demo-core
+--test soak -- --ignored`, 2026-09-11: **18/18 at 3,600,000 ticks**, every
+scenario's check task still reporting running, `ticks >= 3,600,000` asserted so
+a scenario that stopped early cannot pass.
+
+**The emulators are not failing; they are slow, and `semtest` is where the time
+is.** The host run makes that unmissable:
+
+| | host time at 3,600,000 ticks |
+|---|---:|
+| `semtest` | **106.2 s** |
+| every other scenario, together | 30.2 s |
+| total | 136.4 s |
+
+`semtest` is **78% of the corpus's work at this length**, and the reason is
+structural and already documented in the soak test's own notes: it runs **345
+state-machine steps per unit of sim time** against a corpus average of 6.3,
+because `semtest.c`'s guarded loop counts to `0xfff` between one semaphore take
+and the next. On an emulator that is tens of minutes to hours by itself.
+
+So the three full-corpus emulator runs that "stopped at `semtest`" were stopped
+**in** it, not **by** it. What was read as a failure at scenario four was the
+scenario that takes longer than the other seventeen combined, reached in order.
+
+What is established on the emulators, all 2026-09-11:
+
+| | result |
+|---|---|
+| `death` at 3,600,000 ticks, Cortex-M3 | `ok ticks=3600057 yields=57580 exits=3533911 lines=3973943` |
+| `death` at 3,600,000 ticks, RV32 | **identical, field for field** |
+| `semtest` at 100,000 / 400,000 ticks, RV32 | ok, counters scaling linearly |
+| `semtest` at 1,600,000 ticks, RV32 | still running past 25 minutes |
+| `semtest` at 3,600,000 ticks, RV32 | no verdict inside the time a session can hold a process |
+| the pinned 2,000-tick gate, both cells | 18/18, unaffected throughout |
+
+**What stays open, stated narrowly.** The full eighteen at 3,600,000 ticks has
+been *observed* end to end on the host and not on an emulator. That is a
+duration problem rather than a correctness one — but it is not the same
+sentence as "the emulator hour passes", and it will not be written as one
+until a run finishes. The plan already classed these as background runs rather
+than gates, at hours per architecture; this session measured what "hours"
+means and it is mostly one scenario.
+
+**The record that prompted the withdrawal.** A previous session recorded 17/17
+at 3,600,000 ticks per emulator. Nothing here contradicts it — that run
+evidently had the wall-clock this one did not — but it could not be reproduced
+inside a session, so the claim it supports should carry that caveat.
+
+**Tooling that came out of it.** Both corpus cells now take two compile-time
+overrides, and the second exists only because the first was not enough to
+diagnose anything:
+
+* `KAIROS_SOAK_ONLY=<name>` runs one scenario instead of eighteen. Re-running
+  seventeen that pass to reach one that has not been tried is waste; this made
+  `death` a 24-second command and isolated `semtest` in a single run. A name
+  not in the table FAILs and exits 1, because a filter matching nothing
+  otherwise produces a run with zero failures — the shape of a gate that tests
+  nothing.
+* `KAIROS_SOAK_TICKS=<n>` moves the length. The soak asks one question — is
+  this still running after an hour — and when no answer comes back, that
+  question gives no purchase on *why*. A length that can be moved turns silence
+  into a bisection, which is how the 100k/400k/1.6M points above exist, and how
+  "`semtest` is broken" was ruled out before it reached a ledger row as a fact.
+
+**And the hour now exists on SILICON, which the clause asks for and the C6 was
+only ever one way to get.** `rusty_rtos_demo/firmware/xiao-s3-corpus`, run live
+on a XIAO ESP32-S3 on 2026-09-11:
+
+| on the S3, over USB, this session | result |
+|---|---|
+| the pinned corpus | **18/18 byte-identical to the C kernel**, `death` included |
+| `death` at 3,600,000 ticks | `ok ticks=3600057 yields=57580 exits=3533911 lines=3973943 bytes=139919939` |
+
+That second row is **identical field for field to the Cortex-M3 and RV32 runs**
+— so three architectures, one of them a real part rather than an emulator,
+agree on every counter and the FNV-1a/64 digest at **1,800× the pinned length**.
+
+It is worth being exact about what that does and does not settle. The clause
+names a C6, and no C6 is in hand; this is an S3. But the thing the C6 was in
+the row *for* — an hour of the corpus on silicon rather than under emulation —
+is now measured, on the part that is actually on the desk. What a C6 would add
+is a second chip and a second architecture-of-record, not the first silicon
+hour. The S3 cell also gained `KAIROS_SOAK_ONLY` and `KAIROS_SOAK_TICKS`, so
+re-running one scenario's hour there is a single command rather than an
+afternoon.
+
+**And the emulator hour is now CLOSED on RV32 — all 18, measured end to end.**
+`bench/soak-each/run.sh riscv32-qemu-corpus`, 2026-09-11: **18/18 at 3,600,000
+ticks, in 58 minutes**, every scenario's check task still reporting running.
+
+The split is the whole trick, and it costs nothing: the cell builds a **fresh
+kernel per scenario** (`Runner::kernel_for` inside the loop), so eighteen runs
+of one scenario is the same computation as one run of eighteen, in the same
+order, at the same lengths. Nothing is shared across iterations for splitting
+them to lose. What it costs is a rebuild per scenario — about twenty seconds,
+against the forty-six minutes `semtest` alone takes.
+
+And the timing confirms the diagnosis exactly:
+
+| | of the 58-minute run |
+|---|---:|
+| `semtest` | **2,769 s (46 min) — 79%** |
+| the other seventeen together | 719 s |
+
+The host had put `semtest` at 78% of its own 136-second run. **79% against 78%,
+two machines three orders of magnitude apart in speed** — which is what a
+structural cost looks like, and it is why the three earlier full-corpus runs
+appeared to "stop at scenario four". They were stopped *in* `semtest`, not by
+it.
+
+**And Cortex-M3 followed**: `bench/soak-each/run.sh mps2-an385-qemu-corpus`, **18/18 at 3,600,000 ticks in 75 minutes**. So the emulator hour is closed on BOTH architectures, and with the host and the S3's `death` row it is the same answer on four machines.
+
+**Still blocked regardless:** the C6 third of the clause, on the same hardware
+B4b needs.
+
+
+
+## K6 — the C ABI, first cells (2026-09-11)
+
+`rusty_rtos-capi/firmware/mps2-an385-qemu-capi` links **unmodified C demo
+task files** from the pinned `oracle/` checkout against the Kairos kernel,
+through `extern "C"` symbols, on QEMU `mps2-an385`.
+
+Nothing about the C is patched, wrapped or regenerated. It is compiled by
+`build.rs` straight out of `oracle/FreeRTOS/FreeRTOS/Demo/Common/Minimal/`
+against the oracle's own `FreeRTOS.h`, `task.h` and `queue.h`. The only file
+this cell hands the C side is a `FreeRTOSConfig.h`, which every FreeRTOS
+application supplies.
+
+### The inversion
+
+Those files are the corpus's **oracle**. Nineteen of them were remade as
+Rust state machines and diffed line-by-line against their traces on four
+architectures. Here the same sources are the **client**: we proved we behave
+like them, and now they run on us.
+
+### The specification was derived, not chosen
+
+The demo files were compiled unmodified and `llvm-nm -u` was asked what they
+wanted. That list **is** the requirement, and it is much smaller than the API
+map suggests:
+
+| | |
+|---|---:|
+| `docs/API-MAP.md` entry points | 341 |
+| union of undefined symbols across 33 demo files | **108** |
+| of those, `__aeabi_*` compiler float helpers | 11 |
+| board drivers (`vParTestSetLED`, the serial four) | 6 |
+| **the actual kernel surface** | **~84** |
+
+`PollQ.c` alone needs eight. Ordering the files by how many NEW symbols each
+one costs turned "implement 341 things" into a sequence where the first
+cell needed eight and the next six needed seven more — and eight demo files
+need **zero** beyond what `PollQ` already required.
+
+**33 of 34 demo files compile.** The one that does not is `IntQueue.c`,
+which includes a board-specific `IntQueueTimer.h` that each demo *project*
+supplies — not an ABI gap.
+
+**Update 2026-09-12: the six board drivers in that table are now supplied,
+and they are still not ABI.** `seam/board.rs` implements
+`vParTestInitialise`/`SetLED`/`ToggleLED` and the serial four as a demo
+*project* would, with the serial port as a software LOOPBACK because
+`comtest.c` asks for one in words. They are deliberately absent from
+`symbols.rs` and from the generated header — FreeRTOS does not export them —
+so `seam/board_gate.c` audits their signatures against the oracle's own
+`partest.h` and `serial.h` instead, the same trick the header gate uses.
+
+That table's last row also moved, downward, for a good reason: the kernel
+surface is now **87** rather than 89, because `strcmp` and `strncmp` were
+being claimed as ABI when they exist only because a bare-metal cell has no
+libc. The deriver stops at the seam's own `tiny libc` banner, which also
+keeps a three-argument `sprintf` stand-in out of a header that would then
+conflict with the real `<stdio.h>`.
+
+The run itself is in `rusty_rtos-capi/docs/LEDGER.md`: **26 demo files**, 25
+of them reporting a verdict of their own, on QEMU M3 and on a host under
+Windows threads and Linux pthreads.
+
+### A C task can block because the port gives it a stack
+
+The Kairos kernel is stackless: a blocking call returns `Wait::Blocked`,
+meaning "call again when this task next runs". A C task cannot do that —
+`vTaskDelay` must return *later*, with its locals intact.
+
+It gets a real stack from `rusty_rtos_port-cortex-m`, and `PendSV` asks
+`Kernel::switch_context` who is next. That is the same joint
+`mps2-an385-qemu-kernel` proves; this cell puts a C function on top of it.
+`Wait::Blocked` then becomes a retry loop around a `pend_switch`, which is
+exactly what the enum's own doc comment describes.
+
+`pvPortMalloc` and `vPortFree` are **K4's `heap_4` remake**, not a new
+allocator: the one already diffed against `heap_4.c` over 20,000 operations.
+That needed one small addition to `Heap4` — `address_of` / `offset_of`,
+bounds-checked both ways — which is the offset-to-pointer "binding" its own
+module docs anticipated but had left to whoever owned the storage.
+
+### Four defects, and the C found all four
+
+The `configASSERT` hook is wired to print and exit rather than being
+compiled out, on the reasoning that **a demo tripping one is the C telling
+us the ABI lied to it**, and that is the most valuable thing this cell can
+produce.
+
+1. **A null handle encoded as a non-null pointer.** Handles cross the seam
+   as `to_raw() + 1`, so that a valid handle is never NULL. A *null* kernel
+   handle then came out as `0 + 1 = 1`. `GenQTest.c:564` checks
+   `xSemaphoreGetMutexHolderFromISR( xMutex ) != NULL` after giving a mutex
+   back; an unheld mutex answering `1` failed its assertion. The `+ 1` must
+   keep valid handles non-null without manufacturing one from the absence of
+   a handle.
+2. **A discarded return value.** `Kernel::notify` answers `bool` —
+   with `eSetValueWithoutOverwrite` a notification that is already pending
+   makes it fail. The seam returned `pdPASS` for `Ok(_)`, so a notification
+   that never landed reported success. `TaskNotify.c:204` asserts precisely
+   that case.
+3. **An operation silently turned into a different one.** `xQueueSend`,
+   `xQueueSendToFront` and `xQueueOverwrite` are all macros over
+   `xQueueGenericSend`, distinguished by `xCopyPosition`. Handling two of
+   the three sent every overwrite to the back of the queue instead, with no
+   error anywhere. Both the task and ISR forms had the hole.
+4. **The timer daemon starved the demos.** Parked in a spin loop at
+   `TIMER_TASK_PRIORITY`, it starved every task below it: of nineteen tasks
+   across six demo files, only the two at its own priority ever ran. This is
+   the **same shape** as the `xiao-s3-signing` finding already in this
+   ledger, where the scheduled arm completed zero operations while reporting
+   a batch 75x faster than bare.
+
+### And one that was not a defect at all
+
+Six demo files passed **individually** and four of six failed **together**,
+with context switches collapsing from 3,057 to 121. That is correct
+fixed-priority scheduling punishing a bad priority assignment: tasks that
+never block starve everything beneath them.
+
+The priorities were mine, invented. `Demo/Posix_GCC/main_full.c` has the
+authoritative ones — `PollQ` and `semtest` at `tskIDLE_PRIORITY + 1`,
+`BlockQ` at `+ 2`, `integer` at idle, the check task at
+`configMAX_PRIORITIES - 2`. Using theirs fixed it outright. These files are
+designed to run together at *those* numbers.
+
+Separating that from an ABI bug needed a per-demo filter
+(`KAIROS_CAPI_ONLY=<name>`), for the same reason `KAIROS_SOAK_ONLY` exists:
+individually-pass/together-fail is a different diagnosis from a broken
+symbol, and without the filter the two are indistinguishable.
+
+### Two sizing traps, both silent by construction
+
+Both presented as the demos doing nothing, and neither raised an error:
+
+* **The queue slot pool.** `PollQ` asks for a queue of ten; the pool was
+  eight. `xQueueCreate` returned NULL and `PollQ.c` skipped its task
+  creation inside `if( xPolledQueue != NULL )` — which is correct FreeRTOS
+  behaviour and terrible to debug. The seam now says out loud when the
+  kernel refuses a queue.
+* **The stream-buffer arena** was `1` buffer of `8` bytes, a placeholder
+  from when only `PollQ` was linked, and silently refused every
+  `xStreamBufferGenericCreate` once the buffer demos arrived.
+
+### Status
+
+Not finished, and the remaining work has changed character: the surface is
+essentially complete, and what is left is **semantic conformance**, one C
+assertion at a time, in edge cases the corpus's nineteen scenarios do not
+reach. Several of those are likely to be kernel findings rather than seam
+findings, which is a good outcome and a different kind of work.
