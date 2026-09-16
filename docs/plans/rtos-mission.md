@@ -393,6 +393,21 @@ version tag, `release-plz` and the org's `portfolio-check` are in the flipping
 commit and the crates.io name is reserved; and **the owner runs the flip**.
 `kairos deploy` refuses without `--public|--private`.
 
+**Status (2026-09-16): the first flip has happened.**
+`rusty_rtos_core` is on crates.io at **0.1.0** and its repository is **public**,
+tagged `v0.1.0`. Two of the conditions above were NOT met and are recorded
+rather than skipped: the hardening row is 50% rather than complete (waived for
+0.x, with a reason per gate in that package's plan), and neither `release-plz`
+nor the org's `portfolio-check` exists yet. This bar is written for 1.0.0;
+0.x is the version number that says the API is not stable, which is the reason
+those two were acceptable here and will not be at 1.0. One condition the
+release CLOSED for the whole family: "CI green without a token" — the
+`KAIROS_GIT_TOKEN` rewrite existed to fetch private siblings by git URL, and
+with every sibling resolving from crates.io there is nothing private to fetch.
+Everything else is queued behind `tools/publish-0.1.0.sh`, and three of the
+four port backends are still UNTRACKED in git, which blocks publishing them.
+See `docs/LEDGER.md`.
+
 ### 2.12 Non-goals
 
 No rewrite of Espressif's radio blob, RF calibration or ROM; no replacement of
@@ -835,11 +850,11 @@ reused.
 | item | where | state | when it lands |
 |---|---|---|---|
 | Generalise the fleet tool (`janus` and `kairos` are one binary reading `<NAME>.toml`) | janus `tools/janus` | not filed | Kairos ships with a copy until then |
-| `esp-radio-rtos-driver` adapter on a non-esp-rtos scheduler | esp-rs (docs) | **drafted 2026-09-11, awaiting the owner** — `docs/upstream/esp-radio-rtos-driver-stack-contract.md` | The condition fired: the contract IS under-documented. `SchedulerImplementation` can only be implemented by a scheduler that gives each task its own call stack — the requirement is spread across `task_create` ("It should allocate the stack"), `schedule_task_deletion` ("The thread stack can be free'ed") and a blocking `Semaphore::take`, and is never stated as a requirement. A stackless scheduler reads the trait as satisfiable and finds out on silicon. We found out by writing the Xtensa switch |
+| `esp-radio-rtos-driver` adapter on a non-esp-rtos scheduler | esp-rs (docs) | **drafted 2026-09-11, awaiting the owner** — `kairos-upstream/drafts/esp-radio-rtos-driver-stack-contract.md` | The condition fired: the contract IS under-documented. `SchedulerImplementation` can only be implemented by a scheduler that gives each task its own call stack — the requirement is spread across `task_create` ("It should allocate the stack"), `schedule_task_deletion` ("The thread stack can be free'ed") and a blocking `Semaphore::take`, and is never stated as a requirement. A stackless scheduler reads the trait as satisfiable and finds out on silicon. We found out by writing the Xtensa switch |
 | `rusty_alloc` `prim::fixed` on Cortex-M (small-metal was measured on the S3 only) | rusty_alloc | not filed | K4's `heap_3` seam on the M3 cell |
-| `rusty_time` `no_std` leaf for the SNTP client: `rusty_time-core` 0.1.10 carries the `no-std` category but has no `#![no_std]` (it needs `std` on `thumbv7em` / `riscv32imac`, measured 2026-09-09 in `tools/house-gate`) | rusty_time | drafted (`docs/upstream/rusty_time-no-std-leaf.md`), not filed | decides §5.5 item 4; until it lands, `rusty_rtos_sntp` is a coreSNTP remake |
+| `rusty_time` `no_std` leaf for the SNTP client: `rusty_time-core` 0.1.10 carries the `no-std` category but has no `#![no_std]` (it needs `std` on `thumbv7em` / `riscv32imac`, measured 2026-09-09 in `tools/house-gate`) | rusty_time | drafted (`kairos-upstream/drafts/rusty_time-no-std-leaf.md`), not filed | decides §5.5 item 4; until it lands, `rusty_rtos_sntp` is a coreSNTP remake |
 | ~~`rusty_zstd` 0.2.3 `no_std + alloc` uses `core::sync::atomic::AtomicU64`~~ | rusty_zstd | **resolved upstream in 0.2.5**, never filed; re-measured 2026-09-09 (`gate-zstd` exit 0 on both bare-metal targets), house-gate pin moved to `=0.2.5` | on-chip compression (OTA, trace capture) is unblocked; the fleet tool still links 0.2.3 on the host, which is a pin to align, not a blocker |
-| `rusty_erasure-core` 0.4.0 imports `AtomicU64` in its `no_std` build; same 32-bit gap | rusty_erasure | drafted (`docs/upstream/rusty_erasure-atomic-u64.md`), not filed | nothing in Kairos v1 needs it; recorded so the ladder is honest |
+| `rusty_erasure-core` 0.4.0 imports `AtomicU64` in its `no_std` build; same 32-bit gap | rusty_erasure | drafted (`kairos-upstream/drafts/rusty_erasure-atomic-u64.md`), not filed | nothing in Kairos v1 needs it; recorded so the ladder is honest |
 | smoltcp: any API gap the +TCP surface needs (e.g. socket-set sizing from a `Config`) | smoltcp | not filed | K7 |
 | FreeRTOS upstream: a deterministic-tick option for the Posix port (our oracle patch) | FreeRTOS-Kernel | not filed | the patch stays in-tree either way |
 
@@ -870,7 +885,7 @@ reused.
    without `std`; else the remake (it is small). **Measured 2026-09-09:**
    `rusty_time-core` 0.1.10 is `std`-only on the bare-metal targets (the
    umbrella's `tools/house-gate`), so the remake is the default until the
-   upstream leaf exists (`docs/upstream/rusty_time-no-std-leaf.md`).
+   upstream leaf exists (`kairos-upstream/drafts/rusty_time-no-std-leaf.md`).
 5. **Tick width and `TickType_t` at the C ABI.** The ABI must pick one width
    per build (a `capi` feature); the Rust API is generic.
 6. **A self-hosted runner** for the Xtensa gate and the QEMU cells (the
@@ -930,7 +945,7 @@ which.
 - [x] every one of those re-runnable rather than re-readable — `--board`
       exists, and a cell that prints no verdict FAILS
 - [x] the upstream finding drafted —
-      `docs/upstream/esp-radio-rtos-driver-stack-contract.md`
+      `kairos-upstream/drafts/esp-radio-rtos-driver-stack-contract.md`
 
 **The whole of K5a is therefore: `kairos conform --all` reports 19/19 and
 `kairos check rusty_rtos_kernel rusty_rtos_port rusty_rtos_demo --board`

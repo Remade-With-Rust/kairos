@@ -881,7 +881,7 @@ geometry, collect frequency (`FIXED_PAGE`/`good_size` is monotone in size
 and the cost is not), and a per-page cost amortised over blocks (fits
 16…256 at ~0.875 cycles/byte, then breaks at 512). The mechanism is
 inside a house dependency; the reproduction is written up for the owner
-at `docs/upstream/rusty_alloc-size-class-inversion.md`.
+at `kairos-upstream/drafts/rusty_alloc-size-class-inversion.md`, in the private `Remade-With-Rust/kairos-upstream`.
 
 **One row is not quoted.** 4,096 is `FIXED_PAGE`, so it cannot come from
 a page and takes the dedicated path; it read **789, 861 and 933**
@@ -989,7 +989,7 @@ name the router. On **64-bit they differ** — 1,024 against 512 — so the same
 sweep on a host build under `ra_small_profile` settles it, and needs no
 hardware. It matters because it decides whether the fix is free or a
 footprint trade. Written up at
-`docs/upstream/rusty_alloc-size-class-inversion.md`.
+`kairos-upstream/drafts/rusty_alloc-size-class-inversion.md`.
 
 **Not quoted, and said so.** `heap_4`'s byte charge is measured — request +
 8 exactly, from `xPortGetFreeHeapSize()` either side of one allocation — and
@@ -1249,7 +1249,7 @@ correct — with only `pcTimerName` and one list field garbage. That reads as
 key) written into the first 16 bytes of the freed chunk. **A partial clobber
 looks like a misread struct**; ASan turned a guess into three stacks in one
 run. Written up for the owner at
-`docs/upstream/freertos-timer-trace-uaf.md`.
+`kairos-upstream/drafts/freertos-timer-trace-uaf.md`.
 
 ### And `TaskNotify` still cannot be an oracle — for an unrelated reason
 
@@ -2861,6 +2861,145 @@ it.
 B4b needs.
 
 
+
+## v0.1.0 — the first crates.io release (2026-09-16)
+
+**`rusty_rtos_core` 0.1.0 is published, and its repository is public.** 22
+files, 41.9 KiB compressed. It is the bottom of the stack — no dependencies at
+all — which is why it went first and why nothing above it could go before it.
+
+### What the release actually required, and none of it was code
+
+| blocker | what it was | how it was closed |
+|---|---|---|
+| **24 git-sourced dependencies** | the umbrella's development pattern is git URLs plus a `[patch]` table. **`cargo publish` refuses a git dependency outright**, and §2.11 says "released pins only" for the same reason | every sibling now names a version only; `kairos patches` emits ONE `[patch.crates-io]` table instead of one per git URL |
+| **the names were unclaimed** | proven, not assumed: a dry run answered `no matching package named rusty_rtos_core found — location searched: crates.io index` | `rusty_rtos_core` is now taken; the rest are queued |
+| **licence texts were not in the packages** | the `license` field was set but `LICENSE-MIT` / `LICENSE-APACHE` live at each repo root, outside the crate directory cargo packages | copied into all 20 publishable crate directories; the package went 20 files to 22 |
+| **four crates had no README** | the port backends — `-cortex-m`, `-riscv`, `-xtensa`, `-host` — each publish separately and each would have shipped a blank crates.io page | written, and `readme` / `documentation` declared in their manifests |
+| **relative documentation links** | `[docs/LEDGER.md](docs/LEDGER.md)` resolves against **crates.io**, not GitHub, so every doc link on the crate page would have 404'd | 17 links across eight READMEs made absolute |
+
+### The H-07 lockfile artifact is gone, structurally
+
+Every standalone `Cargo.lock` now carries **zero** `source = "git+..."` lines
+and resolves `rusty_rtos_core` from the registry, with a checksum. The gate row
+that fired on every run for weeks fired because a lockfile written with the
+umbrella's `[patch]` in scope recorded git sources a fresh clone could not use.
+With no git dependencies there is nothing for the patch to rewrite that way.
+
+Worth noting the ordering this forced: a dependent's standalone lockfile could
+not be generated **until `rusty_rtos_core` was actually on crates.io**, because
+a version-only dependency has nowhere else to resolve from. Publish order here
+is not a preference, it is the only order that works.
+
+### The repo is public, and §2.11 scored honestly
+
+`Remade-With-Rust/rusty_rtos_core` flipped **PUBLIC** on 2026-09-16, after the
+release work was committed and tagged `v0.1.0` — in that order, because the
+published tarball was AHEAD of the repo. Publishing from a working tree with
+`--allow-dirty` puts source in the crate that GitHub does not have, and a public
+repo that disagrees with the crate it claims to be the source of is worse than
+a private one.
+
+**The flip added no exposure.** The source was already on crates.io, which is
+permanent and world-readable; what it fixed was three dead links — the crate
+page's Repository link, and every `docs/` link in the README, all of which are
+absolute by necessity and all of which were 404ing. Verified after the flip:
+`docs/LEDGER.md`, `docs/plans/rusty_rtos_core.md` and
+`docs/plans/use-protection-please.md` all resolve.
+
+Scored against §2.11's own bar rather than waved through:
+
+| condition | |
+|---|---|
+| siblings public first | ✓ core is first; nothing precedes it |
+| released pins only, no `git =` | ✓ |
+| emulator and board half measured | ✓ through the corpus above it |
+| `cargo deny` green in CI | ✓ |
+| **CI green without a token** | ✓ **closed by this release** — the `KAIROS_GIT_TOKEN` rewrite existed to fetch private siblings by git URL, and there is nothing private to fetch now |
+| README equals the plan, dual licence, FreeRTOS credit | ✓ |
+| version tag in the flipping commit | ✓ `v0.1.0` |
+| crates.io name reserved | ✓ |
+| **hardening row complete** | ✗ **50%**, waived for 0.x with a reason per gate |
+| **`release-plz` and `portfolio-check` in the flipping commit** | ✗ neither exists yet |
+
+Two conditions unmet, both recorded rather than quietly skipped. The bar in
+§2.11 is written for **1.0.0**; this is 0.1.0, and 0.x is the version number
+that tells a consumer the API is not stable. That is a reason, not an excuse,
+and those two rows are what has to close before the next flip.
+
+### H-07 had become a check that could only fail
+
+Worth its own note, because it is the failure mode a gate is most likely to
+have and least likely to admit to. `standalone_lockfile` decided a lockfile was
+the standalone one by checking it **contained**
+`git+https://github.com/<org>/<sibling>`. That was correct while the siblings
+were git dependencies. Removing those — which `cargo publish` requires — made
+the string impossible, so the function answered `None` every time and the gate
+reported all six dependent packages as broken on every run.
+
+A gate that always fails is indistinguishable from a gate that is telling you
+something, and this one had been shouting for weeks.
+
+The property it should test never changed, only its signature. A standalone
+lockfile is one a **fresh clone** can use, which means every sibling resolves
+from the registry; under `[patch.crates-io]` a sibling is a path override, and
+cargo records a path dependency as a `[[package]]` with **no `source` line at
+all**. So the tell is a sibling entry carrying no source, and that tell is the
+same whichever way the dependency is written.
+
+With it fixed, `kairos check --fmt --clippy --test --deny` reports
+**12 package(s) passed** — green end to end, which it had not been for weeks.
+
+### The READMEs were rebuilt on the `rusty_mp3` architecture
+
+All eight repository READMEs and eight inner-crate READMEs now share one
+section order, taken from [`rusty_mp3`](https://crates.io/crates/rusty_mp3):
+badges, a positioning paragraph, the halves **with their known gaps stated in
+the opening rather than buried**, an evidence section with a regeneration
+command, a runnable example, performance **with its method**, a portability
+matrix, the family, the org boilerplate between markers, and the licence.
+
+Two things that pass for detail and are not. The reference states the
+measurement method beside every number — pinned, CPU time, ABBA-interleaved, N
+pairs, the null-arm floor — and quotes **per-item** tables rather than a mean,
+"because a mean hides the thing that matters". Both are carried over: the
+list-cost row quotes its callgrind slope and the checksum both arms print, and
+the switch-cost rows quote the ARM control (19 vs 19, exact parity) that makes
+the RISC-V number readable rather than flattering.
+
+The stale status sections went with it. The kernel's README had said "K2 in
+progress — 14 of its 18 scenarios agree" and the port's had said the silicon
+ports were future work; both were months out of date and would have been the
+first thing a reader saw.
+
+### Hardening: 42% to 50%, and the waivers are on the record
+
+| gate | closed by |
+|---|---|
+| H-11 unsafe inventory | `cargo geiger`: **0/0** across the whole tree, reported `:)` — no `unsafe`, `forbid(unsafe_code)` declared. The compiler enforces it, which is stronger than the survey |
+| H-12 SBOM | CycloneDX per published crate, in `sbom/` — deliberately NOT inside the crate directories, where an SBOM is stale the moment a dependency moves |
+| H-13 git deps pinned | there are none left; `deny.toml`'s `allow-git` list is now empty, and the file's own comment says an allowance nothing uses is a warning on every run |
+| H-14 dependency freshness | `dependabot.yml`, weekly, PR-only, siblings ignored because a sibling's version is decided by a release rather than a bot |
+
+The rest are **waived for 0.x with a reason each**, in every plan's "v0.1.0
+release decision" section — threat model, `cargo vet`, fuzzing beyond the
+no-panic gate, and formal verification. The distinction that section draws: an
+Incomplete gate listed there is a decision, one not listed is an omission.
+
+### Still to publish, and one thing that has to be settled first
+
+`rusty_rtos_alloc`, then the kernel, port and heap crates — each dry-run clean
+(`tools/publish-0.1.0.sh`, dry run by default) and each blocked only on running
+the command. **Three of the four port backends (`-host`, `-riscv`, `-xtensa`)
+are UNTRACKED in git**: they exist on one machine and have never been
+committed. They cannot be published from a state nobody else can reproduce,
+and that is a release blocker rather than a tidiness one.
+
+Held back deliberately: `rusty_rtos-capi` until its seam is a library crate
+rather than a `#[path]` include (today the publishable crate is a 15-line
+`lib.rs` and the 87 symbols are not in it), and `rusty_rtos_json` /
+`rusty_rtos_backoff` until they have code — both are 27-line scaffolds, and
+publishing them would claim a name with nothing behind it.
 
 ## K6 — the C ABI, first cells (2026-09-11)
 

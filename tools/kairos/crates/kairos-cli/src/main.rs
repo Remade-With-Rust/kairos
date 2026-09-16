@@ -294,18 +294,65 @@ fn run_env(
 /// ([`restore_standalone_lockfile`]) — the working tree is always left in
 /// the state that should be committed.
 fn standalone_lockfile(dir: &Path, package: &Package, manifest: &Manifest) -> Option<String> {
+    let _ = manifest;
     if package.uses.is_empty() {
         return None;
     }
     let text = fs::read_to_string(dir.join("Cargo.lock")).ok()?;
-    for used in &package.uses {
-        let sibling = used.split('/').next().unwrap_or(used);
-        let url = format!("git+https://github.com/{}/{sibling}", manifest.kairos.org);
-        if !text.contains(&url) {
-            return None;
-        }
+    // A standalone lockfile is one a FRESH CLONE can use, and the tell is a
+    // sibling entry with no `source`.
+    //
+    // This used to look for `git+https://github.com/<org>/<sibling>`, which was
+    // right while the siblings were git dependencies. They are crates.io
+    // versions now -- `cargo publish` refuses a git dependency -- so that
+    // string is never present and the check could only ever fail. The property
+    // is unchanged; only its signature is.
+    //
+    // Under the umbrella's `[patch.crates-io]` a sibling is a path override,
+    // and cargo records a path dependency as a `[[package]]` with NO `source`
+    // line. A registry dependency always has one.
+    if lockfile_has_pathed_sibling(&text, dir) {
+        return None;
     }
     Some(text)
+}
+
+/// Does any `rusty_rtos*` entry in this lockfile lack a `source`?
+///
+/// Entries for the packages the lockfile's own workspace CONTAINS legitimately
+/// have no source, so only siblings count -- and a sibling is any
+/// `rusty_rtos*` package whose directory is not inside this repo. The cheap
+/// form of that test: the workspace's own crates are listed in its
+/// `[workspace] members`, and every other `rusty_rtos*` entry came from
+/// outside.
+fn lockfile_has_pathed_sibling(text: &str, dir: &Path) -> bool {
+    let mut local = Vec::new();
+    for block in text.split("[[package]]").skip(1) {
+        let Some(name) = toml_string_field(block, "name") else {
+            continue;
+        };
+        if !name.starts_with("rusty_rtos") {
+            continue;
+        }
+        if block.lines().any(|l| l.trim_start().starts_with("source = ")) {
+            continue;
+        }
+        local.push(name);
+    }
+    // Everything sourceless is either this workspace's own crate or a patched
+    // sibling. A workspace crate has a `dependencies` entry naming it from
+    // within, which is not worth parsing: compare against the crates on disk.
+    local
+        .iter()
+        .any(|name| !dir.join("crates").join(name).join("Cargo.toml").is_file())
+}
+
+/// The value of `key = "..."` in a lockfile block.
+fn toml_string_field(block: &str, key: &str) -> Option<String> {
+    block.lines().find_map(|line| {
+        let rest = line.trim().strip_prefix(key)?.trim_start().strip_prefix('=')?;
+        Some(rest.trim().trim_matches('"').to_owned())
+    })
 }
 
 /// Put back the lockfile cargo rewrote, if it rewrote it.

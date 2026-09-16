@@ -62,8 +62,7 @@ oracle/harness/      the deterministic-tick patch and trace hooks for the C kern
 docs/                plans/rtos-mission.md, the one plan; API-MAP.md and CONFIG-MAP.md, the contracts;
                      LEDGER.md, the family-level numbers (the oracle trace, the fleet gate);
                      HOUSE-STACK.md, every house crate's readiness for this family, compile-gated;
-                     plans/build-me-bare.md, the queue of house crates Kairos wants on bare metal;
-                     upstream/, issue drafts for the house crates the gate found short
+                     plans/build-me-bare.md, the queue of house crates Kairos wants on bare metal
 rusty_rtos_*/        the packages (each: .git, Cargo.toml, crates/, firmware/, docs/plans/<name>.md,
                      docs/LEDGER.md, docs/plans/use-protection-please.md, ci)
 ```

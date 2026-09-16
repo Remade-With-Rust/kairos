@@ -62,7 +62,10 @@ proven on both targets by the gate.
    `Region` on the M3 cell. Those rows are the only thing that upgrades a
    "compiles" here to "runs".
 6. **Filing is the owner's act.** Issue and PR drafts are prepared in
-   `docs/upstream/` with the reproduction and the fix; the owner files them.
+   the private `Remade-With-Rust/kairos-upstream` with the reproduction and the
+   fix; the owner files them. They were in this repo until it went public: a
+   finding about somebody else's code goes to its maintainer before it goes to
+   the internet.
    Nothing in this plan is executed against a public house repository by a
    session on its own.
 
@@ -70,12 +73,12 @@ proven on both targets by the gate.
 
 | # | brick | where the work is | kill test | unblocks |
 |---|---|---|---|---|
-| B1 | ~~`rusty_zstd`: the eight census counters behind `target_has_atomic = "64"`~~ — **closed 2026-09-09, fixed upstream in 0.2.5.** `gate-zstd` at `=0.2.5` exits 0 on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf`; the draft was never filed and is now moot | rusty_zstd (draft: `docs/upstream/rusty_zstd-atomic-u64.md`, resolved) | met | on-chip compression is unblocked; `rusty_rtos_demo`'s trace capture on a board (K3) can store compressed |
-| B2 | ~~`rusty_time-core`: `no_std` leaf~~ — **closed 2026-09-09, fixed upstream in 0.2.0.** `gate-time` at `=0.2.0` exits 0 on both targets; the draft was never filed and is now moot. Original scope: — `cfg_attr(not(std), no_std)`, `ntp.rs` unconditional, `filter`/`discipline`/`select`/`server`/`client`/`config`/`refclock`/`vclock` behind `std`; a CI rung with `--no-default-features`; release 0.2.0 | rusty_time (draft: `docs/upstream/rusty_time-no-std-leaf.md`) | `gate-time` OK on both targets at `=0.2.0`; `NtpPacket::parse` of a 48-byte request round-trips `to_bytes` in a `no_std` test — **both met upstream** (the round trip is `client_request_round_trips_in_48_bytes`, run on the host `no_std` arm AND on the S3); only the registry pin is outstanding | `rusty_rtos_sntp` as a wrapper over the leaf (mission plan §5.5 item 4 flips to "the leaf"); until then the coreSNTP remake |
+| B1 | ~~`rusty_zstd`: the eight census counters behind `target_has_atomic = "64"`~~ — **closed 2026-09-09, fixed upstream in 0.2.5.** `gate-zstd` at `=0.2.5` exits 0 on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf`; the draft was never filed and is now moot | rusty_zstd (draft: `kairos-upstream/drafts/rusty_zstd-atomic-u64.md`, resolved) | met | on-chip compression is unblocked; `rusty_rtos_demo`'s trace capture on a board (K3) can store compressed |
+| B2 | ~~`rusty_time-core`: `no_std` leaf~~ — **closed 2026-09-09, fixed upstream in 0.2.0.** `gate-time` at `=0.2.0` exits 0 on both targets; the draft was never filed and is now moot. Original scope: — `cfg_attr(not(std), no_std)`, `ntp.rs` unconditional, `filter`/`discipline`/`select`/`server`/`client`/`config`/`refclock`/`vclock` behind `std`; a CI rung with `--no-default-features`; release 0.2.0 | rusty_time (draft: `kairos-upstream/drafts/rusty_time-no-std-leaf.md`) | `gate-time` OK on both targets at `=0.2.0`; `NtpPacket::parse` of a 48-byte request round-trips `to_bytes` in a `no_std` test — **both met upstream** (the round trip is `client_request_round_trips_in_48_bytes`, run on the host `no_std` arm AND on the S3); only the registry pin is outstanding | `rusty_rtos_sntp` as a wrapper over the leaf (mission plan §5.5 item 4 flips to "the leaf"); until then the coreSNTP remake |
 | B3 | ~~`rusty_alloc` 2.0.5: `REGION_ALIGN` and a public region error type~~ — **closed 2026-09-10, released as 2.1.0** (not the 2.0.5 this plan named). The seam pins `=2.1.0` and re-exports `REGION_ALIGN`, `PrimError` and the four `FERR_*` codes beside the region API it already had | rusty_alloc | met — see section 6 | the seam's docs and the firmware template: the documented `HEAP.give()?` is now **writable**, which it was not while the error type had no name |
 | B4a | ~~The seam given a `Region` in the M3 cell~~ — **closed 2026-09-10.** `rusty_rtos_core/firmware/mps2-an385-qemu-region`, 9/9 on a Cortex-M3 under QEMU, exit 0. `mps2-an385` and not the `lm3s6965evb` this plan named, because `MIN_REGION` is 65,536 bytes and the LM3S6965 has 65,536 bytes of SRAM in total | Kairos | met | `rusty_alloc` is now run on a Kairos **target** as well as on the S3 |
 | B4b | The K4 allocation-latency row against the C `heap_4` — **and it cannot come from QEMU**, which is the finding B4a produced. See section 4. **The COMPARISON is done as of 2026-09-10** (`rusty_rtos_core/firmware/esp32s3-devkit-alloc-ab`: `heap_4.c` compiled verbatim from the oracle with `xtensa-esp32s3-elf-gcc`, run under the identical CCOUNT harness, null A/B delta **0 cycles**, checksums compared across arms). The blocker was never the board — it was the second allocator, and heap_4 needs no port. **What remains is only the TARGET clause** | Kairos (K4; family plan) | a cycle row from **silicon**: the ESP32-C6 (`riscv32imac`, a Kairos target, real `mcycle`) — **the Xtensa arm of this is done; the Kairos-target arm is not** | `rusty_alloc` "measured on Cortex-M" |
-| B5 | ~~`rusty_erasure-core`: the census counter behind `target_has_atomic = "64"`~~ — **closed 2026-09-10, fixed upstream in 0.4.1**, which is the release this plan asked for by name. `gate-erasure` at `=0.4.1` exits 0 on both targets, a genuine **FAIL → OK**: the rung was still failing at `=0.4.0` in the same session, minutes earlier | rusty_erasure (draft: `docs/upstream/rusty_erasure-atomic-u64.md`, resolved) | met | nothing in Kairos v1; the org's `no-std` label is now true |
+| B5 | ~~`rusty_erasure-core`: the census counter behind `target_has_atomic = "64"`~~ — **closed 2026-09-10, fixed upstream in 0.4.1**, which is the release this plan asked for by name. `gate-erasure` at `=0.4.1` exits 0 on both targets, a genuine **FAIL → OK**: the rung was still failing at `=0.4.0` in the same session, minutes earlier | rusty_erasure (draft: `kairos-upstream/drafts/rusty_erasure-atomic-u64.md`, resolved) | met | nothing in Kairos v1; the org's `no-std` label is now true |
 
 Not a brick: `rusty_xml`. No Kairos package will ever parse XML; the gate
 keeps the row so the category is not mistaken for a fact.
@@ -489,14 +492,14 @@ something is right, and cannot tell you what it costs.**
 
 - ~~**Owner:** file B1~~ **done 2026-09-09**: fixed upstream in its own
   repository, released as `rusty_zstd` 0.2.5, pin moved here, both gate rungs
-  green. The `docs/upstream/` draft was never needed.
+  green. The `kairos-upstream/drafts/` draft was never needed.
 - ~~**Owner:** file B2~~ **done 2026-09-09**: fixed upstream in its own
   repository, released as `rusty_time-core` 0.2.0 (breaking, so a minor bump
   and not the 0.1.11 this plan asked for), pin moved here, both gate rungs
-  green. The `docs/upstream/` draft was never needed.
+  green. The `kairos-upstream/drafts/` draft was never needed.
 - ~~**Owner:** file B5~~ **done 2026-09-10**: fixed upstream and released as
   `rusty_erasure-core` 0.4.1 — the version this plan named — pin moved here,
-  both rungs green from the registry. The `docs/upstream/` draft was never
+  both rungs green from the registry. The `kairos-upstream/drafts/` draft was never
   needed, which is now three for three.
 - ~~**Owner:** B3~~ **done 2026-09-10**: released as `rusty_alloc` **2.1.0**,
   not the 2.0.5 this plan asked for. Pin moved, the seam's re-export list
@@ -550,7 +553,7 @@ something is right, and cannot tell you what it costs.**
 | 2026-09-09 | This plan exists because a `no-std` category on crates.io is not a claim: three house crates carry it and fail on a Cortex-M4F. The gate is the claim; this plan is the queue from FAIL to OK. |
 | 2026-09-09 | Census counters are the whole reason two codecs lose 32-bit bare metal; the fix is to gate or port the counters, never to drop the census (the codec skills depend on it) and never to fork the crate. |
 | 2026-09-09 | `rusty_time` is consumed as a leaf (`ntp.rs`), not lifted whole; the SNTP package wraps the leaf when it exists and remakes coreSNTP until then. |
-| 2026-09-09 | Nothing here is executed against a public house repository by a session; drafts in `docs/upstream/` are the hand-off, filing is the owner's. |
+| 2026-09-09 | Nothing here is executed against a public house repository by a session; drafts in `kairos-upstream/drafts/` are the hand-off, filing is the owner's. |
 | 2026-09-09 | **B1 closed.** Fixed in `rusty_zstd` itself and released as 0.2.5; the pin here moved in the same act and both rungs are green. The plan's estimate ("eight statics, small") was low by two orders of magnitude -- 427 uses across sixteen files -- because it was read off a rustc report that CAPS its output. **Count the sites before sizing a fix from an error list.** The conclusion held regardless, and at that scale the one-seam option was the only maintainable one. |
 | 2026-09-09 | The stub was chosen over `portable-atomic` so a codec does not conscript a downstream firmware's interrupt policy for the sake of a diagnostic counter. The seam is one type wide if Kairos ever wants the census on-chip. |
 | 2026-09-09 | B1 also produced the plan's first board row (an ESP32-S3 round trip), which is strategy item 5's "bare" for the STUB configuration -- but not for a Kairos part. B4 still owes the Cortex-M row. |
@@ -572,7 +575,7 @@ something is right, and cannot tell you what it costs.**
 | 2026-09-10 | **B3's kill test could not fail.** `grep -c "arrives with the next"` printed 0 on the UNFIXED tree, because the comment said "arrive with / the next release" — wrong verb form and split over a line break. Replaced with a compile check. **A kill test that greps for prose rots with the prose**; make every row run a compiler. |
 | 2026-09-10 | **Two of the gate's own rungs had never run.** `host/` and `hostgit/` are packages inside a workspace whose `members = ["gate-*"]` does not match them, so cargo refused to build either — while the README recorded times for both. They now carry their own `[workspace]` tables, and `host/` was still pinning the two PRE-FIX versions because nothing had compiled it since. **Run every rung the README lists before believing any of them**, and re-run all three workspaces when a pin moves. |
 | 2026-09-10 | `host` fails `cargo deny check advisories` on three `unmaintained` crates (`atomic-polyfill`, `smallstr` via **spacedb-sdk**; `paste` via **ffai-core**) and the gate workspace is clean, which is the host/bare-metal split doing its job. Two are one `heapless` 0.8 bump away, because 0.8 replaced `atomic-polyfill` with `portable-atomic` — the crate strategy item 3 already names. Owner steps for those two crates, not Kairos's. |
-| 2026-09-09 | **B2 closed.** Fixed in `rusty_time` itself and released as `rusty_time-core` 0.2.0; the pin here moved in the same act and both rungs are green from the registry. Two bricks in one day (B1, B2) both closed by fixing the crate rather than working around it, and in both cases the `docs/upstream/` draft turned out never to be needed -- **the draft is insurance, not the plan.** Remaining: B3 and B5 need releases, B4 rides K4. |
+| 2026-09-09 | **B2 closed.** Fixed in `rusty_time` itself and released as `rusty_time-core` 0.2.0; the pin here moved in the same act and both rungs are green from the registry. Two bricks in one day (B1, B2) both closed by fixing the crate rather than working around it, and in both cases the `kairos-upstream/drafts/` draft turned out never to be needed -- **the draft is insurance, not the plan.** Remaining: B3 and B5 need releases, B4 rides K4. |
 
 ## 8. Appendix — the exact failures
 

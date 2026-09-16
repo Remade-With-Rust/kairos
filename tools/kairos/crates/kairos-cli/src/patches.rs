@@ -188,6 +188,7 @@ fn reachable_crate_names(root: &Path, manifest: &Manifest, package: &Package) ->
 fn render(root: &Path, manifest: &Manifest, package: &Package) -> Result<(String, usize)> {
     let names = reachable_crate_names(root, manifest, package);
     let mut lines = vec![HEADER.to_owned()];
+    let mut all_rows: Vec<String> = Vec::new();
     let mut rows_total = 0usize;
     for used in &package.uses {
         let (sibling, only) = match used.split_once('/') {
@@ -200,7 +201,6 @@ fn render(root: &Path, manifest: &Manifest, package: &Package) -> Result<(String
                 package.name
             ));
         };
-        let url = format!("https://github.com/{}/{}", manifest.kairos.org, sib.name);
         let mut rows = Vec::new();
         for krate in sib.crate_names() {
             if only.is_some_and(|c| c != krate) {
@@ -210,12 +210,12 @@ fn render(root: &Path, manifest: &Manifest, package: &Package) -> Result<(String
                 continue;
             }
             let target = root.join(&sib.name).join("crates").join(&krate);
-            // A sibling that is not checked out keeps its git dependency; a
-            // row pointing at a directory that is not there makes cargo
-            // refuse to resolve the graph at all.
+            // A sibling that is not checked out resolves from crates.io
+            // instead; a row pointing at a directory that is not there
+            // makes cargo refuse to resolve the graph at all.
             if !target.join("Cargo.toml").is_file() {
                 eprintln!(
-                    "  {}: {krate} is not checked out, keeping the git URL",
+                    "  {}: {krate} is not checked out, resolving it from crates.io",
                     package.name
                 );
                 continue;
@@ -233,8 +233,18 @@ fn render(root: &Path, manifest: &Manifest, package: &Package) -> Result<(String
             continue;
         }
         rows_total = rows_total.saturating_add(rows.len());
-        lines.push(format!("[patch.\"{url}\"]"));
-        lines.extend(rows);
+        all_rows.extend(rows);
+    }
+    // ONE `[patch.crates-io]` table, not one per sibling.
+    //
+    // The siblings used to carry `git = "https://github.com/..."` beside
+    // their version and this patched each URL separately. A crate cannot
+    // be PUBLISHED with a git dependency -- cargo refuses -- so the
+    // manifests now name versions only and resolve from crates.io, which
+    // leaves exactly one source to override.
+    if !all_rows.is_empty() {
+        lines.push("[patch.crates-io]".to_owned());
+        lines.extend(all_rows);
         lines.push(String::new());
     }
     Ok((lines.join("\n"), rows_total))
