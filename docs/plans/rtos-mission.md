@@ -821,8 +821,13 @@ was also the last; the port gained `switch_context_trap` +
 `new_task_context_preemptive`, and the cell now runs 201 switches between two
 tasks that never yield, zero faults (`riscv32-qemu-preempt`, 2026-09-11) ·
 [x] K3 the preemptive switch MEASURED: 74 vs FreeRTOS 83, 1.12x, near parity
-(`bench/switch-cost/run.sh`, 2026-09-11) · [ ] K4
-`heap_4` differential trace · [x] K5 the four hardware claims RE-RUNNABLE,
+(`bench/switch-cost/run.sh`, 2026-09-11) · [x] K4 `heap_4`
+differential trace -- and since 2026-09-16 all four heaps: `heap_1` (2,000 ops,
+1,973 refusals), `heap_4` (20,000 ops + a generational protector), `heap_5`
+(20,000 ops over three regions with real gaps), each poison-proven, plus
+`heap_3` over the global allocator whose claim is deliberately a WEAKER kind --
+the accounting reconciles, because a differential against `heap_3.c` would
+compare two third-party allocators and call it conformance · [x] K5 the four hardware claims RE-RUNNABLE,
 not merely re-readable: `kairos check --board` (2026-09-11) · [ ] K5 S1 on
 Kairos vs esp-rtos · [x] K5 the
 corpus on S3 SILICON, 18/18 byte-identical to C (2026-09-10) · [x] K5 Xtensa
