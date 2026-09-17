@@ -157,7 +157,7 @@ plan = "docs/plans/rusty_rtos-capi.md"
 [[package]]
 name = "rusty_rtos_sntp"
 kind = "function"
-status = "K7 serializer, 160 trace lines"
+status = "K7 serializer + client, 709 trace lines"
 visibility = "private"
 description = "coreSNTP remade in Rust: the SNTPv4 packet codec and its clock arithmetic, diffed against the C across the 2036 era wrap. The client state machine is not written yet."
 crates = ["rusty_rtos_sntp", "rusty_rtos_sntp-core"]
