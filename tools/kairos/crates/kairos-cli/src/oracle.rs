@@ -44,6 +44,120 @@ const CLASSIC_SPARSE: [&str; 5] = [
     "FreeRTOS/Test/VeriFast",
 ];
 
+/// The K7 libraries, pinned in `ORACLES.md` under `FreeRTOS/FreeRTOS-LTS`
+/// at `0b25dc50bae4cb971c7a459b109e52ab2f01a6b8`.
+///
+/// Each is its own repository rather than a directory of the LTS manifest,
+/// which is why they are cloned one at a time and pinned one at a time. They
+/// are fetched only when asked for — `fetch` takes the kernel and the classic
+/// distribution always, because the conformance corpus needs them on every
+/// run, and a K7 library is needed by one package.
+struct Library {
+    /// The directory under `oracle/`, and the name printed.
+    name: &'static str,
+    url: &'static str,
+    tag: &'static str,
+    sha: &'static str,
+    /// Which Kairos package this is the oracle for.
+    package: &'static str,
+}
+
+const LIBRARIES: [Library; 6] = [
+    Library {
+        name: "backoffAlgorithm",
+        url: "https://github.com/FreeRTOS/backoffAlgorithm.git",
+        tag: "v1.4.2",
+        sha: "14f4c88b33dd554be30a00a312c88d3986d457d0",
+        package: "rusty_rtos_backoff",
+    },
+    Library {
+        name: "coreJSON",
+        url: "https://github.com/FreeRTOS/coreJSON.git",
+        tag: "v3.3.1",
+        sha: "cffa492da18c890181d64462f8af63992a69d3b0",
+        package: "rusty_rtos_json",
+    },
+    Library {
+        name: "coreSNTP",
+        url: "https://github.com/FreeRTOS/coreSNTP.git",
+        tag: "v2.0.0",
+        sha: "50f5f96f4c33b14c0358f404ff4ff2a29d422ad7",
+        package: "rusty_rtos_sntp",
+    },
+    Library {
+        name: "coreMQTT",
+        url: "https://github.com/FreeRTOS/coreMQTT.git",
+        tag: "v5.0.2",
+        sha: "04845c6a8e5f9cf2d232f1c6e80baeb81302e690",
+        package: "rusty_rtos_mqtt",
+    },
+    Library {
+        name: "coreHTTP",
+        url: "https://github.com/FreeRTOS/coreHTTP.git",
+        tag: "v3.1.3",
+        sha: "3c4a5838658cd6d0ff8fb7c3a14e30baafcbcd28",
+        package: "rusty_rtos_http",
+    },
+    Library {
+        name: "FreeRTOS-Plus-TCP",
+        url: "https://github.com/FreeRTOS/FreeRTOS-Plus-TCP.git",
+        tag: "V4.4.1",
+        sha: "c12361095aca68aeed858f45d14395fbffa92c0d",
+        package: "rusty_rtos_tcp",
+    },
+];
+
+/// Clone one K7 library at its pin, or verify the clone that is there.
+fn fetch_library(root: &Path, library: &Library) -> Result<()> {
+    let at = root.join("oracle").join(library.name);
+    if at.join(".git").exists() {
+        match head_sha(&at).as_deref() {
+            Some(sha) if sha == library.sha => {
+                println!(
+                    "{}: {} = {sha} (pinned, for {})",
+                    library.name, library.tag, library.package
+                );
+                return Ok(());
+            }
+            Some(sha) => {
+                return fail(format!(
+                    "{} is at {sha}, not the pinned {} ({}); delete oracle/{} and re-fetch, or re-pin in ORACLES.md with a decision-log row",
+                    library.name, library.sha, library.tag, library.name
+                ));
+            }
+            None => return fail(format!("{}: cloned but has no HEAD", library.name)),
+        }
+    }
+
+    println!(
+        "{}: cloning {} for {}",
+        library.name, library.tag, library.package
+    );
+    git(
+        &root.join("oracle"),
+        &[
+            "clone",
+            "--depth",
+            "1",
+            "--branch",
+            library.tag,
+            library.url,
+            library.name,
+        ],
+    )?;
+    match head_sha(&at).as_deref() {
+        Some(sha) if sha == library.sha => {
+            println!("{}: {} = {sha} (pinned)", library.name, library.tag);
+            Ok(())
+        }
+        Some(sha) => fail(format!(
+            "{} cloned at {sha}, not the pinned {} ({}) — the tag has moved; re-pin in ORACLES.md with a decision-log row",
+            library.name, library.sha, library.tag
+        )),
+        None => fail(format!("{}: cloned but has no HEAD", library.name)),
+    }
+}
+
 /// A demo scenario: its name, the standard demo files it needs, and
 /// whether it has to come out of the second binary.
 struct Scenario {
@@ -206,7 +320,7 @@ fn head_sha(dir: &Path) -> Option<String> {
 
 // ------------------------------------------------------------------ fetch --
 
-fn fetch(root: &Path) -> Result<()> {
+fn fetch(root: &Path, args: &[String]) -> Result<()> {
     let oracle = root.join("oracle");
     fs::create_dir_all(&oracle)?;
 
@@ -273,6 +387,33 @@ fn fetch(root: &Path) -> Result<()> {
     let minimal = classic.join("FreeRTOS/Demo/Common/Minimal");
     let n = fs::read_dir(&minimal).map(|d| d.count()).unwrap_or(0);
     println!("FreeRTOS/Demo/Common/Minimal: {n} files");
+
+    // The K7 libraries, on request. `--libs` takes all six; `--lib <name>`
+    // takes one, which is what a package working on itself wants -- cloning
+    // FreeRTOS-Plus-TCP to write a backoff differential is a slow way to
+    // prove nothing.
+    let one = option(args, "--lib");
+    let all = has_flag(args, "--libs");
+    if all || one.is_some() {
+        let mut matched = 0usize;
+        for library in &LIBRARIES {
+            if let Some(ref name) = one {
+                if name != library.name {
+                    continue;
+                }
+            }
+            matched = matched.saturating_add(1);
+            fetch_library(root, library)?;
+        }
+        if matched == 0 {
+            let names: Vec<&str> = LIBRARIES.iter().map(|l| l.name).collect();
+            return fail(format!(
+                "no K7 library named {:?}; ORACLES.md pins {}",
+                one.unwrap_or_default(),
+                names.join(", ")
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -617,7 +758,7 @@ fn cat(root: &Path, name: &str) -> Result<()> {
 pub(crate) fn main(root: &Path, args: &[String]) -> Result<()> {
     let verb = args.first().map(String::as_str).unwrap_or("");
     match verb {
-        "fetch" => fetch(root),
+        "fetch" => fetch(root, &args[1..]),
         "patch" => patch(root),
         "build" => {
             let name = args.get(1).map(String::as_str).unwrap_or("dynamic");

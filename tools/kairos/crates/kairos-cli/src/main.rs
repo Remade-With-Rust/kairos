@@ -35,7 +35,7 @@ use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Command, ExitCode, Stdio},
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
     time::{Duration, Instant},
 };
 
@@ -334,7 +334,10 @@ fn lockfile_has_pathed_sibling(text: &str, dir: &Path) -> bool {
         if !name.starts_with("rusty_rtos") {
             continue;
         }
-        if block.lines().any(|l| l.trim_start().starts_with("source = ")) {
+        if block
+            .lines()
+            .any(|l| l.trim_start().starts_with("source = "))
+        {
             continue;
         }
         local.push(name);
@@ -350,7 +353,11 @@ fn lockfile_has_pathed_sibling(text: &str, dir: &Path) -> bool {
 /// The value of `key = "..."` in a lockfile block.
 fn toml_string_field(block: &str, key: &str) -> Option<String> {
     block.lines().find_map(|line| {
-        let rest = line.trim().strip_prefix(key)?.trim_start().strip_prefix('=')?;
+        let rest = line
+            .trim()
+            .strip_prefix(key)?
+            .trim_start()
+            .strip_prefix('=')?;
         Some(rest.trim().trim_matches('"').to_owned())
     })
 }
@@ -936,9 +943,7 @@ fn flash_and_watch(cell: &Path, elf: &Path, name: &str) -> Result<BoardOutcome> 
 
     // Keep the transcript only when it is wanted: on a pass nobody reads it,
     // and writing one per cell per run would be litter.
-    let path = cell
-        .join("target")
-        .join(format!("kairos-board-{name}.log"));
+    let path = cell.join("target").join(format!("kairos-board-{name}.log"));
     let transcript_path = if verdict == Some(true) {
         let _ = fs::remove_file(&path);
         None

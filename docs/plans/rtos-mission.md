@@ -757,6 +757,69 @@ package building alone with green CI):
    interop against the host stack; `iperf`-style throughput rows on the C6).
    **Kill test:** an MQTT session over our TCP on a C6 to a broker for one
    hour with zero lost keep-alives, and the JSON suite at 100 %.
+### K7's build order, and why it is not the order this plan first wrote (2026-09-16)
+
+The list above reads *json, backoff, mqtt, http, sntp, tcp*. **Start with
+`backoff`**, and the reason is the one K4 paid for twice: `heap_1` was built
+before `heap_5` to learn whether the differential harness generalised beyond
+the allocator it was written for, and it did, and the harness needed nothing.
+K7 has the same question and no answer yet — nothing in this family has ever
+been diffed against a C *library* rather than the kernel.
+
+`backoffAlgorithm` is the smallest thing that can answer it. It is a pure
+function with no I/O, no time source and no transport, its behaviour is two
+lines of arithmetic plus a PRNG, and its oracle is its own unit-test vectors.
+If the K7 harness needs changing, it is far better to learn that on a crate
+that can be read in one sitting than on coreMQTT.
+
+**Step 0, and it blocks every one of them: the oracles are pinned but not
+fetchable.** `ORACLES.md` carries the exact commits — coreJSON v3.3.1 at
+`cffa492`, backoffAlgorithm v1.4.2 at `14f4c88`, coreMQTT v5.0.2, coreHTTP
+v3.1.3, coreSNTP v2.0.0, FreeRTOS-Plus-TCP V4.4.1, all under
+`FreeRTOS/FreeRTOS-LTS` at `0b25dc50` — and `kairos oracle fetch` clones only
+`FreeRTOS-Kernel` and the classic `FreeRTOS` repository. Teaching it the
+library pins is the first commit of K7 and it is shared by all six.
+
+| # | package | oracle, and what the kill test can actually be | why here |
+|---|---|---|---|
+| 1 | **`rusty_rtos_backoff`** | `backoffAlgorithm`'s own unit-test vectors, plus its PRNG driven identically so the sequences are comparable — the same trick the heap differentials use, because `rand()` is implementation-defined and would make the arms incomparable by construction | the smallest thing that proves the K7 harness. No I/O, no transport, no clock |
+| 2 | **`rusty_rtos_json`** | **JSONTestSuite** (the y_/n_/i_ corpus) at 100 %, plus coreJSON's own vectors, plus the family's no-panic gate driven at the whole public surface | self-contained, and the first one with a real external corpus rather than a vendor's vectors |
+| 3 | **`rusty_rtos_sntp`** | `rusty_time`'s server, per decision §5.5 | small, and its dependency is a house crate already `no_std`-ready rather than a network stack |
+| 4 | **`rusty_rtos_mqtt`** | coreMQTT's CMock vectors, then a real broker — `rumqttd` per the 2026-09-10 retarget, NOT AWS IoT Core, which §2.2 marks NEVER | transport-agnostic by design: it takes send/recv callbacks, so it can be proven over the HOST's TCP long before `rusty_rtos_tcp` exists |
+| 5 | **`rusty_rtos_http`** | coreHTTP's vectors, then a real server | same shape as mqtt and strictly less protocol |
+| 6 | **`rusty_rtos_tcp`** | the +TCP API over smoltcp; interop against the host stack; `iperf`-style rows | by far the largest, and the only one that needs a part for its headline number |
+
+**The `json` decision is already taken and should not be reopened.** This
+package is the coreJSON *API* — the zero-allocation validator and
+`JSON_Search` over a byte buffer, `forbid(unsafe)`, **no `alloc`** — because
+serde_json's model (an `alloc`-backed `Value`, boxed errors) cannot provide
+it. Typed (de)serialization under `alloc` goes through the house's
+`rusty_json_turbo` behind a `serde` feature, **never a second parser for that
+job**. That is `rusty_rtos_json`'s decision log, 2026-09-09, and
+`HOUSE-STACK.md` carries the pin and the gate. Two jobs, one crate each.
+
+**What each package must NOT do**, learned from K4 and K6 and worth stating
+once for all six:
+
+* **No differential whose workload cannot fail.** heap_4's first one never
+  refused a request and agreed about the easy half of an allocator; heap_1's
+  guard is inverted for the same reason. Every K7 package needs its own
+  version of "the workload reached the branch that matters" — for a parser
+  that means the REJECTIONS, so JSONTestSuite's `n_` files carry more weight
+  than its `y_` files.
+* **No claim of a kind the oracle cannot support.** `heap_3` could not be
+  diffed against `heap_3.c` because both sides would be third-party
+  allocators, so its claim is weaker and says so. If a K7 package hits the
+  same wall — and `sntp` against a live server may — the weaker claim is
+  stated, not dressed up.
+* **Poison-prove every pass.** Three K4 differentials passed first time and
+  all three were only trustworthy after a deliberate one-character break made
+  them fail.
+* **Read the pinned source, do not remember it.** K4 corrected two plan
+  assumptions this way — `heap_1`'s `vPortFree` is an assertion and not a
+  no-op, and `heap_5` asserts region order rather than sorting. Both were
+  written from memory into a plan and both were wrong.
+
 11. **K8 — SMP, MPU, tickless idle, stats, hardening, 1.0.** `configNUMBER_OF_CORES
    > 1` on the ESP32-S3 (two cores) and QEMU; loom models for the SMP ready
    list; `rusty_rtos_mpu` on M33 (`mps2-an505`); tickless idle with the

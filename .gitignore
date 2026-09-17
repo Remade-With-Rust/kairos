@@ -26,3 +26,13 @@ Thumbs.db
 
 # Recordings from bench/kernel-ir: callgrind dumps, 16MB and regenerable.
 bench/kernel-ir/out/
+
+# K7 library oracles, cloned at their ORACLES.md pins by
+# `kairos oracle fetch --lib <name>`. Pinned, not vendored: the same
+# arrangement as oracle/FreeRTOS-Kernel.
+oracle/backoffAlgorithm/
+oracle/coreJSON/
+oracle/coreSNTP/
+oracle/coreMQTT/
+oracle/coreHTTP/
+oracle/FreeRTOS-Plus-TCP/
