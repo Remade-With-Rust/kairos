@@ -42,7 +42,13 @@ __NAME__-core = { path = "crates/__NAME__-core", version = "0.1.0", default-feat
 # its own. Inside the Kairos umbrella folder `kairos patches` writes a
 # `.cargo/config.toml` that patches the URL to the sibling checkout, so local
 # edits are visible without a push.
-rusty_rtos_core = { version = "0.1.0", git = "https://github.com/__ORG__/rusty_rtos_core", default-features = false }
+# Registry only. A `git =` dependency here is what `cargo publish` refuses,
+# and it silently defeats the umbrella's [patch.crates-io] rows -- a patch
+# aimed at crates-io cannot reach a dependency resolved from a git URL, so
+# the package would build against the PUBLISHED core while every sibling
+# built against the local one. The v0.1.0 release pass removed these from
+# the existing packages and missed the template.
+rusty_rtos_core = { version = "0.1.0", default-features = false }
 
 [profile.release]
 # use-protection-please H-05: overflow checks stay on in release; LTO and

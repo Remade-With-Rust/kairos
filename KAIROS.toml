@@ -101,7 +101,7 @@ plan = "docs/plans/rusty_rtos_heap.md"
 [[package]]
 name = "rusty_rtos_json"
 kind = "function"
-status = "scaffold"
+status = "K7 validator + query, 318/318 and 2,124 queries"
 visibility = "private"
 description = "coreJSON remade in Rust: the strict ECMA-404 validator and the query-by-path search, zero allocation, no_std, forbid(unsafe), with the no-panic gate every parser in the family carries."
 crates = ["rusty_rtos_json", "rusty_rtos_json-core"]
@@ -113,7 +113,7 @@ plan = "docs/plans/rusty_rtos_json.md"
 [[package]]
 name = "rusty_rtos_backoff"
 kind = "function"
-status = "scaffold"
+status = "K7 192/192 calls"
 visibility = "private"
 description = "backoffAlgorithm remade in Rust: exponential backoff with jitter for network retries, no_std, forbid(unsafe), gated against the C library's own test vectors."
 crates = ["rusty_rtos_backoff", "rusty_rtos_backoff-core"]
@@ -153,3 +153,15 @@ no_std_crates = ["rusty_rtos-capi-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
 uses = ["rusty_rtos_core"]
 plan = "docs/plans/rusty_rtos-capi.md"
+
+[[package]]
+name = "rusty_rtos_sntp"
+kind = "function"
+status = "K7 serializer, 160 trace lines"
+visibility = "private"
+description = "coreSNTP remade in Rust: the SNTPv4 packet codec and its clock arithmetic, diffed against the C across the 2036 era wrap. The client state machine is not written yet."
+crates = ["rusty_rtos_sntp", "rusty_rtos_sntp-core"]
+no_std_crates = ["rusty_rtos_sntp-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_sntp.md"
