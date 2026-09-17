@@ -169,7 +169,7 @@ plan = "docs/plans/rusty_rtos_sntp.md"
 [[package]]
 name = "rusty_rtos_mqtt"
 kind = "function"
-status = "K7 publish state, 413 trace lines (7.7% of coreMQTT)"
+status = "K7 publish state + fixed header (9.2% of coreMQTT)"
 visibility = "private"
 description = "coreMQTT remade in Rust: the QoS publish state machine, zero allocation, no_std, forbid(unsafe)."
 crates = ["rusty_rtos_mqtt", "rusty_rtos_mqtt-core"]
