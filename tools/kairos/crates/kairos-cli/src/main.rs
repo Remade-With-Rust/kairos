@@ -781,8 +781,7 @@ impl BoardOutcome {
     fn stderr_tail(&self) -> String {
         self.stderr
             .lines()
-            .filter(|l| !l.trim().is_empty())
-            .next_back()
+            .rfind(|l| !l.trim().is_empty())
             .unwrap_or("(nothing)")
             .trim()
             .to_string()
