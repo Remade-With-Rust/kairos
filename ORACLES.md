@@ -33,6 +33,31 @@ The LTS also carries the AWS IoT libraries (SigV4, Device Shadow, Defender,
 Jobs, Fleet Provisioning, MQTT file streams). They are NEVER in Kairos (mission
 plan §2.1): cloud-of-record by design.
 
+## Third-party corpora — the denominator of a conformance claim
+
+A vendor's own test vectors say a library agrees with itself. A headline like
+"100 % of the suite" needs a suite that is neither ours nor theirs, and it
+needs a pin for exactly the same reason a source checkout does: the file count
+IS the denominator, and an unpinned corpus makes last month's percentage
+incomparable with this month's.
+
+| corpus | commit | files | Kairos package | what it is for |
+|---|---|---|---|---|
+| `nst/JSONTestSuite` (MIT) | `1ef36fa01286573e846ac449e8683f8833c5b26a` (2024-11-22) | 318 in `test_parsing/`: 95 `y_`, 188 `n_`, 35 `i_` | `rusty_rtos_json` (K7) | Nicolas Seriot's *Parsing JSON is a Minefield*. `y_` must be accepted, `n_` must be rejected, `i_` is implementation-defined and only the differential has an opinion |
+
+`test_parsing/` is **vendored** into `rusty_rtos_json/oracle/` (746 KB, MIT,
+licence file alongside) rather than fetched, because the differential has to
+run in CI on a box with no network and no C toolchain. That is the same
+arrangement as the checked-in kernel traces and `backoff.trace`: the C is the
+oracle, its verdicts are captured once against the pin, and the captured
+verdicts are what CI compares against.
+
+**Measure the C against the corpus before adopting both.** coreJSON scores
+100 % here (95/95 accepted, 188/188 rejected), so "agree with coreJSON" and
+"pass JSONTestSuite" happen to be the same target — but that was measured, not
+assumed, and `rusty_rtos_json` keeps a separate test for each so the day they
+diverge is visible rather than silently resolved.
+
 ## Emulators and silicon (the second oracle)
 
 | cell | what runs there | tool | state on this machine (2026-09-09) |
