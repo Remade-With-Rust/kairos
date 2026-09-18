@@ -169,9 +169,9 @@ plan = "docs/plans/rusty_rtos_sntp.md"
 [[package]]
 name = "rusty_rtos_mqtt"
 kind = "function"
-status = "K7 ten slices; reads every packet a broker sends, opens and closes a session (30.1% of coreMQTT)"
+status = "K7 eleven slices; reads every packet a broker sends, opens a session, publishes, closes it (33.8% of coreMQTT)"
 visibility = "private"
-description = "coreMQTT remade in Rust: the QoS publish state machine, the fixed-header codec, the MQTT 5 property primitives, the outgoing-packet writers, the packet-size calculators, the acknowledgement deserializers, the CONNACK, the incoming PUBLISH, the DISCONNECT and the CONNECT. Zero allocation, no_std, forbid(unsafe)."
+description = "coreMQTT remade in Rust: the QoS publish state machine, the fixed-header codec, the MQTT 5 property primitives, the outgoing-packet writers, the packet-size calculators, the acknowledgement deserializers, the CONNACK, the incoming PUBLISH, the DISCONNECT, the CONNECT and the outgoing PUBLISH. Zero allocation, no_std, forbid(unsafe)."
 crates = ["rusty_rtos_mqtt", "rusty_rtos_mqtt-core"]
 no_std_crates = ["rusty_rtos_mqtt-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
