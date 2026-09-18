@@ -169,9 +169,9 @@ plan = "docs/plans/rusty_rtos_sntp.md"
 [[package]]
 name = "rusty_rtos_mqtt"
 kind = "function"
-status = "K7 state + header + properties + writers + sizes (14.3% of coreMQTT)"
+status = "K7 state + header + properties + writers + sizes + ack deserializers (18.0% of coreMQTT)"
 visibility = "private"
-description = "coreMQTT remade in Rust: the QoS publish state machine, the fixed-header codec, the MQTT 5 property primitives, the outgoing-packet writers and the packet-size calculators. Zero allocation, no_std, forbid(unsafe)."
+description = "coreMQTT remade in Rust: the QoS publish state machine, the fixed-header codec, the MQTT 5 property primitives, the outgoing-packet writers, the packet-size calculators and the acknowledgement deserializers. Zero allocation, no_std, forbid(unsafe)."
 crates = ["rusty_rtos_mqtt", "rusty_rtos_mqtt-core"]
 no_std_crates = ["rusty_rtos_mqtt-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
