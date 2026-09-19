@@ -25,15 +25,17 @@ decisions that bind. Read it first; everything below is a summary of it.
 
 | Package | Layer | What it remakes | Status |
 |---|---|---|---|
-| [`rusty_rtos_core`](rusty_rtos_core/) | 0 · foundation | the shared vocabulary: ticks, priorities, generational handles, one `Copy` error, the `Config` trait, the Port / Heap / Trace / Hooks seams | K0 |
-| [`rusty_rtos_kernel`](rusty_rtos_kernel/) | 1 · function | `tasks.c`, `queue.c`, `timers.c`, `event_groups.c`, `stream_buffer.c` | scaffold |
-| [`rusty_rtos_port`](rusty_rtos_port/) | 1 · function | `portable/`: sim, Posix, Cortex-M, RISC-V, Xtensa | scaffold |
-| [`rusty_rtos_heap`](rusty_rtos_heap/) | 1 · function | `portable/MemMang/heap_1..5.c` | scaffold |
-| [`rusty_rtos_json`](rusty_rtos_json/) | 1 · function | coreJSON | scaffold |
-| [`rusty_rtos_backoff`](rusty_rtos_backoff/) | 1 · function | backoffAlgorithm | scaffold |
-| [`rusty_rtos_demo`](rusty_rtos_demo/) | 2 · process | `Demo/Common/Minimal` — the conformance corpus | scaffold |
-| [`rusty_rtos-capi`](rusty_rtos-capi/) | 2 · process | the C ABI: `xTaskCreate` and friends as `extern "C"` | scaffold |
-| `rusty_rtos_{tcp, mqtt, http, sntp, pkcs11, cellular, fat, posix, cli, mpu}` | 1 | the rest of the LTS and the Labs | planned (K7, K9) |
+| [`rusty_rtos_core`](https://github.com/Remade-With-Rust/rusty_rtos_core) | 0 · foundation | the shared vocabulary: ticks, priorities, generational handles, one `Copy` error, the `Config` trait, the Port / Heap / Trace / Hooks seams | K0 |
+| [`rusty_rtos_kernel`](https://github.com/Remade-With-Rust/rusty_rtos_kernel) | 1 · function | `tasks.c`, `queue.c`, `timers.c`, `event_groups.c`, `stream_buffer.c` | scaffold |
+| [`rusty_rtos_port`](https://github.com/Remade-With-Rust/rusty_rtos_port) | 1 · function | `portable/`: sim, Posix, Cortex-M, RISC-V, Xtensa | scaffold |
+| [`rusty_rtos_heap`](https://github.com/Remade-With-Rust/rusty_rtos_heap) | 1 · function | `portable/MemMang/heap_1..5.c` | scaffold |
+| [`rusty_rtos_backoff`](https://github.com/Remade-With-Rust/rusty_rtos_backoff) | 1 · function | backoffAlgorithm | **done** — 192/192 calls agree |
+| [`rusty_rtos_json`](https://github.com/Remade-With-Rust/rusty_rtos_json) | 1 · function | coreJSON | **done**, both halves — JSONTestSuite at 100 % |
+| [`rusty_rtos_sntp`](https://github.com/Remade-With-Rust/rusty_rtos_sntp) | 1 · function | coreSNTP | **done**, both halves — 160 trace lines agree |
+| [`rusty_rtos_mqtt`](https://github.com/Remade-With-Rust/rusty_rtos_mqtt) | 1 · function | coreMQTT | **complete** — **218 of 218 functions**, 100 % |
+| [`rusty_rtos_demo`](https://github.com/Remade-With-Rust/rusty_rtos_demo) | 2 · process | `Demo/Common/Minimal` — the conformance corpus | scaffold |
+| [`rusty_rtos-capi`](https://github.com/Remade-With-Rust/rusty_rtos-capi) | 2 · process | the C ABI: `xTaskCreate` and friends as `extern "C"` | scaffold |
+| `rusty_rtos_{tcp, http, pkcs11, cellular, fat, posix, cli, mpu}` | 1 | the rest of the LTS and the Labs | planned (K7, K9) |
 
 Every package has the same shape: a `no_std` (+ `alloc`), `forbid(unsafe)`
 **core** that compiles for Cortex-M and RISC-V bare metal and is tested on the
