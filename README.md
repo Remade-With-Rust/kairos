@@ -4,19 +4,17 @@
 [![By Mata Network](https://img.shields.io/badge/by-Mata%20Network-5b2be0)](https://www.mata.network)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-*Greek: the opportune moment, the right time — the kernel that decides which
-task runs now.*
+*Greek: the opportune moment — the kernel that decides which task runs now.*
 
-Kairos is the Remade-With-Rust programme that rebuilds the **FreeRTOS
-portfolio** — the kernel, its ports and heaps, and the LTS libraries that sit
-on it — in memory-safe Rust, as a family of independent packages that expose
-the API a FreeRTOS developer already knows, prove every scheduling decision
-against the C kernel's own trace, and run on the chips the house already
-ships to (the Janus ESP32 family, Cortex-M, RISC-V).
+FreeRTOS remade in memory-safe Rust: the kernel, its ports and heaps, and the
+LTS libraries that sit on top. Independent packages, each exposing the API a
+FreeRTOS developer already knows, each proving every scheduling decision
+against the C kernel's own trace.
 
-The plan is [docs/plans/rtos-mission.md](docs/plans/rtos-mission.md) — one
-document: where we are, the strategy, what is finished, what remains, the
-decisions that bind. Read it first; everything below is a summary of it.
+Runs on Cortex-M, RISC-V and the Janus ESP32 family.
+
+The plan is [docs/plans/rtos-mission.md](docs/plans/rtos-mission.md): where we
+are, what is finished, what remains. Everything below summarises it.
 
 ## The one-line test
 
@@ -130,20 +128,20 @@ codecs — and it is never a dependency of anything that ships.
 - Every parser that takes bytes from a wire, a store or a bus has a no-panic
   test; every package has a hardening table rendered from its plan file.
 
-## Status (2026-09-19)
+## Status
 
 Every number below is in [`docs/LEDGER.md`](docs/LEDGER.md) with the command
 that produced it, and every one is a diff against the C, not a self-assessment.
 
 | Milestone | |
 |---|---|
-| **K0 family** | passed 2026-09-09 |
-| **K1 scheduler on sim** | passed 2026-09-09 — nine of nine scenarios, **8,408,764 lines identical** at 100,000 ticks |
-| **K2 IPC + timers** | 14 of 18 passed 2026-09-09 — 12,808,722 lines identical; Kani verifies seven harnesses (3,965 checks) |
-| **K2.1–2.3 the Rust, async and static faces** | passed 2026-09-10 |
-| **K3 silicon + QEMU** | part done 2026-09-10 — Cortex-M switches under QEMU, 100/100 resumptions over 200 switches, poison-proven |
-| **K4 heaps** | **passed 2026-09-10** — 20,000 operations agree with `heap_4.c` on the offset chosen, the free bytes and the minimum ever free |
-| **K6 C ABI** | **both halves pass 2026-09-11** — 25/25 unmodified C demo files on QEMU M3 and on the host, Windows threads and Linux pthreads |
+| **K0 family** | passed |
+| **K1 scheduler on sim** | passed — nine of nine scenarios, **8,408,764 lines identical** at 100,000 ticks |
+| **K2 IPC + timers** | 14 of 18 passed — 12,808,722 lines identical; Kani verifies seven harnesses (3,965 checks) |
+| **K2.1–2.3 the Rust, async and static faces** | passed |
+| **K3 silicon + QEMU** | part done — Cortex-M switches under QEMU, 100/100 resumptions over 200 switches, poison-proven |
+| **K4 heaps** | **passed** — 20,000 operations agree with `heap_4.c` on the offset chosen, the free bytes and the minimum ever free |
+| **K6 C ABI** | **both halves pass** — 25/25 unmodified C demo files on QEMU M3 and on the host, Windows threads and Linux pthreads |
 | **K7 libraries** | `backoff`, `json` and `sntp` done; **`mqtt` complete — 218 of coreMQTT's 218 functions** |
 | **K5 Janus joint, K8 SMP / MPU / 1.0** | open |
 
