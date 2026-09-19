@@ -1,5 +1,9 @@
 # Kairos
 
+[![Remade With Rust](https://img.shields.io/badge/Remade%20With-Rust-000?logo=rust&logoColor=fff)](https://github.com/remade-with-rust)
+[![By Mata Network](https://img.shields.io/badge/by-Mata%20Network-5b2be0)](https://www.mata.network)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+
 *Greek: the opportune moment, the right time — the kernel that decides which
 task runs now.*
 
@@ -25,16 +29,16 @@ decisions that bind. Read it first; everything below is a summary of it.
 
 | Package | Layer | What it remakes | Status |
 |---|---|---|---|
-| [`rusty_rtos_core`](https://github.com/Remade-With-Rust/rusty_rtos_core) | 0 · foundation | the shared vocabulary: ticks, priorities, generational handles, one `Copy` error, the `Config` trait, the Port / Heap / Trace / Hooks seams | K0 |
-| [`rusty_rtos_kernel`](https://github.com/Remade-With-Rust/rusty_rtos_kernel) | 1 · function | `tasks.c`, `queue.c`, `timers.c`, `event_groups.c`, `stream_buffer.c` | scaffold |
-| [`rusty_rtos_port`](https://github.com/Remade-With-Rust/rusty_rtos_port) | 1 · function | `portable/`: sim, Posix, Cortex-M, RISC-V, Xtensa | scaffold |
-| [`rusty_rtos_heap`](https://github.com/Remade-With-Rust/rusty_rtos_heap) | 1 · function | `portable/MemMang/heap_1..5.c` | scaffold |
+| [`rusty_rtos_core`](https://github.com/Remade-With-Rust/rusty_rtos_core) | 0 · foundation | the shared vocabulary: ticks, priorities, generational handles, one `Copy` error, the `Config` trait, the Port / Heap / Trace / Hooks seams | **K0 passed** — 34 tests, 8 bare-metal rungs, Miri |
+| [`rusty_rtos_kernel`](https://github.com/Remade-With-Rust/rusty_rtos_kernel) | 1 · function | `tasks.c`, `queue.c`, `timers.c`, `event_groups.c`, `stream_buffer.c` | **K1 passed** — 9/9 scenarios, 8,408,764 lines identical at 100k ticks; **K2 14/18** |
+| [`rusty_rtos_port`](https://github.com/Remade-With-Rust/rusty_rtos_port) | 1 · function | `portable/`: sim, Posix, Cortex-M, RISC-V, Xtensa | **sim port done**; **K3 part done** — Cortex-M switches under QEMU, 100/100 resumptions |
+| [`rusty_rtos_heap`](https://github.com/Remade-With-Rust/rusty_rtos_heap) | 1 · function | `portable/MemMang/heap_1..5.c` | **K4 passed** — 20,000 operations agree with `heap_4.c` |
 | [`rusty_rtos_backoff`](https://github.com/Remade-With-Rust/rusty_rtos_backoff) | 1 · function | backoffAlgorithm | **done** — 192/192 calls agree |
 | [`rusty_rtos_json`](https://github.com/Remade-With-Rust/rusty_rtos_json) | 1 · function | coreJSON | **done**, both halves — JSONTestSuite at 100 % |
 | [`rusty_rtos_sntp`](https://github.com/Remade-With-Rust/rusty_rtos_sntp) | 1 · function | coreSNTP | **done**, both halves — 160 trace lines agree |
 | [`rusty_rtos_mqtt`](https://github.com/Remade-With-Rust/rusty_rtos_mqtt) | 1 · function | coreMQTT | **complete** — **218 of 218 functions**, 100 % |
-| [`rusty_rtos_demo`](https://github.com/Remade-With-Rust/rusty_rtos_demo) | 2 · process | `Demo/Common/Minimal` — the conformance corpus | scaffold |
-| [`rusty_rtos-capi`](https://github.com/Remade-With-Rust/rusty_rtos-capi) | 2 · process | the C ABI: `xTaskCreate` and friends as `extern "C"` | scaffold |
+| [`rusty_rtos_demo`](https://github.com/Remade-With-Rust/rusty_rtos_demo) | 2 · process | `Demo/Common/Minimal` — the conformance corpus | **K6 passed** — 25/25 unmodified C demo files, QEMU M3 and host |
+| [`rusty_rtos-capi`](https://github.com/Remade-With-Rust/rusty_rtos-capi) | 2 · process | the C ABI: `xTaskCreate` and friends as `extern "C"` | **K6 passed** — both halves, two ports, three platforms |
 | `rusty_rtos_{tcp, http, pkcs11, cellular, fat, posix, cli, mpu}` | 1 | the rest of the LTS and the Labs | planned (K7, K9) |
 
 Every package has the same shape: a `no_std` (+ `alloc`), `forbid(unsafe)`
@@ -126,11 +130,58 @@ codecs — and it is never a dependency of anything that ships.
 - Every parser that takes bytes from a wire, a store or a bus has a no-panic
   test; every package has a hardening table rendered from its plan file.
 
-## Status (2026-09-09)
+## Status (2026-09-19)
 
-K0 in progress: the umbrella, the manifest, the fleet tool and the template
-exist; see the plan's §4 for the checklist and §1 for what is on this machine.
-Nothing has run on a chip.
+Every number below is in [`docs/LEDGER.md`](docs/LEDGER.md) with the command
+that produced it, and every one is a diff against the C, not a self-assessment.
+
+| Milestone | |
+|---|---|
+| **K0 family** | passed 2026-09-09 |
+| **K1 scheduler on sim** | passed 2026-09-09 — nine of nine scenarios, **8,408,764 lines identical** at 100,000 ticks |
+| **K2 IPC + timers** | 14 of 18 passed 2026-09-09 — 12,808,722 lines identical; Kani verifies seven harnesses (3,965 checks) |
+| **K2.1–2.3 the Rust, async and static faces** | passed 2026-09-10 |
+| **K3 silicon + QEMU** | part done 2026-09-10 — Cortex-M switches under QEMU, 100/100 resumptions over 200 switches, poison-proven |
+| **K4 heaps** | **passed 2026-09-10** — 20,000 operations agree with `heap_4.c` on the offset chosen, the free bytes and the minimum ever free |
+| **K6 C ABI** | **both halves pass 2026-09-11** — 25/25 unmodified C demo files on QEMU M3 and on the host, Windows threads and Linux pthreads |
+| **K7 libraries** | `backoff`, `json` and `sntp` done; **`mqtt` complete — 218 of coreMQTT's 218 functions** |
+| **K5 Janus joint, K8 SMP / MPU / 1.0** | open |
+
+It has run on a chip: K3 is QEMU on Cortex-M and RISC-V, and K6 links the
+unmodified C demos against the Rust ABI.
+
+## Part of Remade With Rust
+
+Kairos is **[Remade With Rust](https://github.com/remade-with-rust)**'s FreeRTOS
+programme, and one of the pieces **[Mata Network](https://www.mata.network)**
+builds on: a smart device that joins the Mata cloud runs a real-time kernel
+underneath whatever it is doing, and this is that kernel — memory-safe, with
+the API a FreeRTOS developer already knows, and every scheduling decision
+diffable against the C kernel's own trace.
+
+The family:
+[`rusty_rtos_core`](https://crates.io/crates/rusty_rtos_core) (the shared vocabulary),
+[`rusty_rtos_kernel`](https://crates.io/crates/rusty_rtos_kernel) (the scheduler),
+[`rusty_rtos_port`](https://crates.io/crates/rusty_rtos_port) (the architecture seam),
+[`rusty_rtos_heap`](https://crates.io/crates/rusty_rtos_heap) (the allocators),
+[`rusty_rtos_json`](https://github.com/Remade-With-Rust/rusty_rtos_json) (coreJSON),
+[`rusty_rtos_sntp`](https://github.com/Remade-With-Rust/rusty_rtos_sntp) (coreSNTP),
+[`rusty_rtos_mqtt`](https://github.com/Remade-With-Rust/rusty_rtos_mqtt) (coreMQTT),
+[`rusty_rtos_backoff`](https://github.com/Remade-With-Rust/rusty_rtos_backoff) (backoffAlgorithm),
+[`rusty_rtos-capi`](https://github.com/Remade-With-Rust/rusty_rtos-capi) (the C ABI) and
+[`rusty_rtos_demo`](https://github.com/Remade-With-Rust/rusty_rtos_demo) (the conformance corpus).
+The last six are on GitHub and not yet on crates.io. Also check out
+the rest of **[github.com/remade-with-rust](https://github.com/remade-with-rust)**.
+
+## About Mata Network
+
+<!-- ORG BOILERPLATE — keep identical across repos -->
+
+[Mata Network](https://www.mata.network) builds sovereign, self-hostable
+infrastructure. **Remade With Rust** is our open-source home for the
+permissively-licensed building blocks that work depends on.
+
+<!-- /ORG BOILERPLATE -->
 
 ## License
 
