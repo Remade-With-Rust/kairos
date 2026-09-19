@@ -22,7 +22,7 @@ task scheduling changed?*
 | `kairos power idle` | **done, M0** — ceiling probe over the stored traces |
 | `kairos power diff` | **done, M1** — projection over the stored traces, 18/18 invariant |
 | kernel-side suppression | **done, M2** — `expected_idle_time`, `step_tick`, `idle_suppress_ticks` |
-| a port that sleeps | **done, M2 in tests** — `SleepyPort`. The **sim port does not**, see M3 |
+| a port that sleeps | **done, M2 in tests** — `SleepyPort`. The **sim port does not**, see M2a |
 | on-board energy measurement | **not built** — needs hardware |
 
 ## 2 · Strategy that does not change
@@ -146,9 +146,9 @@ create their one task by hand and say why.
 | **M4** | only if M3 leaves a gap: observe-only harvest, then a threshold or a fit. Decide which *at the ceiling step* |
 | **M5** | ship: opt-in package, provenance, README row naming which gate covers which half |
 
-**Owner-only:** M2 needs a board choice (ESP32-S3 DevKit is cheapest — it closed
-`build-me-bare` B3 — but Cortex-M3 is the Kairos-native target). M3 needs a
-current shunt.
+**Owner-only:** M2a needs an `ORACLES.md` decision on what a sim sleep means.
+M3 needs a board (ESP32-S3 DevKit is cheapest — it closed `build-me-bare` B3 —
+but Cortex-M3 is the Kairos-native target) and a current shunt.
 
 ## 6 · Phases and kill tests
 
