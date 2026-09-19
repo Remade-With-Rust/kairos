@@ -14,12 +14,15 @@ task scheduling changed?*
 | piece | state |
 |---|---|
 | `Config::EXPECTED_IDLE_TIME_BEFORE_SLEEP` | exists, `rusty_rtos_core/config.rs` |
-| `Hooks::pre_suppress_ticks` / `pre_sleep` / `post_sleep` | signatures only — default passthrough, no implementor |
+| `Config::USE_TICKLESS_IDLE` | **done, M2** — off by default |
+| `Port::suppress_ticks_and_sleep` | **done, M2** — returns the ticks it slept; 0 declines |
+| `Hooks::pre_suppress_ticks` | signature only — the kernel has no `Hooks` seam, so the veto is **not wired**. A port declines by returning 0 |
+| `Hooks::pre_sleep` / `post_sleep` | signatures only — they belong in a port implementation, as they do in the C |
 | `trace::Scheduling` + `is_suppressible` | **done, M1** — `rusty_rtos_core`, 3 tests, poison-proved |
 | `kairos power idle` | **done, M0** — ceiling probe over the stored traces |
 | `kairos power diff` | **done, M1** — projection over the stored traces, 18/18 invariant |
-| kernel-side suppression (`vPortSuppressTicksAndSleep`) | **not built** |
-| port-side sleep, any chip | **not built** |
+| kernel-side suppression | **done, M2** — `expected_idle_time`, `step_tick`, `idle_suppress_ticks` |
+| a port that sleeps | **done, M2 in tests** — `SleepyPort`. The **sim port does not**, see M3 |
 | on-board energy measurement | **not built** — needs hardware |
 
 ## 2 · Strategy that does not change
@@ -104,12 +107,42 @@ Poison-proved on both sides by widening the suppressible set to include
 
 Additive: kernel-ir unchanged at 119,461,182.
 
+### M2 — the mechanism (2026-09-19)
+
+Three pieces, each the C's:
+
+* `expected_idle_time` = `prvGetExpectedIdleTime`;
+* `step_tick` = `vTaskStepTick`, leaving the **last** tick pended rather than
+  stepped so `increment_tick` wakes the delayed task through the same code
+  that would have woken it — the detail the whole invariance rests on;
+* `idle_suppress_ticks` = the `configUSE_TICKLESS_IDLE` block of
+  `prvIdleTask`, double-sample and all.
+
+Five tests. The fifth is the claim, and it is M1 pointed at a kernel that
+really suppressed its ticks rather than at a trace file standing in for one:
+two kernels identical but for the config, the same script, **traces that
+differ and schedules that do not**.
+
+Poison-proved twice — stepping the last tick instead of pending it fails the
+invariance test, and trusting a port that oversleeps by 4x fails the clamp.
+
+Off by default, so nothing moved: the 18-scenario differential is unchanged,
+khot-ir / ksched-ir / kipc-ir byte-identical, kernel-ir +2,184 (0.002%) of
+layout drift.
+
+**Two gaps named rather than hidden.** The application veto
+(`configPRE_SUPPRESS_TICKS_AND_SLEEP_PROCESSING`) is not wired, because the
+kernel holds no `Hooks`; a port declines by returning zero instead. And
+`system!` sizes `QUEUES` with no spare, so `System::build` and a started
+scheduler cannot both have the timer daemon's slot — the tickless tests
+create their one task by hand and say why.
+
 ## 5 · Remaining work
 
 | brick | what |
 |---|---|
-| **M2** | the mechanism: kernel-side suppression calling the three hooks, plus one port that sleeps |
-| **M3** | the fixed policy — sleep to the next wake less a fixed margin. **The go/no-go for M4** |
+| **M2a** | wire `idle_suppress_ticks` into the sim's `prvIdleTask` and make the sim port sleep. **Needs an `ORACLES.md` decision first**: the sim's time is critical-section exits, not wall time, so "sleeping" is a sim-contract change |
+| **M3** | the fixed policy on a chip — sleep to the next wake less a fixed margin. **The go/no-go for M4** |
 | **M4** | only if M3 leaves a gap: observe-only harvest, then a threshold or a fit. Decide which *at the ceiling step* |
 | **M5** | ship: opt-in package, provenance, README row naming which gate covers which half |
 
@@ -137,6 +170,9 @@ current shunt.
 | 2026-09-19 | Exactly three events are suppressible; a fourth is a decision-log row, not a code edit |
 | 2026-09-19 | M3 is the go/no-go for M4 — a fixed policy within noise of optimal ends the mission |
 | 2026-09-19 | M0 measured 50.3% sleepable over the corpus, bimodal 9/9. Mission proceeds |
+| 2026-09-19 | A port reports the ticks it slept and the kernel winds the clock; a port that oversleeps is clamped, not trusted, because this kernel may not panic |
+| 2026-09-19 | The application veto stays unwired until the kernel has a `Hooks` seam; declining by returning zero is the supported route |
+| 2026-09-19 | Making the SIM port sleep is a sim-contract change and belongs to `ORACLES.md`, not to a code edit — M2a, owner-only |
 
 ## 8 · Appendix: ground truth
 
