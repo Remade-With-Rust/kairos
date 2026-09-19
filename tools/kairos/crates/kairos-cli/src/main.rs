@@ -28,6 +28,7 @@ mod conform;
 mod harden;
 mod oracle;
 mod patches;
+mod power;
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -1827,6 +1828,7 @@ USAGE
   kairos secrets [--from-env VAR] [--dry-run]
   kairos oracle fetch | patch | build [SCENARIO] | trace [SCENARIO] [--ticks N] [--all] | cat [SCENARIO]
   kairos conform [SCENARIO] [--ticks N] [--all] [--exits]
+  kairos power idle [SCENARIO] [--min-sleep N] | diff [SCENARIO] [--show]
 
 `status --ci` adds the latest GitHub Actions conclusion per package (through
 `gh`). `check` is the compile gate — host workspace plus each no_std crate on
@@ -1961,6 +1963,7 @@ fn real_main() -> Result<()> {
         "secrets" => secrets(&manifest, &args[1..]),
         "oracle" => oracle::main(&root, &args[1..]),
         "conform" => conform::main(&root, &args[1..]),
+        "power" => power::main(&root, &args[1..]),
         other => fail(format!("unknown verb {other:?}\n\n{USAGE}")),
     }
 }
