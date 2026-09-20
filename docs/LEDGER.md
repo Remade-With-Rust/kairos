@@ -3306,3 +3306,60 @@ overhead when they were the scanning itself.
 
 > **A census attributes cost to a line; it does not say the cost is
 > removable.** Two attempts on the same rows, one −1.5% and one +18.9%.
+
+
+## TaskNotify, and what its two kernel fixes cost (2026-09-19)
+
+The twentieth conformance scenario. `TaskNotify.c` -> 806 Rust lines, **3,519
+lines identical to the C kernel, exits included**
+(`ticks=2001 yields=227 exits=2845 lines=3518`), pinned in `pins.rs` with a
+digest taken from the C kernel's own trace. `conform --all` is 20 identical.
+It agreed for 565 lines on the first run.
+
+It closes three of H2's undifferentiated APIs -- `notify_value_clear`,
+`timer_change_period`, `timer_delete` -- and needed two changes to the kernel.
+
+**A timer delete never paid for its free.** `prvProcessReceivedCommands` ends
+`tmrCOMMAND_DELETE` in `vPortFree( pxTimer )`, and every `heap_N.c` wraps free
+in `vTaskSuspendAll` / `xTaskResumeAll` exactly as it wraps malloc. One
+outermost exit, spent with no trace line to show for it. `queue_delete` and
+`event_group_delete` had both been told; the timer command was the third
+object with a free and **nothing in the corpus had ever deleted a timer**. It
+presented as the other two did: every event agreed and the exit column was one
+short from the first delete on, ours `#473` against the oracle's `#474`.
+
+**`xTaskNotifyAndQuery` needs one critical section, not two.** It hands back
+the value it is about to replace from inside the notify's own section. The
+capi shim reads `notify_value` first and then notifies, which yields the same
+two numbers and costs a second section -- and on the sim an exit is a tick
+opportunity, so the extra one moves the tick. Hence `notify_and_query` /
+`notify_and_query_from_isr`. `TaskNotify.c` calls it eleven times.
+
+### The price, on every instrument
+
+Both arms are real commits, built and counted under callgrind:
+
+| instrument | before | after | delta |
+|---|---:|---:|---:|
+| `kdelay-ir` | 4,024,115 | 4,024,119 | +4 |
+| `kdelay-deep` | 4,368,150 | 4,368,154 | +4 |
+| `ksched-ir` | 1,790,783 | 1,790,783 | 0 |
+| `khot-ir` | 14,800,492 | 14,800,490 | -2 |
+| `kipc-ir` | 5,423,490 | 5,423,490 | 0 |
+| `kobj-ir` | 5,616,763 | 5,616,763 | 0 |
+
+Checksums identical down every column: the work is unchanged. Every delta is
+at or inside the measured kernel-arm noise floor of 4.
+
+**And the largest of them has an accidental null-arm control.** The first
+attempt at this table had a harness bug -- `git checkout <commit> -- <paths>`
+writes the INDEX, so the restore handed the second arm the first arm's code --
+and that run, with BOTH arms on identical source, produced `kdelay-ir` +4 and
+`kdelay-deep` +4, the same two numbers. A delta a null arm reproduces exactly
+is not a delta. **Verdict: flat. The correctness fix is free.**
+
+Two lessons kept: that git trap belongs to one-off scripts, since `ksweep.sh`
+swaps a variant FILE and never touches the index; and both sweeps documented
+their own invocation as `wsl -e sh ...`, a non-login shell with no cargo on
+PATH, which printed a full table of `BUILD FAIL` and **exited 0**. Both now
+fail the run when a cell does not build.
