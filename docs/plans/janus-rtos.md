@@ -153,6 +153,45 @@ it, it is not yours.
 
 ---
 
+## 5b. And the kernel now schedules Janus tasks through the seam
+
+Added 2026-09-20, after the section above was written.
+
+The seam gained a `kernel` rung (`rusty_rtos_kernel-core`), and
+`rusty_esp_core/firmware/xiao-s3-kairos-tasks` runs two tasks that
+**`Kernel::switch_context` chooses**, on a XIAO S3, through the seam:
+
+```
+KT boot main_idx=0 current_idx=0 ready1=Some(1) ready2=Some(2)
+KT laps_a=50 laps_b=50 want=50 faults=0
+KT entries=103 swaps=103 declined_same=0 declined_no_ctx=0
+RESULT: PASS
+```
+
+103 entries, 103 real swaps, none declined; hand-off by `suspend`/`resume`;
+witnesses checked from three call frames deep. This is the claim
+`xiao-s3-switch` deliberately does not make, and it is now made from the
+Janus side against your published 0.1.0 crates.
+
+**Two things you may want from this.** First, the priority trap: because
+`start_scheduler` creates `Tmr Svc` unconditionally at
+`TIMER_TASK_PRIORITY` and `create_task` makes the highest-priority task
+current, a firmware whose `main` sits *below* the daemon has the kernel
+believing a stackless task is running — `current_idx` names the daemon while
+the CPU is on `main`'s stack, every switch is declined as `from == to`, and
+the workers starve silently at `laps 0/0`. It cost a board run here and it
+is the same failure your radio cell's README records. A line in the
+`create_task` or `start_scheduler` docs would save the next person the run.
+
+Second, and larger: **the radio adapter is in a firmware, not a crate.**
+`xiao-s3-radio` implements all five `esp-radio-rtos-driver` traits and
+passes on silicon — which is further along than the mission plan's "the
+ports document the interface" suggests. But Janus cannot consume ~1,450
+lines of `adapter.rs` + `kernel.rs` from inside a firmware directory. If
+that glue became a crate (`rusty_rtos_port-esp-radio`, or a feature on the
+port crates), the Janus mesh node could take it the day S1's baseline
+exists, instead of Janus duplicating it and the two copies drifting.
+
 ## 6. How to consume Janus, concretely
 
 ```toml
