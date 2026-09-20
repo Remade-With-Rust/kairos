@@ -40,7 +40,7 @@ thoth = { version = "0.3.0", git = "https://github.com/Remade-With-Rust/thoth", 
 serde_json = { package = "rusty_json_turbo", version = "0.1.0", git = "https://github.com/Remade-With-Rust/rusty_json_turbo", default-features = false, features = ["std"] }
 # The house compressor: a stored oracle trace is one zstd frame
 # (`oracle/traces/<scenario>.trace.zst`), round-tripped before it is kept.
-rusty_zstd = "=0.2.3"
+rusty_zstd = "=0.2.5"
 # The allocator, pinned EXACTLY in the seam crate and nowhere else.
 rusty_alloc-api = { version = "=2.0.4", default-features = false }
 
