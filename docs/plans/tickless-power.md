@@ -192,13 +192,62 @@ the fixed policy the C ships. And it is not the XIAO; see M3b.
 Additive: port crate 7/7, kernel 39/39, `mps2-an385-qemu-preempt` still
 200/200 with the window closed.
 
+### M3b — the XIAO ESP32-S3 (2026-09-19)
+
+Flashed and run on a XIAO ESP32-S3 rev v0.2 (8 MB flash, 40 MHz crystal, MAC
+68:ee:8f:51:74:64). Both claims hold:
+
+| | control | tickless |
+|---|---:|---:|
+| logical ticks | 400 | 400 |
+| **alarm wakeups** | **400** | **0** |
+| projected events | 195 | 195 |
+| context switches | 63 | 63 |
+| **schedule digest** | `ebb908b74bccb99e` | `ebb908b74bccb99e` |
+
+**Claim 1 is a repo first:** the Kairos kernel driven by a *tick interrupt*
+on an Xtensa part. Every other kernel-driving cell is Cortex-M under QEMU,
+and the two existing XIAO cells prove the port's switch and stop there. That
+is the K3 prerequisite, met inside this mission.
+
+**Claim 2:** every one of those interrupts suppressed, schedule unmoved.
+Diagnostics: 20 sleeps, 400 ticks asked, 400 slept, last window 20,014 us
+against a 20,000 us request — elapsed time read off the free-running counter
+rather than assumed, which is what makes the mechanism survive swapping
+`waiti` for a light sleep in M3c.
+
+#### ★ The bug the board found, which building never would have
+
+The first tickless run **failed**: 20 logical ticks where the arithmetic says
+400. The cause is an Xtensa fact with no ARM counterpart —
+
+> **`waiti 0` does not lower `PS.INTLEVEL` for the duration of the sleep. It
+> SETS it to zero and leaves it there.** The waking interrupt returns through
+> `RFI`, which restores the PS `waiti` installed, so the caller's critical
+> section is gone from the wake onward.
+
+Everything `idle_suppress_ticks` did after the sleep — `step_tick`,
+`resume_all`, two trace events — therefore ran with interrupts open on a
+kernel the idle task held `&mut` to. It did not crash. The scheduler quietly
+stopped working and the worker never blocked. One line fixes it: re-raise the
+mask the instant `waiti` returns. ARM needs none, because `wfi` leaves
+PRIMASK alone.
+
+**Two changes were made and only one mattered.** The switch handler was also
+taught to decline while sleeping, on the theory `Software0` could be taken in
+the open window; its counter reads **zero** across the run. Defence in depth,
+not the cure, and labelled so in the source.
+
+This is the mission's clearest argument for hardware: M3a's QEMU cell, the
+kernel's unit tests, the section sizes and the disassembly all passed while
+this defect sat in the code.
+
 ## 5 · Remaining work
 
 | brick | what |
 |---|---|
 | **M2a** | wire `idle_suppress_ticks` into the sim's `prvIdleTask` and make the sim port sleep. **Needs an `ORACLES.md` decision first**: the sim's time is critical-section exits, not wall time, so "sleeping" is a sim-contract change |
-| **M3b** | the same on the **XIAO ESP32-S3**. `xiao-s3-tickless` is **written and builds for both arms, and has never executed** — this box has no board and no Espressif QEMU. Flashing it is the whole of what remains, and it answers two questions at once: whether the Kernel runs from a tick on Xtensa at all (the control arm), and whether tickless holds there (the digest comparison) |
-| **M3c** | the meter. `Rtc::sleep_light` under the measured-elapsed mechanism M3b already uses, and a current shunt. Only after M3b has run |
+| **M3c** | the meter. `Rtc::sleep_light` under the measured-elapsed mechanism M3b proved, and a current shunt. **Must NOT use this cell's control arm as the baseline** — it busy-spins, so it would flatter tickless; compare against an idle task that calls `Port::idle` |
 | **M4** | only if M3 leaves a gap: observe-only harvest, then a threshold or a fit. Decide which *at the ceiling step* |
 | **M5** | ship: opt-in package, provenance, README row naming which gate covers which half |
 
@@ -214,8 +263,8 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
 | M1 | projection | `kairos power diff` reports 18/18 invariant; widening the suppressible set fails tests |
 | M2 | mechanism | the existing 18-scenario differential is unchanged with tickless off |
 | M3a | mechanism on silicon | `cargo run --release` and `--features tickless` in `mps2-an385-qemu-tickless` both PASS; wakeups collapse; one pinned order digest serves both arms |
-| M3b | the S3 joint and tickless on it | flash both arms of `xiao-s3-tickless`; the control arm passing proves the Kernel runs from a tick on Xtensa, and the two `SCHEDULE DIGEST` lines matching proves tickless holds there |
-| M3c | fixed policy | measured energy drop on a named board, with the order digest and the tick band clean |
+| M3b | the S3 joint and tickless on it | `cargo run --release` and `--features tickless` in `xiao-s3-tickless` both PASS on a XIAO; wakeups collapse; one pinned digest serves both arms |
+| M3c | fixed policy | measured energy drop on a named board, against a `Port::idle` baseline, with the order digest and the tick band clean |
 | M4 | fitted policy | beats M3 **on a holdout board it was not fitted on** |
 | M5 | ship | `cargo add` plus three lines reduces measured current on a stranger's board |
 
@@ -235,7 +284,10 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
 | 2026-09-19 | Wakeup count is the proxy under QEMU, and the word "proxy" ships with every number. Energy needs a board |
 | 2026-09-19 | M3 splits: M3a is the mechanism on a Cortex-M cell, done. M3b is the XIAO, M3c is the meter |
 | 2026-09-19 | The K3 prerequisite is met inside this mission rather than deferred: `xiao-s3-tickless` drives the Kernel from `SYSTIMER` alarm 0. Its control arm IS the K3 claim, so one flashing answers both |
-| 2026-09-19 | A cell that has never executed says so in its module header, its README banner and its commit. `xiao-s3-tickless` builds and has not been flashed; no number in its README is quoted from a run |
+| 2026-09-19 | A cell that has never executed says so in its module header, its README banner and its commit. `xiao-s3-tickless` said so until it was flashed, and the claim was replaced by measurements the same day |
+| 2026-09-19 | `waiti 0` leaves `PS.INTLEVEL` at zero after the wake, so an Xtensa port must re-raise its own mask; `wfi` does not, so ARM must not. The two sleeps are not interchangeable and neither is their suppression |
+| 2026-09-19 | When a fix ships as two changes, the one that did nothing is labelled as such. The `Software0` decline fired zero times and is recorded as defence in depth, not as part of the cure |
+| 2026-09-19 | M3c may not use `xiao-s3-tickless`'s control arm as its energy baseline: that arm busy-spins, because `idle_suppress_ticks` returns before reaching `Port::idle`. Valid for counting wakeups, invalid for counting current |
 | 2026-09-19 | The Xtensa sleep lives in the CELL, not in `rusty_rtos_port-xtensa`: SysTick is a core peripheral the ARM port owns, `SYSTIMER` is a chip peripheral belonging to `esp-hal`, and the Xtensa port is HAL-free. A second ESP part promotes the newtype into `rusty_rtos_port-esp` |
 | 2026-09-19 | An Xtensa port measures its own sleep with the free-running counter rather than trusting the sleep, because `waiti 0` unmasks and `Rtc::sleep_light` reports nothing. That mechanism is what lets M3c swap in a deeper sleep without re-proving anything |
 | 2026-09-19 | The tickless cell pins ONE order digest for BOTH arms, so a single run gates and the cross-arm claim is carried by a number rather than by a promise to run a diff |
