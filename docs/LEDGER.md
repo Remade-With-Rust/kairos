@@ -1575,8 +1575,36 @@ Reachable is not the same as killed, and "the corpus creates tasks at
 runtime now" is not the same as "the arm is exercised". **What actually
 closes this gap is a scenario that creates a HIGHER-priority task while the
 scheduler is running**, which `death.c` never does and no scenario in the
-corpus does. K2's row should be read as still open, with `death` having
-narrowed it from six to four rather than closed it.
+corpus does.
+
+### CLOSED (2026-09-19), by a unit test rather than a scenario
+
+No corpus scenario can do it, and none can be added without a C original
+to diff against -- but the arm does not need a *scenario*, it needs a
+*caller*. `system::tests::creating_a_higher_priority_task_asks_for_a_switch_and_a_lower_one_does_not`
+starts the scheduler, creates one task below the running priority and one
+above, and asserts on `CountingPort::count_yield` that the kernel asks for
+a switch in the second case and not the first.
+
+Both halves are required, and that was established by planting all four
+survivors by hand and re-running:
+
+| mutation | killed by |
+|---|---|
+| condition → `false` | the HIGHER half |
+| body removed (no yield) | the HIGHER half |
+| `<` → `>` | the HIGHER half |
+| `<` → `!=` | the LOWER half |
+
+Four for four. The LOWER half reads like a formality and is the only thing
+that kills `!=` -- a guard that fires whenever the priorities merely
+*differ* is wrong in a way only a lower-priority create can show.
+
+K2's mutants row therefore reads **40 of 42** rather than 36, with the two
+remaining survivors elsewhere in the file. The general point stands and is
+worth keeping: a corpus diffed against a C oracle can only exercise what
+its C scenarios do, and where that stops, a unit test with a counting port
+is the instrument -- not a bigger corpus.
 
 ### An inconclusive experiment, recorded so it is not re-run
 
