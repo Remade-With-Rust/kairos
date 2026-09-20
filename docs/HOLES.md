@@ -68,9 +68,57 @@ The gate's whole claim is "does the Rust kernel decide what the C kernel
 decides". For these, nobody has asked.
 
 **Cost of the gap:** a semantic difference here surfaces in somebody's
-application, not in CI. **Fix:** ranked by blast radius — the timer
-mutators (`timer_delete`, `timer_change_period`) first, since they alter a
-list the tick walks.
+application, not in CI.
+
+### What closing it takes, scoped (2026-09-19)
+
+The strongest evidence needs a C original to diff against. Four of the
+vendored-but-unused demos supply one, and the ratio for a port is about
+0.7 Rust lines per C line (`TimerDemo` is 1,226 → 861):
+
+| work | C lines | H2 APIs it closes |
+|---|---|---|
+| **`TimerDemo` Test7** + one harness line | **107** | `timer_change_period` |
+| `TaskNotify` scenario | 721 | `notify_value_clear`, `timer_delete`, `timer_change_period` |
+| `QueueSet` scenario | 1,160 | `queue_remove_from_set` |
+| `StreamBufferDemo` scenario | 1,247 | six: `reset`, `is_empty`, `is_full`, `bytes_available`, `spaces_available`, `receive_from_isr` |
+
+`StreamBufferDemo` is the best coverage per scenario. **Test7 is the best
+coverage per hour** — it extends a scenario that already passes, needs no
+new plumbing, and is an order of magnitude smaller than any new port.
+
+**Seven have no C demo at all** and no differential is possible for them:
+`xTimerGetPeriod`, `xTimerGetExpiryTime`, `xTimerPendFunctionCall`,
+`xQueueSendToFrontFromISR`, `xStreamBufferNextMessageLengthBytes`,
+`xStreamBufferSetTriggerLevel`, `pcTaskGetName`. Those need a semantic
+audit against the C source plus unit tests pinning the contract — weaker
+evidence, and the only evidence available.
+
+### Why `TimerDemo` does not already cover this
+
+`TimerDemo` passes and its C original calls `xTimerChangePeriod` four
+times, which looks like a contradiction. It is not, and the answer took a
+detour worth recording.
+
+The Rust port implements Test1–Test6; the C has Test7,
+`prvTest7_CheckBacklogBehaviour`, which is where those calls live. That
+looks like an incomplete port. It is not: Test7 is guarded by
+`ucIsBacklogDemoEnabled`, which defaults to `pdFALSE` and is set only by
+`vTimerDemoIncludeBacklogTests()` — and `oracle/harness/main.c` calls
+`vStartTimerDemoTask()` without ever calling the enabler. **Test7 is
+switched off in the C oracle, so the port is faithful and the pass is
+honest.** Confirmed by running `TimerDemo` at 100,000 ticks, five times
+the usual budget: 156,492 lines identical. A C that reached Test7 would
+diverge from a port that has no Test7, and it does not.
+
+So the API is uncovered because the only C code that exercises it is
+disabled, not because anybody skipped it. Turning it on is one line in the
+harness plus the port — and both APIs Test7 needs already exist
+(`xTaskCatchUpTicks` is `Kernel::step_tick`, exposed at `abi.rs:1247`,
+whose doc already says it is *"used by the timer tests to jump time
+forward"*). That call is itself only ever reached through the tickless
+path today, so porting Test7 puts it under the differential for the first
+time in the role it was written for.
 
 ---
 
