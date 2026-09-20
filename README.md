@@ -133,6 +133,11 @@ codecs — and it is never a dependency of anything that ships.
 Every number below is in [`docs/LEDGER.md`](docs/LEDGER.md) with the command
 that produced it, and every one is a diff against the C, not a self-assessment.
 
+What is **not** proved is in [`docs/HOLES.md`](docs/HOLES.md), measured the
+same way: three of the four kernel instruments never block a task, 22 public
+APIs reach the C shim without ever being diffed against the C kernel, and the
+mutation survey covers one file of nine.
+
 | Milestone | |
 |---|---|
 | **K0 family** | passed |
