@@ -22,8 +22,9 @@ task scheduling changed?*
 | `kairos power idle` | **done, M0** — ceiling probe over the stored traces |
 | `kairos power diff` | **done, M1** — projection over the stored traces, 18/18 invariant |
 | kernel-side suppression | **done, M2** — `expected_idle_time`, `step_tick`, `idle_suppress_ticks` |
-| a port that sleeps | **done, M2 in tests** — `SleepyPort`. The **sim port does not**, see M2a |
-| on-board energy measurement | **not built** — needs hardware |
+| a port that sleeps | **done, M3a** — `rusty_rtos_port-cortex-m` really reprograms SysTick. The **sim port does not**, see M2a |
+| a cell that runs it | **done, M3a** — `mps2-an385-qemu-tickless`, 401 wakeups → 0 |
+| on-board energy measurement | **not built** — needs hardware, and on the S3 needs a tick-driven kernel cell first (M3b) |
 
 ## 2 · Strategy that does not change
 
@@ -137,12 +138,66 @@ kernel holds no `Hooks`; a port declines by returning zero instead. And
 scheduler cannot both have the timer daemon's slot — the tickless tests
 create their one task by hand and say why.
 
+### M3a — the mechanism on silicon (2026-09-19)
+
+`vPortSuppressTicksAndSleep` for ARMv7-M, and the cell that runs it. This is
+the first time in the mission a timer was actually reprogrammed: everything
+before it either read stored traces or asked a test double to return a number.
+
+`mps2-an385-qemu-tickless`, one feature flag the only difference between arms:
+
+| | control | tickless |
+|---|---:|---:|
+| logical ticks | 401 | 400 |
+| **SysTick wakeups** | **401** | **0** |
+| projected events | 193 | 193 |
+| context switches | 62 | 62 |
+| **schedule digest** | `94f229d7a5bd8f77` | `94f229d7a5bd8f77` |
+
+**Wakeups are a proxy, named as one.** QEMU has no power model. They are
+exactly countable, deterministic, and what idle energy is proportional to on
+a part that idles in `wfi` — so they carry the *mechanism* claim, and the
+energy claim still needs a board and a shunt.
+
+#### ★ The finding: the simulator's gate does not transfer to silicon
+
+`kairos power diff` compares whole projected **lines**, tick stamp included,
+and reports 18/18. That is sound for the oracle traces, where time is
+critical-section exits and a tick stamp is a count of work done. **It is not
+sound on a Cortex-M3**, where a tick stamp also records how long the work
+took — and the two arms do not take the same time, because one spends the
+idle windows in `wfi` instead of servicing four hundred interrupts.
+
+Editing the cell twice while building it moved the logical tick count each
+time, in *both* arms — control 402, 401, 400; tickless 400, 400, 401 — and
+moved a tick-stamped digest with it. The order digest never moved.
+
+> **A quantity the instrument's own cost can move is not a schedule.**
+
+So the hardware gate is **order plus a timing band**, not a line diff. Both
+halves are needed and the poison proves it: deleting the line in
+`Kernel::step_tick` that leaves the last tick *pended* gave 421 ticks — every
+lap one tick late — with the order digest **unchanged**, event for event. The
+order digest cannot see a wake that is in the right sequence but late; the
+band can.
+
+`kairos power diff` keeps its own guarantee over stored traces. Section 8's
+standing rule is unchanged and now merely the weaker of two reasons.
+
+#### What M3a did not do
+
+It did not choose a policy — the sleep is `expected_idle_time` less nothing,
+the fixed policy the C ships. And it is not the XIAO; see M3b.
+
+Additive: port crate 7/7, kernel 39/39, `mps2-an385-qemu-preempt` still
+200/200 with the window closed.
+
 ## 5 · Remaining work
 
 | brick | what |
 |---|---|
 | **M2a** | wire `idle_suppress_ticks` into the sim's `prvIdleTask` and make the sim port sleep. **Needs an `ORACLES.md` decision first**: the sim's time is critical-section exits, not wall time, so "sleeping" is a sim-contract change |
-| **M3** | the fixed policy on a chip — sleep to the next wake less a fixed margin. **The go/no-go for M4** |
+| **M3b** | the same on the **XIAO ESP32-S3**, with a meter. Two prerequisites, both found by scoping M3: no S3 firmware drives the Kernel from a tick at all (that is **K3 port work**, not this mission), and `esp-hal`'s `Rtc::sleep_light` reports nothing about how long it lasted — its own docs say a refused, a rejected and a very short sleep are indistinguishable — so the Xtensa port must measure elapsed time itself |
 | **M4** | only if M3 leaves a gap: observe-only harvest, then a threshold or a fit. Decide which *at the ceiling step* |
 | **M5** | ship: opt-in package, provenance, README row naming which gate covers which half |
 
@@ -157,7 +212,8 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
 | M0 | ceiling probe | `kairos power idle` reports a non-zero sleepable share |
 | M1 | projection | `kairos power diff` reports 18/18 invariant; widening the suppressible set fails tests |
 | M2 | mechanism | the existing 18-scenario differential is unchanged with tickless off |
-| M3 | fixed policy | measured energy drop on a named board, with `power diff` clean |
+| M3a | mechanism on silicon | `cargo run --release` and `--features tickless` in `mps2-an385-qemu-tickless` both PASS; wakeups collapse; one pinned order digest serves both arms |
+| M3b | fixed policy | measured energy drop on a named board, with the order digest and the tick band clean |
 | M4 | fitted policy | beats M3 **on a holdout board it was not fitted on** |
 | M5 | ship | `cargo add` plus three lines reduces measured current on a stranger's board |
 
@@ -173,6 +229,10 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
 | 2026-09-19 | A port reports the ticks it slept and the kernel winds the clock; a port that oversleeps is clamped, not trusted, because this kernel may not panic |
 | 2026-09-19 | The application veto stays unwired until the kernel has a `Hooks` seam; declining by returning zero is the supported route |
 | 2026-09-19 | Making the SIM port sleep is a sim-contract change and belongs to `ORACLES.md`, not to a code edit — M2a, owner-only |
+| 2026-09-19 | On silicon a tick stamp is a wall-clock reading, so the hardware gate is the event ORDER plus a TIMING BAND. `power diff`'s line comparison stays the gate for stored traces and is not quoted for hardware |
+| 2026-09-19 | Wakeup count is the proxy under QEMU, and the word "proxy" ships with every number. Energy needs a board |
+| 2026-09-19 | M3 splits: M3a is the mechanism on a Cortex-M cell, done. M3b is the XIAO, and it is blocked on K3 — no ESP32-S3 firmware drives the Kernel from a tick, which is port work this mission does not own |
+| 2026-09-19 | The tickless cell pins ONE order digest for BOTH arms, so a single run gates and the cross-arm claim is carried by a number rather than by a promise to run a diff |
 
 ## 8 · Appendix: ground truth
 
@@ -187,3 +247,9 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
   windows by tracking `TASK_SWITCHED_IN`.
 - **Standing rule:** a raw trace byte-diff cannot gate a tickless port, and the
   projection is the only thing that may be quoted as proving the schedule held.
+  **On hardware, tighten it further** (M3a): the projection's *tick stamps* are
+  a wall-clock reading there and move with the instrument's own cost, so what
+  may be quoted is the projection's ORDER, plus a separate bound on the clock.
+- **The tickless cell:** `rusty_rtos_port/firmware/mps2-an385-qemu-tickless`,
+  pinned order digest `94f229d7a5bd8f77`, measured on qemu-system-arm 11.1.0,
+  `-cpu cortex-m3 -machine mps2-an385`, release profile.
