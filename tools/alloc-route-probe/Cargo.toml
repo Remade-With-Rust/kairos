@@ -10,10 +10,10 @@ publish = false
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rusty_alloc = "=2.1.0"
+rusty_alloc = "=2.2.0"
 # The GlobalAlloc shim, so the probe calls the allocator the way a
 # program does rather than reaching into its internals.
-rusty_alloc-api = { version = "=2.1.0", default-features = false, features = ["std"] }
+rusty_alloc-api = { version = "=2.2.0", default-features = false, features = ["std"] }
 
 [profile.release]
 opt-level = 3
