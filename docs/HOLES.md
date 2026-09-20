@@ -79,7 +79,7 @@ vendored-but-unused demos supply one, and the ratio for a port is about
 | work | C lines | H2 APIs it closes |
 |---|---|---|
 | **`TimerDemo` Test7** + one harness line | **107** | `timer_change_period` |
-| `TaskNotify` scenario | 721 | `notify_value_clear`, `timer_delete`, `timer_change_period` |
+| `TaskNotify` scenario | 721 | `notify_value_clear`, `timer_delete`, `timer_change_period` — **C side ready, see below** |
 | `QueueSet` scenario | 1,160 | `queue_remove_from_set` |
 | `StreamBufferDemo` scenario | 1,247 | six: `reset`, `is_empty`, `is_full`, `bytes_available`, `spaces_available`, `receive_from_isr` |
 
@@ -93,6 +93,37 @@ new plumbing, and is an order of magnitude smaller than any new port.
 `xStreamBufferSetTriggerLevel`, `pcTaskGetName`. Those need a semantic
 audit against the C source plus unit tests pinning the contract — weaker
 evidence, and the only evidence available.
+
+### `TaskNotify` was blocked, and is not any more (2026-09-19)
+
+Its C side was already wired up -- registered in the harness, with an ISR
+hook -- so it looked like only the Rust port was missing. It was not. The
+demo **could not conform at all**:
+
+```c
+uxNextRand = ( uint32_t ) prvRand;   /* seed = a function's LOAD ADDRESS */
+...
+xPeriod = prvRand() % xMaxPeriod;    /* and that picks TIMER PERIODS */
+```
+
+Timer periods decide when the daemon wakes, which is all over the trace,
+and ASLR varies the address per run — so the oracle did not reproduce
+*itself*:
+
+| run condition | result |
+|---|---|
+| 3 runs, ASLR on, as vendored | 3,421 / 3,336 / 3,530 lines |
+| 3 runs, `setarch -R` | identical, 3,530 |
+| 3 runs, ASLR on, seed pinned | identical, 3,519 |
+
+Pinned in `kairos oracle patch` — not in the file, because
+`oracle/FreeRTOS/` is gitignored and an edit there evaporates at the next
+fetch. `TaskNotify` is now a porting job like any other.
+
+**The middle row is worth more than the scenario.** It says the C oracle is
+deterministic on real pthreads: the POSIX port adds no scheduling
+non-determinism to the trace. Every conformance number in `LEDGER.md`
+depends on that and it was nowhere written down.
 
 ### Why `TimerDemo` does not already cover this
 
