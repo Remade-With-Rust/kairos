@@ -179,6 +179,9 @@ FreeRTOS's idle task does — tickless **costs more than it saves**:
 | core active | 2,656 us | 3,638 us |
 | **duty cycle** | **0.6 %** | **0.9 %** |
 
+Three repeat runs, control 2,656 / 2,656 / 2,656 us and tickless 3,638 /
+3,638 / 3,639 us — a deterministic instrument, not noise.
+
 A `waiti` idle is already 99.4 % halted, so 0.6 % is the ceiling for *any*
 idle optimisation on that workload, and this one's suspend/reprogram/restore
 cycle costs more than the interrupts it removes.

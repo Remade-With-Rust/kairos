@@ -259,9 +259,9 @@ SYSTIMER. **The headline inverts.**
 | **duty cycle** | **0.6 %** | **0.9 %** |
 | alarm wakeups | 400 | 0 |
 
-Four hundred wakeups became zero and the part worked **37 % harder**. The
-control's active time is bit-identical across repeat runs (2,656 us twice), so
-this is a deterministic instrument, not noise.
+Four hundred wakeups became zero and the part worked **37 % harder**. Three
+repeats each way — control 2,656 / 2,656 / 2,656 us, tickless 3,638 / 3,638 /
+3,639 us — so this is a deterministic instrument, not noise.
 
 #### The ceiling argument, which is the real result
 
