@@ -1,7 +1,10 @@
 #!/bin/sh
 # Price ONE change to rusty_rtos_kernel-core on every instrument that sees it.
 #
-#     wsl -e sh bench/ksweep.sh <variant>          # from the umbrella root
+#     wsl -e bash -lc 'sh bench/ksweep.sh <variant>'   # from the umbrella root
+#
+# It must be a LOGIN shell. `wsl -e sh bench/ksweep.sh` does not load the
+# profile, so cargo is not on PATH and every cell answers BUILD FAIL.
 #
 # where <variant> names `bench/variants/<variant>_kernel.rs` holding the
 # candidate `kernel.rs`. Measures committed HEAD against it, then restores the
@@ -49,6 +52,14 @@ if cmp -s "$VAR" "$KERN"; then
     exit 1
 fi
 
+# A cell that cannot BUILD is not a slow cell, it is no measurement at all --
+# so a failure has to end the sweep rather than print a row. This is not
+# hypothetical: the usage line above used to read `wsl -e sh ...`, which is a
+# NON-LOGIN shell with no cargo on PATH, so the whole table came out
+# `BUILD FAIL` and the script still exited 0. A harness that reports success
+# having measured nothing is worse than one that crashes.
+fatal=0
+
 restore() {
     (cd "$here/rusty_rtos_kernel" && git checkout -- crates/rusty_rtos_kernel-core/src/kernel.rs)
 }
@@ -59,8 +70,8 @@ count() { # <bench-dir> <bin> <label> [build flags...]
     shift 3
     cd "$here/rusty_rtos_kernel/bench/$d"
     rm -f "target/release/$b"
-    cargo build --release "$@" >/dev/null 2>&1 || { echo "$arm $label BUILD FAIL"; return 0; }
-    [ -f "target/release/$b" ] || { echo "$arm $label NO BINARY"; return 0; }
+    cargo build --release "$@" >/dev/null 2>&1 || { echo "$arm $label BUILD FAIL"; fatal=1; return 0; }
+    [ -f "target/release/$b" ] || { echo "$arm $label NO BINARY"; fatal=1; return 0; }
     valgrind --tool=callgrind --cache-sim=no --branch-sim=no \
              --callgrind-out-file=/tmp/kw.out "./target/release/$b" >/tmp/kw.txt 2>/dev/null
     printf '%-8s %-12s %12s   %s\n' "$arm" "$label" \
@@ -78,6 +89,12 @@ for arm in head "$V"; do
     count ksched-ir ksched-ir ksched-ir
     count khot-ir   khot-ir   khot-ir
 done
+
+if [ "$fatal" -ne 0 ]; then
+    echo >&2
+    echo "A CELL DID NOT BUILD -- this table is not a measurement." >&2
+    exit 1
+fi
 
 echo
 echo "Checksums must be identical down each column. Then run the gate:"

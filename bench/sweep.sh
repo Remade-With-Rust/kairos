@@ -1,7 +1,10 @@
 #!/bin/sh
 # Price ONE change to rusty_rtos_core's lists on every instrument that can see it.
 #
-#     wsl -e sh bench/sweep.sh <variant>          # from the umbrella root
+#     wsl -e bash -lc 'sh bench/sweep.sh <variant>'    # from the umbrella root
+#
+# It must be a LOGIN shell. `wsl -e sh bench/sweep.sh` does not load the
+# profile, so cargo is not on PATH and every cell answers BUILD FAIL.
 #
 # where <variant> names a file `bench/variants/<variant>.rs` holding the
 # candidate `list.rs`. The script measures the committed HEAD and the variant
@@ -76,6 +79,12 @@ if cmp -s "$VAR" "$LIST"; then
     exit 1
 fi
 
+# A cell that cannot BUILD is not a slow cell, it is no measurement at all --
+# so a failure has to end the sweep rather than print a row. See the usage
+# note above: a non-login shell produced a whole table of BUILD FAIL and an
+# exit status of 0.
+fatal=0
+
 restore() { (cd "$here/rusty_rtos_core" && git checkout -- crates/rusty_rtos_core/src/list.rs); }
 trap restore EXIT
 
@@ -84,8 +93,8 @@ count() { # <dir> <bin> <label> [build flags...]
     shift 3
     cd "$d"
     rm -f "$b"
-    cargo build --release "$@" >/dev/null 2>&1 || { echo "$label BUILD FAIL"; return 0; }
-    [ -f "$b" ] || { echo "$label NO BINARY"; return 0; }
+    cargo build --release "$@" >/dev/null 2>&1 || { echo "$label BUILD FAIL"; fatal=1; return 0; }
+    [ -f "$b" ] || { echo "$label NO BINARY"; fatal=1; return 0; }
     valgrind --tool=callgrind --cache-sim=no --branch-sim=no \
              --callgrind-out-file=/tmp/sweep.out "./$b" >/tmp/sweep.txt 2>/dev/null
     printf '%-8s %-10s %-7s %12s   %s\n' "$arm" "$label" "$mach" \
@@ -110,6 +119,12 @@ for arm in head "$V"; do
     count "$here/rusty_rtos_kernel/bench/kdelay-ir" target/release/kdelay-ir kdelay-ir
     count "$here/rusty_rtos_kernel/bench/ksched-ir" target/release/ksched-ir ksched-ir
 done
+
+if [ "$fatal" -ne 0 ]; then
+    echo >&2
+    echo "A CELL DID NOT BUILD -- this table is not a measurement." >&2
+    exit 1
+fi
 
 echo
 echo "Checksums must be identical down each column. A changed checksum is a"
