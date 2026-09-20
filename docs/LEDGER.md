@@ -3710,7 +3710,7 @@ same "reports success having measured nothing" defect `bench/sweep.sh`
 carried.
 
 
-## `kernel.rs`: two oracles, 90.1%, and why neither number works alone (2026-09-20)
+## `kernel.rs`: two oracles, 92.5%, and why neither number works alone (2026-09-20)
 
 `kernel.rs` was the last file in H4's nine, carried as "42 viable mutants,
 40 caught, two survivors outstanding and unlocated" from a shard of 47. It
@@ -3720,11 +3720,11 @@ disagree about 239 mutants.
 
 | | mutants |
 |---|---:|
-| survived the corpus only | 37 |
-| survived the unit suite only | 202 |
-| **survived both — the real gap** | **41** |
+| survived the corpus only | 71 |
+| survived the unit suite only | 179 |
+| **survived both — the real gap** | **31** |
 
-Together: **374 of 415 viable, 90.1%.** The corpus alone reads 75.4%, the
+Together: **384 of 415 viable, 92.5%.** The corpus alone reads 75.4%, the
 unit suite alone about a third.
 
 **Neither number is usable on its own, and the reason is structural.** The
@@ -3733,14 +3733,14 @@ default of false — so it cannot execute the tickless path at all, and 23
 of its survivors were sitting in `expected_idle_time`, `step_tick` and
 `idle_suppress_ticks`. The unit suite has `TicklessConfig` and
 `SleepyPort` and reaches exactly there, and very little else. Quoting the
-corpus alone overstates the hole by 61; quoting the pair without
-intersecting understates the coverage by fifteen points.
+corpus alone overstates the hole by 71; quoting the pair without
+intersecting understates the coverage by seventeen points.
 
 So: a mutant surviving ONE oracle is not a gap. One surviving BOTH is.
 
-### Sixteen tests, 80 -> 41
+### Twenty-six tests, 80 -> 31
 
-The gap fell 80 -> 65 -> 41. Two of those tests are worth repeating.
+The gap fell 80 -> 65 -> 41 -> 31. Two of those tests are worth repeating.
 
 **`delay_until`'s tick-overflow arms held nine of the original 80.** The
 corpus runs 2,000 ticks and never overflows; no unit test went near it.

@@ -299,7 +299,7 @@ below with what blocks them. 42 tests were written against what survived.
 | `system.rs` | **0** | — | — | *nothing to mutate* |
 | `queue.rs` (corpus) | 255 | 125 | 55 | **69.4%** |
 | `kernel.rs` (corpus) | 454 | 313 | 102 | **75.4%** |
-| `kernel.rs` (**both oracles**) | 415 viable | 374 | **41** | **90.1%** |
+| `kernel.rs` (**both oracles**) | 415 viable | 384 | **31** | **92.5%** |
 
 `list.rs` and `arena.rs` are **closed**: every one of their twelve
 survivors is either in code this target does not compile or an equivalent
@@ -367,11 +367,11 @@ disagree about 235 mutants:
 
 | | mutants |
 |---|---:|
-| survived the CORPUS only (the unit suite catches them) | 37 |
-| survived the UNIT SUITE only (the corpus catches them) | 202 |
-| **survived BOTH — the real gap** | **41** |
+| survived the CORPUS only (the unit suite catches them) | 71 |
+| survived the UNIT SUITE only (the corpus catches them) | 179 |
+| **survived BOTH — the real gap** | **31** |
 
-Together they kill **374 of 415 viable, 90.1%**, where the corpus alone
+Together they kill **384 of 415 viable, 92.5%**, where the corpus alone
 manages 75.4% and the unit suite alone about a third. The corpus runs
 `PosixDemoConfig`, which leaves `USE_TICKLESS_IDLE` at its default of
 false, so it **cannot execute the tickless path at all** — that was 23 of
@@ -382,9 +382,9 @@ reaches exactly there, and almost nothing else.
 is.** Quoting either number alone overstates the hole by 60 or understates
 the coverage by fifteen points.
 
-Sixteen tests took the real gap from 80 to 41, and the tickless cluster is
+Twenty-six tests took the real gap from 80 to 31, and the tickless cluster is
 CLOSED: `expected_idle_time`'s five survivors are all dead, and so are
-`notify_value`'s. What remains is 41, led by `set_priority` (4),
+`notify_value`'s. What remains is 31, led by `set_priority` (4),
 `delay_until` (4), and a priority-inheritance cluster of six —
 `priority_disinherit_after_timeout`, `priority_inherit` and
 `wait_inherited`. That last one is the interesting lead: `recmutex` and
