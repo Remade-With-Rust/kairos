@@ -193,7 +193,70 @@ time in the role it was written for.
 
 ---
 
-## H3 — Four of five kernel-core files have no unit tests at all
+## H3 — Four of five kernel-core files have no unit tests at all — CLOSED for the three that needed it, 2026-09-20
+
+**Closed where it mattered.** The entry itself named which three: the
+corpus is the deliberate oracle for `kernel.rs` and `queue.rs`, and it was
+`timer.rs`, `stream.rs` and `events.rs` that had no unit test AND no
+scenario. Those three now have 22 tests between them.
+
+| file | tests before | tests now |
+|---|---:|---:|
+| `system.rs` | 17 | 17 |
+| `typed.rs` | 6 | 6 |
+| `name.rs` | 4 | 4 |
+| **`stream.rs`** | **0** | **10** |
+| **`timer.rs`** | **0** | **6** |
+| **`events.rs`** | **0** | **6** |
+| `kernel.rs` | 0 | 0 — corpus-oracled, by decision |
+| `queue.rs` | 0 | 0 — corpus-oracled, by decision |
+
+**Each test pins the C's contract, quoted, not this kernel's behaviour.**
+That distinction is the whole value: a test written the other way round
+proves only that the code still does what it did, which is worth having
+and is not evidence of conformance. For the H2 APIs no scenario reaches,
+a semantic audit against the C source plus a test of what it says is the
+only evidence available, and this is that evidence.
+
+The audit found the *tests* wrong twice and the kernel right both times,
+which is the outcome to want. The one worth reading is the zero-length
+message: `prvWriteMessageToBuffer` writes the length header into
+`xNextHead`, a LOCAL, and only commits `pxStreamBuffer->xHead` inside
+`if( xDataLengthBytes != 0 )` — so a zero-length message to a message
+buffer is a no-op indistinguishable from a send that failed. The first
+version of that test asserted the header would show up in
+`bytes_available`. It does not, in either kernel.
+
+Contracts now pinned that no scenario isolates, in rough order of how
+badly they would bite:
+
+* a MESSAGE buffer reports `isFull` while it still has free bytes — the C
+  compares spaces against the length HEADER, not against zero;
+* the timer API is a COMMAND QUEUE, so `xTimerStart` returning pdPASS
+  means "queued", `xTimerIsTimerActive` keeps saying false until the
+  daemon runs, and `xTimerGetPeriod` answers the OLD period after a
+  successful `xTimerChangePeriod`;
+* `xTimerGetExpiryTime` is an unguarded list-item read — valid only when
+  `xTimerIsTimerActive` says so, and the return type cannot tell you;
+* `xEventGroupSetBits` can answer a value WITHOUT the bit it just set,
+  because a waiter woke inside the call and its clear-on-exit ran first;
+* `xEventGroupClearBits` answers the value from BEFORE the clear;
+* `xStreamBufferNextMessageLengthBytes` answers 0 on a stream buffer
+  whatever it holds, and cannot distinguish that from "no message";
+* `xStreamBufferReset` keeps the trigger level and refuses while a task
+  waits.
+
+`vTimerSetReloadMode` is pinned as the odd one out: it is the only timer
+mutator that is NOT a queued command, so it takes effect at once and
+reschedules nothing.
+
+The three share `system.rs`'s config, port and sink, which is now
+`pub(crate)` — three copies of a harness is three places for it to drift.
+Release builds are unchanged by construction: the module is `#[cfg(test)]`.
+
+*The measurement that opened it is kept below.*
+
+## H3 — the counts as they stood
 
 **Measured**, `#[test]` per file:
 

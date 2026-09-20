@@ -3504,3 +3504,85 @@ it runs in a firmware self-check, not only in a debug build.
 Five tests pin the result, including the hazard: `insert_sorted` on an
 unsorted list DOES misplace, pinned as a hazard rather than fixed. One of
 them fails if anyone ever rebuilds the append on `insert_end`.
+
+
+## H3: 22 tests for the three files that had none, each pinning the C (2026-09-20)
+
+`stream.rs`, `timer.rs` and `events.rs` had **no unit test at all**, and
+most of their APIs are the ones no conformance scenario reaches either.
+They now have 27 tests between them where they had none: 10, 6 and 6 new,
+and the kernel-core suite goes from 27 to 49.
+
+`kernel.rs` and `queue.rs` still have none, and that stays a decision
+rather than a gap: the corpus is their oracle, deliberately.
+
+### The rule these were written under
+
+**Pin the C's contract, quoted, not this kernel's behaviour.** A test
+written the other way round proves only that the code still does what it
+did. Every one of the 22 carries the `stream_buffer.c`, `timers.c` or
+`event_groups.c` lines it is pinning, so a reader can check the test rather
+than trust it.
+
+That rule earned itself twice: the audit found the TEST wrong and the
+kernel right, both times.
+
+### The find worth keeping: a zero-length message is a no-op
+
+`prvWriteMessageToBuffer` writes the length header and keeps the new
+position in `xNextHead`, a **local**:
+
+```c
+if( message buffer ) {
+    if( xSpace >= xRequiredSpace ) {
+        xNextHead = prvWriteBytesToBuffer( ..., sbBYTES_TO_STORE_MESSAGE_LENGTH, xNextHead );
+    }
+}
+if( xDataLengthBytes != ( size_t ) 0 ) {
+    pxStreamBuffer->xHead = prvWriteBytesToBuffer( ..., xNextHead );
+}
+return xDataLengthBytes;
+```
+
+`pxStreamBuffer->xHead` is only committed inside the `!= 0` branch, which a
+zero-length message never takes. So the header bytes go into the array, the
+head never moves, the buffer stays empty, the call returns 0, and the next
+send writes over them. **A zero-length send is indistinguishable from a
+send that failed**, and no amount of polling reveals the difference.
+
+The first version of that test asserted the opposite. The kernel already
+matched the C.
+
+### The other contracts now pinned, none of which a scenario isolates
+
+* a MESSAGE buffer reports `isFull` **with free bytes still in it** — the C
+  compares spaces against the length HEADER (`<=`), not against zero, so a
+  caller expecting `spaces_available() == 0` is wrong by up to a header;
+* the timer API is a **command queue**: `xTimerStart` returning pdPASS
+  means "the daemon has been told", `xTimerIsTimerActive` keeps saying
+  false until it runs, and `xTimerGetPeriod` answers the OLD period after a
+  successful `xTimerChangePeriod`. A setter and its getter that disagree;
+* `xTimerGetExpiryTime` is an **unguarded** `listGET_LIST_ITEM_VALUE` — on
+  a dormant timer it answers whatever the item was last left holding, and
+  the return type cannot say so. Only `xTimerIsTimerActive` can;
+* `vTimerSetReloadMode` is the odd one out: not a queued command, so it is
+  immediate — and it reschedules nothing, so a running timer keeps the
+  expiry it has;
+* `xEventGroupSetBits` can answer a value **without the bit it just set**,
+  because a waiter matched inside the call and its clear-on-exit ran before
+  the snapshot. A control test with a non-clearing waiter pins that the
+  surprise is about clear-on-exit, not about waking;
+* `xEventGroupClearBits` answers the value from **before** the clear, so
+  the return still contains what was cleared;
+* `xStreamBufferNextMessageLengthBytes` answers 0 on a stream buffer
+  whatever it holds — "the question does not apply", which the return type
+  cannot distinguish from "no message waiting";
+* `xStreamBufferReset` keeps the trigger level (the C passes the buffer's
+  own back into `prvInitialiseNewStreamBuffer`) and refuses while a task is
+  blocked on the buffer.
+
+### Cost
+
+None. The harness moved to `pub(crate)` on a `#[cfg(test)]` module, so the
+release build is unchanged by construction and no instrument was re-run on
+that account. `conform --all` is 21 scenarios identical, clippy clean.
