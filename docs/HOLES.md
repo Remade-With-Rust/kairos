@@ -12,10 +12,20 @@ Ordered by how much a reader should care, not by how easy the fix is.
 
 ---
 
-## H1 — Three of the four kernel instruments never block a task
+## H1 — Three of the four kernel instruments never block a task — CLOSED 2026-09-19
 
-**Measured.** Zero-timeout calls per bench, and how many ever assert
-`Wait::Blocked`:
+**Closed.** All four now park a task on a real timeout and assert
+`Wait::Blocked` on it: `khot-ir` on a starved queue (3) and a semaphore
+(2), `kipc-ir` on a notification (2) and a stream buffer (3), `kobj-ir`
+on an event-group bit nobody sets (2), `kdelay-ir` on a queue (3). The
+assertion is `matches!(.., Ok(Wait::Blocked))` and not `is_ok()`, because
+a call that declines to block is also `Ok` — which is how the hole hid.
+
+*The measurement that opened it is kept below; a closed hole that deletes
+its own evidence teaches nothing.*
+
+**Measured, as it stood.** Zero-timeout calls per bench, and how many ever
+asserted `Wait::Blocked`:
 
 | bench | zero-timeout calls | blocking asserts |
 |---|---|---|
@@ -36,28 +46,37 @@ moved its top consumer from `wake_due_tasks` to
 optimisation. Whatever these three would say about the blocking paths, they
 are not saying it yet.
 
-**Cost of the gap:** any change to the blocking IPC paths is currently
-priced at zero. **Fix:** the `kdelay-ir` pattern — one call with a real
+**Cost of the gap:** any change to the blocking IPC paths was priced at
+zero. **Fix, applied:** the `kdelay-ir` pattern — one call with a real
 timeout against an endpoint nobody satisfies.
+
+**This entry was itself stale for a day.** The fix landed in the bench
+crates and the hole list was not told, which is the failure mode a hole
+list exists to prevent. Closing a hole is two commits, not one.
 
 ---
 
-## H2 — 22 public APIs have no evidence from the C differential
+## H2 — 19 public APIs have no evidence from the C differential
 
 **Measured.** Of 130 public kernel APIs, these are called by no conformance
 scenario, no runner code, no other kernel code, and no unit test:
 
 ```
 name_of                 task_at                 with_tick_hook
-notify_value            notify_value_clear      queue_remove_from_set
-queue_send_to_front_from_isr                    ready_cursor
-ready_items             timer_change_period     timer_delete
-timer_expiry_time       timer_period            timer_pend_function_call
+notify_value            queue_remove_from_set   queue_send_to_front_from_isr
+ready_cursor            ready_items             timer_expiry_time
+timer_period            timer_pend_function_call
 stream_buffer_reset     stream_buffer_is_empty  stream_buffer_is_full
 stream_buffer_bytes_available                   stream_buffer_spaces_available
 stream_buffer_next_message_length               stream_buffer_receive_from_isr
 stream_buffer_set_trigger_level
 ```
+
+`notify_value_clear`, `timer_change_period` and `timer_delete` came off
+this list on 2026-09-19 when the `TaskNotify` scenario landed. `notify_value`
+stayed on it: the scenario reaches `xTaskNotifyAndQuery` through
+`notify_and_query`, which is one critical section, and `notify_value` is
+the two-call spelling only the capi shim uses.
 
 They are **not dead**: `rusty_rtos-capi` calls most of them, so a C program
 linking the shim reaches them. `vTimerDelete`, `xQueueRemoveFromSet`,
@@ -78,8 +97,8 @@ vendored-but-unused demos supply one, and the ratio for a port is about
 
 | work | C lines | H2 APIs it closes |
 |---|---|---|
-| **`TimerDemo` Test7** + one harness line | **107** | `timer_change_period` |
-| `TaskNotify` scenario | 721 | `notify_value_clear`, `timer_delete`, `timer_change_period` — **C side ready, see below** |
+| **`TimerDemo` Test7** + one harness line | **107** | `timer_change_period` — **closed by `TaskNotify` instead** |
+| ~~`TaskNotify` scenario~~ | 721 | ~~`notify_value_clear`, `timer_delete`, `timer_change_period`~~ — **DONE 2026-09-19, see below** |
 | `QueueSet` scenario | 1,160 | `queue_remove_from_set` |
 | `StreamBufferDemo` scenario | 1,247 | six: `reset`, `is_empty`, `is_full`, `bytes_available`, `spaces_available`, `receive_from_isr` |
 
@@ -119,6 +138,27 @@ and ASLR varies the address per run — so the oracle did not reproduce
 Pinned in `kairos oracle patch` — not in the file, because
 `oracle/FreeRTOS/` is gitignored and an edit there evaporates at the next
 fetch. `TaskNotify` is now a porting job like any other.
+
+**Ported 2026-09-19: 3,519 lines identical, exits included** (`ticks=2001
+yields=227 exits=2845 lines=3518`), pinned with the other nineteen, and
+`conform --all` is 20 scenarios identical. The estimate above was 721 C
+lines at ~0.7; it came out at 806 Rust lines, and it agreed with the C
+kernel for 565 lines on the first run.
+
+It found one defect, and the defect was the **kernel's**, not the port's:
+`prvProcessReceivedCommands` ends `tmrCOMMAND_DELETE` in `vPortFree`,
+which every `heap_N.c` wraps in `vTaskSuspendAll` / `xTaskResumeAll` —
+one outermost exit, spent with no trace line to show for it.
+`queue_delete` and `event_group_delete` had both been told; the timer
+command was the third object with a free and nothing in the corpus had
+deleted a timer before. It presented as the other two did: every event
+agreed and the exit column was one short from the first delete on.
+
+It also needed one new kernel call. `xTaskNotifyAndQuery` hands back the
+value it is about to replace **from inside the same critical section**;
+the capi shim's read-then-notify gives the same two numbers and costs a
+second one, and on the sim an exit is a tick opportunity. Hence
+`notify_and_query` / `notify_and_query_from_isr`.
 
 **The middle row is worth more than the scenario.** It says the C oracle is
 deterministic on real pthreads: the POSIX port adds no scheduling
