@@ -176,11 +176,18 @@ FreeRTOS's idle task does — tickless **costs more than it saves**:
 
 | | control | tickless |
 |---|---:|---:|
-| core active | 2,656 us | 3,638 us |
+| core active | 2,506 us | 3,722 us |
 | **duty cycle** | **0.6 %** | **0.9 %** |
 
-Three repeat runs, control 2,656 / 2,656 / 2,656 us and tickless 3,638 /
-3,638 / 3,639 us — a deterministic instrument, not noise.
+Repeat runs reproduce to a few microseconds, so the difference is not noise.
+
+It does keep **time**, and that took a second fix: a sleep that restarts the
+tick period on waking silently loses whatever fraction of a period had already
+elapsed, and the first version ran **0.99 % slow** — 38.7 s in an hour — with
+a flawless logical tick count and a matching digest. The tick is now a one-shot
+on an absolute grid, measured at 0.0 % drift, and there is a gate on it. The
+lesson is worth more than the bug: *a gate that only compares the system to
+itself cannot catch the system's shared reference drifting.*
 
 A `waiti` idle is already 99.4 % halted, so 0.6 % is the ceiling for *any*
 idle optimisation on that workload, and this one's suspend/reprogram/restore

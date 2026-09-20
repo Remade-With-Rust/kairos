@@ -253,15 +253,44 @@ SYSTIMER. **The headline inverts.**
 
 | | control (`waiti` per tick) | tickless |
 |---|---:|---:|
-| wall | 399,666 us | 403,960 us |
-| halted | 397,010 us | 400,322 us |
-| **core active** | **2,656 us** | **3,638 us** |
+| wall | 399,595 us | 399,611 us |
+| **core active** | **2,506 us** | **3,722 us** |
 | **duty cycle** | **0.6 %** | **0.9 %** |
 | alarm wakeups | 400 | 0 |
+| clock drift | 0.1 % | 0.0 % |
 
-Four hundred wakeups became zero and the part worked **37 % harder**. Three
-repeats each way — control 2,656 / 2,656 / 2,656 us, tickless 3,638 / 3,638 /
-3,639 us — so this is a deterministic instrument, not noise.
+Four hundred wakeups became zero and the part worked **~48 % harder**. Repeat
+runs reproduce to a few microseconds, so this is a deterministic instrument,
+not noise.
+
+#### M3c-1 — the clock-drift defect, and the gate that could not see it
+
+The first version of this table showed the tickless arm **4,294 us longer in
+wall time** for the same 400 logical ticks, and reported it as incidental. It
+was not: **the tickless kernel was losing real time**, 0.99 % of it, which is
+38.7 seconds in an hour.
+
+The tick was a free-running 1 ms period and the sleep restarted that period at
+the instant it woke, so every sleep discarded whatever fraction of a period had
+elapsed while the worker ran. 91 % of the gap is exactly the measured active
+time; a simulation of the old logic predicts +0.965 % against +0.99 % measured.
+
+Fixed by driving the tick as a **one-shot on an absolute grid** — `NEXT_TICK_US`
+holds the next tick's absolute instant, each arming is `grid - now`, and a
+sleep targets a grid point rather than a duration, so errors cannot accumulate.
+After: a 16 us gap where there had been 4,294, and 0.0 % drift.
+
+**Why nothing caught it.** Every check counted LOGICAL ticks, and both arms
+produce exactly 400 of those however badly the timer is driven. The digest
+matched too, because no event was ever out of order.
+
+> **A gate that only compares the system to itself cannot catch the system's
+> shared reference drifting.**
+
+There is now a check on wall-time-per-logical-tick, and it is the only one in
+that cell comparing the kernel to something outside itself. The hazard was
+already written down on the ARM port -- boundary-sleeping was implemented there
+on purpose -- and was simply not carried across.
 
 #### The ceiling argument, which is the real result
 
@@ -350,6 +379,9 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
 | 2026-09-19 | **M3c answers the go/no-go NO.** Against a fair `waiti` baseline tickless raised the duty cycle 0.6 % -> 0.9 %. M4 (fitted policy) is pruned on arithmetic: 99.4 % already halted leaves nothing for a policy to win |
 | 2026-09-19 | The mission's remaining value is sleep DEPTH, not sleep count. M6 replaces M4 |
 | 2026-09-19 | The README states the duty-cycle LOSS beside the wakeup win. A feature whose headline number is real and whose benefit is conditional says both, or the headline is a lie by omission |
+| 2026-09-19 | A tickless port drives its tick as a ONE-SHOT ON AN ABSOLUTE GRID, never as a period restarted on waking. Restarting discards the elapsed fraction every sleep and the loss compounds -- measured at 0.99 % slow, 38.7 s in an hour |
+| 2026-09-19 | Every tickless cell gates WALL TIME PER LOGICAL TICK against an external clock. Logical tick counts and schedule digests are both blind to the clock drifting, because they only compare the system to itself |
+| 2026-09-19 | An unexplained difference in a reported number is a defect until shown otherwise. The 4,294 us wall gap was reported as incidental and was a 1 % clock error |
 | 2026-09-19 | The Xtensa sleep lives in the CELL, not in `rusty_rtos_port-xtensa`: SysTick is a core peripheral the ARM port owns, `SYSTIMER` is a chip peripheral belonging to `esp-hal`, and the Xtensa port is HAL-free. A second ESP part promotes the newtype into `rusty_rtos_port-esp` |
 | 2026-09-19 | An Xtensa port measures its own sleep with the free-running counter rather than trusting the sleep, because `waiti 0` unmasks and `Rtc::sleep_light` reports nothing. That mechanism is what lets M3c swap in a deeper sleep without re-proving anything |
 | 2026-09-19 | The tickless cell pins ONE order digest for BOTH arms, so a single run gates and the cross-arm claim is carried by a number rather than by a promise to run a diff |
