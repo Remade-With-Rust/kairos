@@ -127,11 +127,31 @@ restore
 cells || { echo "ABORT: the cells still fail after removing the poison." >&2; exit 1; }
 echo "bridge PROVED: poisoned fails, clean passes."
 
+# PRE-FLIGHT. The poison proof above runs the cells DIRECTLY; it says
+# nothing about whether cargo-mutants' OWN invocation runs them. It did
+# not: `--test-workspace` defaults to false and OVERRIDES `--test-package`,
+# so cargo-mutants tested the mutated package alone -- which has no tests
+# at all -- logged "running 0 tests", and scored all 87 mutants against
+# nothing. Every one of those numbers was fiction.
+#
+# So run ONE mutant first and require its baseline to have executed a cell.
+echo "pre-flight: one mutant, to prove cargo-mutants itself runs the cells..."
+(cd "$P" && cargo mutants --in-place --file "crates/$CRATE/src/$FILE" \
+    --test-workspace true --timeout 300 --shard 1/1000 -- "$FILTER" \
+    >/tmp/mq-pre.txt 2>&1) || true
+if grep -q "running 0 tests" "$P/mutants.out/log/baseline.log" 2>/dev/null; then
+    echo "ABORT: cargo-mutants ran ZERO tests in its own baseline." >&2
+    echo "It would score every mutant against nothing, and the report would" >&2
+    echo "look exactly like a run that found a great many holes." >&2
+    exit 1
+fi
+echo "pre-flight OK: cargo-mutants' baseline executed a cell."
+
 echo "running cargo mutants on $CRATE/$FILE, judged by its QEMU cells..."
 set +e
 (cd "$P" && cargo mutants --in-place \
     --file "crates/$CRATE/src/$FILE" \
-    --test-package rusty_rtos_port-core \
+    --test-workspace true \
     --timeout 300 "$@" \
     -- "$FILTER")
 verdict=$?
