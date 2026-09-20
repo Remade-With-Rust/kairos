@@ -242,14 +242,72 @@ This is the mission's clearest argument for hardware: M3a's QEMU cell, the
 kernel's unit tests, the section sizes and the disassembly all passed while
 this defect sat in the code.
 
+### M3c — the energy question, answered against a fair baseline (2026-09-19)
+
+M3b counted wakeups. Wakeups are not energy, and the honest measurement needed
+two things M3b did not have: a control arm that **halts the core** the way
+FreeRTOS's idle task does, and a measure of how long the core actually ran.
+
+Both arms now halt in `waiti` and accumulate time-halted off the free-running
+SYSTIMER. **The headline inverts.**
+
+| | control (`waiti` per tick) | tickless |
+|---|---:|---:|
+| wall | 399,666 us | 403,960 us |
+| halted | 397,010 us | 400,322 us |
+| **core active** | **2,656 us** | **3,638 us** |
+| **duty cycle** | **0.6 %** | **0.9 %** |
+| alarm wakeups | 400 | 0 |
+
+Four hundred wakeups became zero and the part worked **37 % harder**. The
+control's active time is bit-identical across repeat runs (2,656 us twice), so
+this is a deterministic instrument, not noise.
+
+#### The ceiling argument, which is the real result
+
+A `waiti` control is **already 99.4 % halted**. That is the ceiling for *any*
+idle optimisation on this workload: a tickless implementation costing
+literally nothing could remove at most 2,656 us from a 399,666 us run.
+
+This one is not free. Each sleep replaces ~20 tick interrupts at ~6.6 us
+(~133 us) with one suspend / reprogram / sleep / measure / restore / resume
+cycle costing ~182 us — **+49 us per sleep**, twenty times over.
+
+The reason is that `waiti` is a *shallow* halt: the core clock stops, nothing
+else does, so re-entering costs one interrupt entry. Tickless pays for itself
+only when a wakeup is EXPENSIVE.
+
+> **Tickless idle is a lever on sleep DEPTH, not sleep COUNT. Removing wakeups
+> is worth nothing until a wakeup is worth something.**
+
+#### What this prunes, and what it opens
+
+**M4 — the fitted sleep-length policy — is PRUNED, on arithmetic.** Tuning
+*when* to sleep cannot help when the sleep is the wrong *depth*, and no policy
+beats a 0.6 % ceiling. This is precisely the go/no-go M3 was declared to be on
+2026-09-19, answered "no".
+
+What it opens is **sleep depth**: `Rtc::sleep_light`, which gates clocks and
+drops power domains. There a wake costs hundreds of microseconds and real
+charge, and 400 to 0 becomes the whole game. The mechanism is already built
+to survive the swap — elapsed time is read off the counter rather than
+trusted, which is exactly what a sleep that reports nothing demands.
+
+#### On predicting first
+
+The prediction on record before the run was that the difference would be
+"small". It was neither small nor in the predicted direction. A confirmed
+guess would have taught nothing; this one produced the ceiling argument that
+closed the mission.
+
 ## 5 · Remaining work
 
 | brick | what |
 |---|---|
 | **M2a** | wire `idle_suppress_ticks` into the sim's `prvIdleTask` and make the sim port sleep. **Needs an `ORACLES.md` decision first**: the sim's time is critical-section exits, not wall time, so "sleeping" is a sim-contract change |
-| **M3c** | the meter. `Rtc::sleep_light` under the measured-elapsed mechanism M3b proved, and a current shunt. **Must NOT use this cell's control arm as the baseline** — it busy-spins, so it would flatter tickless; compare against an idle task that calls `Port::idle` |
-| **M4** | only if M3 leaves a gap: observe-only harvest, then a threshold or a fit. Decide which *at the ceiling step* |
-| **M5** | ship: opt-in package, provenance, README row naming which gate covers which half |
+| **M5** | ship: opt-in package, provenance, README row naming which gate covers which half. The README row is **done** — it states the wakeup win AND the duty-cycle loss |
+| **M6 (new, replaces M4)** | sleep DEPTH: `Rtc::sleep_light` behind the same measured-elapsed mechanism, with the same three numbers plus a current shunt. This is where the prize actually is |
+| ~~**M4**~~ | ~~fitted sleep-length policy~~ — **PRUNED by M3c on arithmetic.** A `waiti` idle is already 99.4 % halted, so no policy can win more than 0.6 %. Reopen only if M6 makes a wake expensive enough for the policy to matter |
 
 **Owner-only:** M2a needs an `ORACLES.md` decision on what a sim sleep means.
 M3 needs a board (ESP32-S3 DevKit is cheapest — it closed `build-me-bare` B3 —
@@ -264,7 +322,8 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
 | M2 | mechanism | the existing 18-scenario differential is unchanged with tickless off |
 | M3a | mechanism on silicon | `cargo run --release` and `--features tickless` in `mps2-an385-qemu-tickless` both PASS; wakeups collapse; one pinned order digest serves both arms |
 | M3b | the S3 joint and tickless on it | `cargo run --release` and `--features tickless` in `xiao-s3-tickless` both PASS on a XIAO; wakeups collapse; one pinned digest serves both arms |
-| M3c | fixed policy | measured energy drop on a named board, against a `Port::idle` baseline, with the order digest and the tick band clean |
+| M3c | the energy question | **answered, negative** — against a `Port::idle` baseline the duty cycle went 0.6 % -> 0.9 %; the ceiling is 0.6 % and tickless cannot beat it on a shallow halt |
+| M6 | sleep depth | a measured current drop on a named board with `Rtc::sleep_light`, digest and tick band clean |
 | M4 | fitted policy | beats M3 **on a holdout board it was not fitted on** |
 | M5 | ship | `cargo add` plus three lines reduces measured current on a stranger's board |
 
@@ -287,7 +346,10 @@ but Cortex-M3 is the Kairos-native target) and a current shunt.
 | 2026-09-19 | A cell that has never executed says so in its module header, its README banner and its commit. `xiao-s3-tickless` said so until it was flashed, and the claim was replaced by measurements the same day |
 | 2026-09-19 | `waiti 0` leaves `PS.INTLEVEL` at zero after the wake, so an Xtensa port must re-raise its own mask; `wfi` does not, so ARM must not. The two sleeps are not interchangeable and neither is their suppression |
 | 2026-09-19 | When a fix ships as two changes, the one that did nothing is labelled as such. The `Software0` decline fired zero times and is recorded as defence in depth, not as part of the cure |
-| 2026-09-19 | M3c may not use `xiao-s3-tickless`'s control arm as its energy baseline: that arm busy-spins, because `idle_suppress_ticks` returns before reaching `Port::idle`. Valid for counting wakeups, invalid for counting current |
+| 2026-09-19 | M3c may not use `xiao-s3-tickless`'s control arm as its energy baseline: that arm busy-spins, because `idle_suppress_ticks` returns before reaching `Port::idle`. Valid for counting wakeups, invalid for counting current. **Fixed same day** — the control now halts, and the fixed measurement is M3c |
+| 2026-09-19 | **M3c answers the go/no-go NO.** Against a fair `waiti` baseline tickless raised the duty cycle 0.6 % -> 0.9 %. M4 (fitted policy) is pruned on arithmetic: 99.4 % already halted leaves nothing for a policy to win |
+| 2026-09-19 | The mission's remaining value is sleep DEPTH, not sleep count. M6 replaces M4 |
+| 2026-09-19 | The README states the duty-cycle LOSS beside the wakeup win. A feature whose headline number is real and whose benefit is conditional says both, or the headline is a lie by omission |
 | 2026-09-19 | The Xtensa sleep lives in the CELL, not in `rusty_rtos_port-xtensa`: SysTick is a core peripheral the ARM port owns, `SYSTIMER` is a chip peripheral belonging to `esp-hal`, and the Xtensa port is HAL-free. A second ESP part promotes the newtype into `rusty_rtos_port-esp` |
 | 2026-09-19 | An Xtensa port measures its own sleep with the free-running counter rather than trusting the sleep, because `waiti 0` unmasks and `Rtc::sleep_light` reports nothing. That mechanism is what lets M3c swap in a deeper sleep without re-proving anything |
 | 2026-09-19 | The tickless cell pins ONE order digest for BOTH arms, so a single run gates and the cross-arm claim is carried by a number rather than by a promise to run a diff |

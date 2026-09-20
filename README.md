@@ -29,7 +29,7 @@ are, what is finished, what remains. Everything below summarises it.
 |---|---|---|---|
 | [`rusty_rtos_core`](https://github.com/Remade-With-Rust/rusty_rtos_core) | 0 · foundation | the shared vocabulary: ticks, priorities, generational handles, one `Copy` error, the `Config` trait, the Port / Heap / Trace / Hooks seams | **K0 passed** — 34 tests, 8 bare-metal rungs, Miri |
 | [`rusty_rtos_kernel`](https://github.com/Remade-With-Rust/rusty_rtos_kernel) | 1 · function | `tasks.c`, `queue.c`, `timers.c`, `event_groups.c`, `stream_buffer.c` | **K1 passed** — 9/9 scenarios, 8,408,764 lines identical at 100k ticks; **K2 14/18** |
-| [`rusty_rtos_port`](https://github.com/Remade-With-Rust/rusty_rtos_port) | 1 · function | `portable/`: sim, Posix, Cortex-M, RISC-V, Xtensa | **sim port done**; **K3 part done** — Cortex-M switches under QEMU, 100/100 resumptions |
+| [`rusty_rtos_port`](https://github.com/Remade-With-Rust/rusty_rtos_port) | 1 · function | `portable/`: sim, Posix, Cortex-M, RISC-V, Xtensa | **sim port done**; **K3 part done** — Cortex-M switches under QEMU, 100/100 resumptions; **tickless idle on Cortex-M and ESP32-S3** |
 | [`rusty_rtos_heap`](https://github.com/Remade-With-Rust/rusty_rtos_heap) | 1 · function | `portable/MemMang/heap_1..5.c` | **K4 passed** — 20,000 operations agree with `heap_4.c` |
 | [`rusty_rtos_backoff`](https://github.com/Remade-With-Rust/rusty_rtos_backoff) | 1 · function | backoffAlgorithm | **done** — 192/192 calls agree |
 | [`rusty_rtos_json`](https://github.com/Remade-With-Rust/rusty_rtos_json) | 1 · function | coreJSON | **done**, both halves — JSONTestSuite at 100 % |
@@ -139,14 +139,58 @@ that produced it, and every one is a diff against the C, not a self-assessment.
 | **K1 scheduler on sim** | passed — nine of nine scenarios, **8,408,764 lines identical** at 100,000 ticks |
 | **K2 IPC + timers** | 14 of 18 passed — 12,808,722 lines identical; Kani verifies seven harnesses (3,965 checks) |
 | **K2.1–2.3 the Rust, async and static faces** | passed |
-| **K3 silicon + QEMU** | part done — Cortex-M switches under QEMU, 100/100 resumptions over 200 switches, poison-proven |
+| **K3 silicon + QEMU** | part done — Cortex-M and RISC-V under QEMU, 100/100 resumptions over 200 switches, poison-proven; and the **kernel now runs from a tick interrupt on a real ESP32-S3**, 400 ticks, 63 switches, no stalls |
+| **Tickless idle** | **done on two architectures** — 400 wakeups to 0 with a byte-identical schedule, on QEMU Cortex-M and on a XIAO ESP32-S3. See below |
 | **K4 heaps** | **passed** — 20,000 operations agree with `heap_4.c` on the offset chosen, the free bytes and the minimum ever free |
 | **K6 C ABI** | **both halves pass** — 25/25 unmodified C demo files on QEMU M3 and on the host, Windows threads and Linux pthreads |
 | **K7 libraries** | `backoff`, `json` and `sntp` done; **`mqtt` complete — 218 of coreMQTT's 218 functions** |
 | **K5 Janus joint, K8 SMP / MPU / 1.0** | open |
 
-It has run on a chip: K3 is QEMU on Cortex-M and RISC-V, and K6 links the
-unmodified C demos against the Rust ABI.
+It has run on a chip, and not only under emulation: K3 is QEMU on Cortex-M and
+RISC-V, K6 links the unmodified C demos against the Rust ABI, and the kernel
+schedules from a tick interrupt on a real ESP32-S3.
+
+## Tickless idle, and what it is honestly worth
+
+**It is real, it is opt-in, and it is off unless you ask for it.** A build that
+does not set `Config::USE_TICKLESS_IDLE` passes the 18-scenario differential
+byte for byte, unchanged.
+
+Two cells run it, one command each, and both gate themselves:
+
+| | `mps2-an385-qemu-tickless` | `xiao-s3-tickless` |
+|---|---|---|
+| where | QEMU, Cortex-M3 | **a real XIAO ESP32-S3** |
+| **timer interrupts** | **401 → 0** | **400 → 0** |
+| **schedule digest** | identical both arms | identical both arms |
+
+The schedule is the claim, and it is a *pinned* FNV-1a digest of every
+scheduling event and the task it names — one constant serving both arms, so a
+single run is a kill test. Poison-proved: deleting the one line in
+`step_tick` that leaves the last tick pended makes every lap arrive a tick
+late, and the gate fails.
+
+**And the part most projects would not print.** On the ESP32-S3, measured
+against a *fair* baseline — a control that halts the core in `waiti` the way
+FreeRTOS's idle task does — tickless **costs more than it saves**:
+
+| | control | tickless |
+|---|---:|---:|
+| core active | 2,656 us | 3,638 us |
+| **duty cycle** | **0.6 %** | **0.9 %** |
+
+A `waiti` idle is already 99.4 % halted, so 0.6 % is the ceiling for *any*
+idle optimisation on that workload, and this one's suspend/reprogram/restore
+cycle costs more than the interrupts it removes.
+
+> **Tickless is a lever on sleep DEPTH, not sleep COUNT. Removing wakeups is
+> worth nothing until a wakeup is worth something.**
+
+So: use it when your port's sleep is deep — one that gates clocks and drops
+power domains, where a wake costs hundreds of microseconds and real charge.
+On a shallow `wfi`/`waiti` idle it will not pay, and we would rather say so
+than quote you a wakeup count. The full workings are in
+[docs/plans/tickless-power.md](docs/plans/tickless-power.md).
 
 ## Part of Remade With Rust
 
