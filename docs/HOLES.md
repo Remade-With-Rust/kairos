@@ -266,7 +266,49 @@ that scenario exercises were outside the gate.
 
 ---
 
-## H6 — `tail_value`'s invariant is a caller's promise with no check
+## H6 — `tail_value`'s invariant is a caller's promise with no check — CLOSED 2026-09-20
+
+**Closed, and it made the kernel faster.** The promise was never really
+about `tail_value`; it was about the PATTERN the one caller built on it —
+read the tail, compare, write the value, append. `ListsOf::insert_sorted`
+is that pattern, in the list, so two of the three obligations are gone:
+
+| obligation | before | now |
+|---|---|---|
+| the comparison must be `>=`, not `>` | caller's, and silent when wrong | in the list, tested |
+| the append must actually append | caller's: `insert_end` links before the CURSOR | **structurally absent** — it links between the tail and the marker, so the cursor cannot matter |
+| the list must already be sorted | caller's, prose only | caller's, and `ListsOf::is_sorted` checks it |
+
+`is_sorted` answers a `Result` rather than panicking, because this crate's
+contract is that nothing in it panics on any input a caller can construct
+(`tests/no_panic.rs`). That ruled out the `debug_assert!` this would
+otherwise have been — and the predicate is the better tool anyway, since it
+works in a firmware self-check and not only in a debug build.
+
+**The first attempt got the mechanism backwards, and the measurement said
+so.** Keeping `insert_end` and TESTING the cursor cost +0.09% to +0.19%
+across the instruments. Removing the question instead of checking it won on
+every arm:
+
+| instrument | call site | `insert_sorted` | |
+|---|---:|---:|---:|
+| `kdelay-ir` | 4,024,119 | 3,995,313 | **-0.72%** |
+| `kdelay-deep` | 4,368,168 | 4,344,745 | **-0.54%** |
+| `khot-ir` | 14,800,504 | 14,736,516 | **-0.43%** |
+| `ksched-ir` | 1,790,797 | 1,790,797 | flat |
+
+One end read rather than two, the value written by the link rather than by
+a separate `set_value`, and no cursor read at all. Checksums identical down
+every column; `conform --all` still 21 scenarios identical.
+
+Five tests pin it, including the hazard itself: `insert_sorted` on an
+unsorted list DOES misplace, and that is pinned as a hazard rather than
+fixed, because fixing it is the `sorted` flag `tail_value` records as a
+measured net loss.
+
+*The measurement that opened it is kept below.*
+
+## H6 — `tail_value`'s invariant is a caller's promise with no check (as it stood)
 
 **By construction**, introduced 2026-09-19. `ListsOf::tail_value` is only
 meaningful on a sorted list, and the list deliberately does not track

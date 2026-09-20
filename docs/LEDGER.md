@@ -3441,3 +3441,66 @@ turned an "owner decision" into an afternoon.
   `BLOCKED` note told the reader to run exactly that. Both are gone.
 * `TaskNotify` had no committed `.trace.zst`. It has one now; the corpus
   pins 19 C traces and the set is complete.
+
+
+## H6: the safe version of the delayed-list append is the fast one (2026-09-20)
+
+`ListsOf::tail_value` handed its caller a three-part promise written only in
+prose, and the kernel's delayed-list append was the one caller keeping it.
+Closed by moving the PATTERN into the list as `insert_sorted`, which turned
+out to be **a win on every instrument that touches it**.
+
+| instrument | call site | `insert_sorted` | |
+|---|---:|---:|---:|
+| `kdelay-ir` | 4,024,119 | 3,995,313 | **-0.72%** |
+| `kdelay-deep` | 4,368,168 | 4,344,745 | **-0.54%** |
+| `khot-ir` | 14,800,504 | 14,736,516 | **-0.43%** |
+| `ksched-ir` | 1,790,797 | 1,790,797 | flat |
+
+Two real trees, callgrind, checksums identical down every column, and
+`conform --all` still 21 scenarios identical to the C kernel.
+
+### The first mechanism was wrong, and the bisect is why we know
+
+The obvious closure keeps `insert_end` and TESTS the cursor, because
+`insert_end` links before the cursor and therefore appends only while the
+cursor sits at the marker. That version cost **+0.09% / +0.04% / +0.19%**.
+
+A three-arm bisect separated the two effects:
+
+| arm | `kdelay-ir` | `kdelay-deep` | `khot-ir` |
+|---|---:|---:|---:|
+| call site (before) | 4,024,119 | 4,368,168 | 14,800,504 |
+| pattern folded in, no cursor test | 4,015,111 | 4,359,142 | 14,800,492 |
+| + cursor test | 4,027,720 | 4,369,972 | 14,828,503 |
+
+The fold was already a win; the whole cost was the check. So the check went,
+and with it the reason for one: `insert_sorted` links between the tail and
+the end marker directly, which appends whatever the cursor is doing.
+**Removing the question beat checking it, on every arm.** That is worth
+keeping as a shape -- when a runtime check is guarding an invariant, ask
+first whether a different mechanism makes the invariant unreachable.
+
+### Where the speed came from
+
+Not from the safety. From what the old call site did twice: it read
+`end(list)` once for `tail_value` and again inside `insert_end`, and it
+called `set_value` to write a value that `link_between` writes for free on
+the way in. One read, one write, no cursor.
+
+### What is left, and what it costs to check
+
+The list must already be sorted. That one cannot go without the `sorted`
+flag this repository already measured as a 12% stage win turned 5% system
+loss, so it stays the caller's -- but it is now CHECKABLE: `is_sorted` walks
+the list and answers a `Result`.
+
+A `debug_assert!` was the obvious alternative and is ruled out by this
+crate's own contract: `tests/no_panic.rs` states that nothing in it panics
+on any input a caller can construct, and fuzzes the list under
+`catch_unwind` to prove it. The predicate is the better tool regardless --
+it runs in a firmware self-check, not only in a debug build.
+
+Five tests pin the result, including the hazard: `insert_sorted` on an
+unsorted list DOES misplace, pinned as a hazard rather than fixed. One of
+them fails if anyone ever rebuilds the append on `insert_end`.
