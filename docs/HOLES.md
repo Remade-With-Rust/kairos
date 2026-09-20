@@ -578,3 +578,44 @@ running the thing before work is scheduled against it.
 
 H1, H3, H4 and H5 do not depend on that method: they are counts of what is
 in the files and what the tools reported.
+
+---
+
+## H8 — `mps2-an385-qemu-kernel` does not compile in this checkout
+
+**Measured 2026-09-20**, while wiring the port's QEMU cells up as a
+mutation oracle. Three of the four Cortex-M cells pass; this one fails to
+build with 30 errors, all of the shape
+
+```
+the trait bound `CortexMPort: Port` is not satisfied
+```
+
+which is not a code error. `cargo tree` shows the cell resolving **two**
+`rusty_rtos_core v0.1.0`:
+
+| source | reached via |
+|---|---|
+| `F:\...\rusty_rtos_core\crates\rusty_rtos_core` | `rusty_rtos_port-cortex-m`, by **path** |
+| `https://github.com/Remade-With-Rust/rusty_rtos_core#bb56d5c8` | `rusty_rtos_kernel-core`, by **git** |
+
+So `CortexMPort` implements one `Port` and the kernel expects the other —
+the same trait name from two different crates.
+
+It is the **only** cell that names its siblings by git URL; the other
+three use paths. `[patch.crates-io]` cannot override a git dependency, so
+the umbrella's patch table does not unify them, and `kairos patches` would
+not write such a row anyway: the port repository does not depend on the
+kernel, only this excluded firmware cell does.
+
+**Cost of the gap:** the cell that exercises the KERNEL on the cortex-m
+port is the one that cannot run, so the port's mutation oracle is three
+cells rather than four — PendSV, SysTick and tickless, but not the kernel
+above them.
+
+**Not fixed here**, because the choice is an owner's: either the cell
+moves to path dependencies like its three siblings, or the repository
+grows a `[patch."https://github.com/..."]` table, and the second changes
+what a fresh clone resolves. `firmware/README.md` states the git-URL rule
+that this cell alone follows, so the inconsistency is documented in two
+directions at once.
