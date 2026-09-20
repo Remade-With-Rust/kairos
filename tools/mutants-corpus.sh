@@ -110,8 +110,23 @@ echo "bridge PROVED: poisoned fails, clean passes."
 
 # 4. The run itself.
 echo "running cargo mutants on $FILE, judged by the corpus..."
+# The trap runs on EXIT and its own status would become the script's, so
+# cargo-mutants' verdict has to be captured and re-raised. Without this the
+# script exits 0 with survivors still on the screen -- a harness reporting
+# success for a run that found holes, which is exactly the defect
+# bench/sweep.sh carried.
+set +e
 cargo mutants --in-place \
     --file "crates/rusty_rtos_kernel-core/src/$FILE" \
     --test-package rusty_rtos_demo-core \
     --timeout 300 "$@" \
     -- --manifest-path ../rusty_rtos_demo/Cargo.toml --release
+verdict=$?
+set -e
+
+restore
+trap - EXIT
+if [ "$verdict" -ne 0 ]; then
+    echo "cargo mutants exited $verdict -- non-zero means survivors" >&2
+fi
+exit "$verdict"
