@@ -23,6 +23,7 @@ typedef struct
 {
     char cKind;
     const void * pvObject;
+    unsigned long ulOrdinal;
 } Ordinal_t;
 
 static Ordinal_t xOrdinals[ KAIROS_MAX_OBJECTS ];
@@ -63,17 +64,52 @@ static void prvEnsureBuffer( void )
     }
 }
 
-/* The creation ordinal of an object of one kind, 1-based, first-seen order. */
-static unsigned long prvOrdinal( char cKind,
-                                 const void * pvObject )
-{
-    unsigned long i;
+/* ---- Object identity in the trace: CREATION ORDER, not address ---------
+ *
+ * A C `Queue_t` has no name and its address is not reproducible, so the
+ * contract names unnamed objects by a per-kind ordinal: q1, g1, s1.
+ *
+ * This used to be "position among the same-kind pointers ever seen", which
+ * made the ordinal a function of what MALLOC DID. A freed object left its
+ * entry behind, so a successor got a new ordinal when it landed on a
+ * different block and the OLD ordinal when it landed on the same one. The
+ * Rust arena reuses a freed INDEX, so the two rules agreed only by luck --
+ * and they disagreed in both directions at once:
+ *
+ *   EventGroupsDemo  deletes and recreates a same-sized group, malloc hands
+ *                    back the same block, C said g2 every time.
+ *   AbortDelay       deletes a binary semaphore and creates a 1-item queue,
+ *                    malloc hands back a different block, C said q3 where
+ *                    the arena's reused index said q2.
+ *
+ * No rule on ONE side can satisfy both, because the disagreement is about an
+ * allocator the two kernels do not share. So the rule changed on BOTH sides
+ * to a monotonic per-kind counter: the n-th object of a kind ever created is
+ * <kind>n, and an ordinal is never reused.
+ *
+ * That is strictly better evidence, not a workaround. Identity now depends
+ * only on CREATION ORDER -- which is a thing the differential already proves
+ * identical, line by line -- instead of on a heap layout that was never
+ * checking anything about the kernel under test.
+ */
 
+/* Give a newly created object the next ordinal of its kind. */
+static unsigned long prvOrdinalNew( char cKind,
+                                    const void * pvObject )
+{
+    unsigned long i, ulNext;
+
+    ulNext = ++ulOrdinalCount[ ( unsigned char ) cKind & 0x7F ];
+
+    /* A freed object's entry stays behind and malloc may hand its block
+     * straight back, so REBIND a matching pointer to the new object rather
+     * than appending -- otherwise a later lookup finds the dead entry. */
     for( i = 0UL; i < ulOrdinalsUsed; i++ )
     {
         if( ( xOrdinals[ i ].cKind == cKind ) && ( xOrdinals[ i ].pvObject == pvObject ) )
         {
-            return i + 1UL;
+            xOrdinals[ i ].ulOrdinal = ulNext;
+            return ulNext;
         }
     }
 
@@ -81,36 +117,32 @@ static unsigned long prvOrdinal( char cKind,
     {
         xOrdinals[ ulOrdinalsUsed ].cKind = cKind;
         xOrdinals[ ulOrdinalsUsed ].pvObject = pvObject;
+        xOrdinals[ ulOrdinalsUsed ].ulOrdinal = ulNext;
         ulOrdinalsUsed++;
-        ulOrdinalCount[ ( unsigned char ) cKind & 0x7F ]++;
-        return ulOrdinalsUsed;
+        return ulNext;
     }
 
     return 0UL; /* Out of table: printed as <kind>0, which no real object gets. */
 }
 
-/* Ordinals are numbered per kind: the n-th queue is q<n> regardless of how
- * many event groups were created before it. */
+/* The ordinal of an object that has already been announced. */
 static unsigned long prvOrdinalPerKind( char cKind,
                                         const void * pvObject )
 {
-    unsigned long i, ulSeen = 0UL;
+    unsigned long i;
 
     for( i = 0UL; i < ulOrdinalsUsed; i++ )
     {
-        if( xOrdinals[ i ].cKind == cKind )
+        if( ( xOrdinals[ i ].cKind == cKind ) && ( xOrdinals[ i ].pvObject == pvObject ) )
         {
-            ulSeen++;
-
-            if( xOrdinals[ i ].pvObject == pvObject )
-            {
-                return ulSeen;
-            }
+            return xOrdinals[ i ].ulOrdinal;
         }
     }
 
-    ( void ) prvOrdinal( cKind, pvObject );
-    return ulOrdinalCount[ ( unsigned char ) cKind & 0x7F ];
+    /* Never announced. Every object the kernel makes fires its own _CREATE
+     * first, so reaching here means a trace macro named an object nothing
+     * created; register it so the line is at least stable. */
+    return prvOrdinalNew( cKind, pvObject );
 }
 
 static unsigned long prvTick( void )
@@ -242,6 +274,29 @@ void kairos_trace_task_iu( const char * pcEvent,
 {
     prvEnsureBuffer();
     fprintf( stderr, "%lu %s %s %ld %lu", prvTick(), pcEvent, pcName, lArg, ulArg );
+    prvTail();
+    ulLines++;
+}
+
+/* The _CREATE entry points. These ASSIGN the ordinal; everything else
+ * looks one up. */
+void kairos_trace_obj_create( const char * pcEvent,
+                              char cKind,
+                              const void * pvObject )
+{
+    prvEnsureBuffer();
+    fprintf( stderr, "%lu %s %c%lu", prvTick(), pcEvent, cKind, prvOrdinalNew( cKind, pvObject ) );
+    prvTail();
+    ulLines++;
+}
+
+void kairos_trace_obj_create_u( const char * pcEvent,
+                                char cKind,
+                                const void * pvObject,
+                                unsigned long ulArg )
+{
+    prvEnsureBuffer();
+    fprintf( stderr, "%lu %s %c%lu %lu", prvTick(), pcEvent, cKind, prvOrdinalNew( cKind, pvObject ), ulArg );
     prvTail();
     ulLines++;
 }

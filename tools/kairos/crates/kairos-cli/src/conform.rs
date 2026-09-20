@@ -23,8 +23,9 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 20] = [
+const SCENARIOS: [&str; 21] = [
     "dynamic",
+    "AbortDelay",
     "PollQ",
     "BlockQ",
     "semtest",
@@ -76,10 +77,14 @@ fn min_ticks(scenario: &str) -> u64 {
 /// quietly dropped from a list is the defect this repository has paid for
 /// more than once, so `--all` PRINTS these and what blocks them rather
 /// than omitting them.
-const BLOCKED: [(&str, &str); 1] = [(
-    "AbortDelay",
-    "1,945 of 2,549 lines identical; the next line is a CONTRACT question,      not a kernel one. The C harness keys a queue's trace ordinal on its      malloc address, so a differently-sized successor to a freed object      gets a new ordinal (q3) where our arena reuses the freed index (q2).      A running count fixes this and breaks EventGroupsDemo. See      docs/LEDGER.md; `kairos conform AbortDelay` runs it on its own.",
-)];
+const BLOCKED: [(&str, &str); 0] = [];
+
+// `AbortDelay` was the one entry here, for 1,945 of 2,549 lines, and it was
+// never a kernel disagreement: all 2,549 events, ticks and arguments
+// matched, and 8 lines differed only in a QUEUE ORDINAL. The trace contract
+// named unnamed objects in a way that depended on the C allocator, which the
+// Rust arena does not share. Both sides now number by creation order and it
+// conforms in full. See `rusty_rtos_demo-core::trace`.
 
 /// A scenario whose C arm is another scenario's.
 ///

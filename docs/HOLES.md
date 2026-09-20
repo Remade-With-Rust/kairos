@@ -237,17 +237,32 @@ seven shards have not been run.
 
 ---
 
-## H5 — `AbortDelay` is the 20th scenario and it does not run
+## H5 — `AbortDelay` is the 20th scenario and it does not run — CLOSED 2026-09-20
 
-**Measured:** 1,945 of 2,549 lines identical, then a divergence the ledger
-argues is a *contract* question rather than a kernel one — the C harness
-keys a queue's trace ordinal on its malloc address, so a differently-sized
-successor to a freed object gets a new ordinal where our arena reuses the
-freed index. A running count fixes `AbortDelay` and breaks
+**Closed.** `AbortDelay` runs in `conform --all`, **2,549 lines, and the
+sim's trace is byte-identical to the C kernel's**. `BLOCKED` is now empty.
+`xTaskAbortDelay` is inside the gate, along with `xTaskGetHandle`,
+`vTaskDelayUntil`, all three object deletes and both notify paths.
+
+It was a contract question, and provably so: of 2,549 lines, 8 differed and
+**all 8 differed only in a queue ordinal**. Both sides now number objects by
+a monotonic per-kind creation counter, so identity depends on creation
+ORDER rather than on a C allocator the Rust arena does not share. The
+2026-09-10 note that "a running count fixes `AbortDelay` and breaks
+`EventGroupsDemo`" was a correct measurement of a fix applied to ONE side.
+Full write-up in `LEDGER.md`.
+
+*The measurement that opened it is kept below.*
+
+**Measured, as it stood:** 1,945 of 2,549 lines identical, then a divergence
+the ledger argues is a *contract* question rather than a kernel one — the C
+harness keys a queue's trace ordinal on its malloc address, so a
+differently-sized successor to a freed object gets a new ordinal where our
+arena reuses the freed index. A running count fixes `AbortDelay` and breaks
 `EventGroupsDemo`.
 
-Whatever the right answer, the effect today is that `xTaskAbortDelay` and
-the three APIs that scenario exercises are outside the gate.
+The effect, until 2026-09-20, was that `xTaskAbortDelay` and the three APIs
+that scenario exercises were outside the gate.
 
 ---
 

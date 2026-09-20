@@ -1351,6 +1351,12 @@ seventeen scenarios, and `trace.rs` records why. **Making the C's ordinal a
 pure creation count would settle it and requires re-pinning every scenario:
 an owner decision, alongside `QueueSet` and `TaskNotify`.**
 
+> **Taken 2026-09-20, and the estimate was wrong in our favour.** It did not
+> require re-pinning every scenario -- it required re-pinning **one**. The C
+> rule only differs from a creation count where an address was REUSED, and
+> across the whole corpus that happens in `EventGroupsDemo` alone. See
+> *AbortDelay conforms* at the end of this ledger.
+
 ## K4 — the heaps (2026-09-10)
 
 ### `heap_4` diffed against C, operation for operation
@@ -3363,3 +3369,75 @@ swaps a variant FILE and never touches the index; and both sweeps documented
 their own invocation as `wsl -e sh ...`, a non-login shell with no cargo on
 PATH, which printed a full table of `BUILD FAIL` and **exited 0**. Both now
 fail the run when a cell does not build.
+
+
+## AbortDelay conforms: the contract named objects after the allocator (2026-09-20)
+
+The last scenario outside the gate is inside it. **2,549 lines, and the sim's
+trace is now BYTE-IDENTICAL to the C kernel's.** `conform --all` is 21
+scenarios, `BLOCKED` is empty, and both QEMU cells report 20 pinned scenarios
+byte-identical on Cortex-M3 and on RV32.
+
+### It was never a kernel disagreement, and that is measurable
+
+Of 2,549 lines, 8 differed. **All 8 differed only in a queue ordinal**, `q2`
+against `q3`; every event, tick, argument and ordering already matched. The
+kernel had agreed all along.
+
+### Why no fix on one side could work
+
+The contract names unnamed objects by a per-kind ordinal. The C harness
+computed it as *position among the same-kind pointers ever seen*, which makes
+it a function of what `malloc` did; the Rust sink read it off the arena slot.
+Those rules disagree in **both directions at once**:
+
+| scenario | what happens | C says | arena says |
+|---|---|---|---|
+| `EventGroupsDemo` | same-sized group deleted and recreated, same block back | `g2` every time | `g2` — agrees |
+| `AbortDelay` | binary semaphore deleted, 1-item queue created, different block | `q3` | `q2` — disagrees |
+
+So a running count on our side alone fixed `AbortDelay` and broke
+`EventGroupsDemo` (707,007 bytes against a pinned 702,507). That was recorded
+in 2026-09-10 as a dead end. It was the right measurement and the wrong
+conclusion: **no rule on one side can satisfy both, because the disagreement
+is about an allocator the two kernels do not share.**
+
+### The fix, and why it is better evidence rather than a workaround
+
+Both sides now number by a monotonic per-kind creation counter: the n-th
+object of a kind ever created is `<kind>n`, and an ordinal is never reused.
+
+Identity now depends only on **creation order** — which is a thing the
+differential already proves identical, line by line — instead of on a heap
+layout that was never checking anything about the kernel under test. The old
+rule could not be computed by a kernel that does not have a C heap, so it was
+testing the allocator and calling it a kernel property.
+
+### The cost, measured rather than estimated
+
+The 2026-09-10 entry predicted "re-pinning every scenario". Measured: **one**.
+
+| what moved | why |
+|---|---|
+| `EventGroupsDemo` digest and byte count | 120 creates that all said `g2` now say `g1`..`g119` |
+| `AbortDelay` — **our side only** | the C trace is byte-for-byte what it always was |
+| the other 19 scenarios | nothing: their creates never reused an ordinal, so the two rules already agreed |
+
+`EventGroupsDemo`'s `ticks`, `yields`, `exits` and `lines` are **unchanged** —
+only its digest and byte count moved. A naming change that moved a scheduling
+counter would have been a naming change that was not one.
+
+The C rule only differs from a creation count where an address was reused, and
+that is why the blast radius was one scenario rather than twenty. Checking
+which traces actually move, rather than assuming all of them do, is what
+turned an "owner decision" into an afternoon.
+
+### Closed with it
+
+* **H5** — `xTaskAbortDelay` is now inside the gate, with `xTaskGetHandle`,
+  `vTaskDelayUntil`, all three object deletes and both notify paths, all of
+  which that scenario exercises.
+* `kairos conform AbortDelay` used to answer *unknown scenario* while the
+  `BLOCKED` note told the reader to run exactly that. Both are gone.
+* `TaskNotify` had no committed `.trace.zst`. It has one now; the corpus
+  pins 19 C traces and the set is complete.

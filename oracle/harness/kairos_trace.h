@@ -22,6 +22,8 @@ void kairos_trace_timer_create( const void * pvTimer, const char * pcName );
 void kairos_trace_timer_command( const void * pvTimer, long lCommand, unsigned long ulValue );
 void kairos_trace_task_u( const char * pcEvent, const char * pcName, unsigned long ulArg );
 void kairos_trace_task_iu( const char * pcEvent, const char * pcName, long lArg, unsigned long ulArg );
+void kairos_trace_obj_create( const char * pcEvent, char cKind, const void * pvObject );
+void kairos_trace_obj_create_u( const char * pcEvent, char cKind, const void * pvObject, unsigned long ulArg );
 void kairos_trace_obj( const char * pcEvent, char cKind, const void * pvObject );
 void kairos_trace_obj_u( const char * pcEvent, char cKind, const void * pvObject, unsigned long ulArg );
 void kairos_trace_obj_uu( const char * pcEvent, char cKind, const void * pvObject, unsigned long ulArg1, unsigned long ulArg2 );
