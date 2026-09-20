@@ -88,7 +88,7 @@ export KAIROS_QEMU_CELLS=1
 echo "KAIROS_QEMU_CELLS is set: the cells will actually boot."
 
 cells() {
-    (cd "$P" && cargo test -p rusty_rtos_port-core --test qemu_cells "$FILTER" \
+    (cd "$P" && cargo test -p "$CRATE" --test qemu_cells "$FILTER" \
         >/tmp/mq.txt 2>&1)
 }
 
@@ -137,7 +137,7 @@ echo "bridge PROVED: poisoned fails, clean passes."
 # So run ONE mutant first and require its baseline to have executed a cell.
 echo "pre-flight: one mutant, to prove cargo-mutants itself runs the cells..."
 (cd "$P" && cargo mutants --in-place --file "crates/$CRATE/src/$FILE" \
-    --test-workspace true --timeout 300 --shard 1/1000 -- "$FILTER" \
+    --timeout 300 --shard 1/1000 -- "$FILTER" \
     >/tmp/mq-pre.txt 2>&1) || true
 if grep -q "running 0 tests" "$P/mutants.out/log/baseline.log" 2>/dev/null; then
     echo "ABORT: cargo-mutants ran ZERO tests in its own baseline." >&2
@@ -151,7 +151,6 @@ echo "running cargo mutants on $CRATE/$FILE, judged by its QEMU cells..."
 set +e
 (cd "$P" && cargo mutants --in-place \
     --file "crates/$CRATE/src/$FILE" \
-    --test-workspace true \
     --timeout 300 "$@" \
     -- "$FILTER")
 verdict=$?
