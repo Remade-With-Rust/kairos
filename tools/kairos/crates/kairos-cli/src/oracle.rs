@@ -301,6 +301,17 @@ fn classic_dir(root: &Path) -> PathBuf {
     root.join("oracle").join("FreeRTOS")
 }
 
+/// The notification demo, whose PRNG seed has to be pinned. See
+/// [`patch_task_notify`].
+fn task_notify_c(root: &Path) -> PathBuf {
+    classic_dir(root)
+        .join("FreeRTOS")
+        .join("Demo")
+        .join("Common")
+        .join("Minimal")
+        .join("TaskNotify.c")
+}
+
 fn port_c(root: &Path) -> PathBuf {
     kernel_dir(root)
         .join("portable")
@@ -520,6 +531,79 @@ fn patch(root: &Path) -> Result<()> {
     }
     fs::write(&path, out)?;
     println!("{}: patched (6 edits + vPortKairosTick)", path.display());
+    patch_task_notify(root)
+}
+
+/// Pin `TaskNotify.c`'s PRNG seed, which upstream takes from a function
+/// ADDRESS.
+///
+/// `vStartTaskNotifyTask` does `uxNextRand = ( uint32_t ) prvRand`, and
+/// `prvRand()` then chooses TIMER PERIODS (TaskNotify.c:557 and :570), which
+/// decide when the daemon wakes, which is all over the trace. ASLR varies
+/// that address per run, so the demo does not reproduce ITSELF:
+///
+/// ```text
+///   3 runs, ASLR on, as vendored   3,421 / 3,336 / 3,530 lines
+///   3 runs, setarch -R             identical, 3,530
+///   3 runs, ASLR on, seeded        identical, 3,519
+/// ```
+///
+/// A differential needs BOTH arms to reproduce, and no Rust port can know a
+/// C function's load address, so the scenario is unusable until this is
+/// pinned. That is the real reason `TaskNotify` is one of the two K1
+/// scenarios never built -- the ledger records only that registering it
+/// exposed a use-after-free in the oracle's tracing, and somebody picking it
+/// up would write the whole port before finding out.
+///
+/// The constant changes nothing the demo tests: the value only chooses which
+/// periods the notifying timer runs at.
+///
+/// The middle row above is worth keeping for its own sake -- it says the C
+/// oracle is deterministic on real pthreads, which is the assumption the
+/// whole differential rests on.
+fn patch_task_notify(root: &Path) -> Result<()> {
+    let path = task_notify_c(root);
+    if !path.is_file() {
+        return fail(format!(
+            "{}: not found (run `kairos oracle fetch` first)",
+            path.display()
+        ));
+    }
+    // From the pinned file every time, as `patch` does for port.c.
+    git(
+        &classic_dir(root),
+        &["checkout", "--", "FreeRTOS/Demo/Common/Minimal/TaskNotify.c"],
+    )?;
+    let text = fs::read_to_string(&path)?;
+    if text.contains(MARKER) {
+        return fail(
+            "TaskNotify.c still carries KAIROS edits after `git checkout`; the checkout is not the pinned tree",
+        );
+    }
+    let crlf = text.contains("\r\n");
+    let mut out = if crlf {
+        text.replace("\r\n", "\n")
+    } else {
+        text
+    };
+    const FROM: &str = "    uxNextRand = ( uint32_t ) prvRand;";
+    const TO: &str = r"    /* KAIROS: upstream seeds from the ADDRESS of prvRand, which ASLR
+     * varies per run, and the values it makes become timer periods -- so the
+     * demo does not reproduce itself and cannot be diffed against anything.
+     * A constant changes nothing the demo tests. */
+    uxNextRand = ( uint32_t ) 0x0dc0ffeeUL;";
+    let n = out.matches(FROM).count();
+    if n != 1 {
+        return fail(format!(
+            "TaskNotify.c patch \"pin the PRNG seed\": anchor matched {n} times, expected exactly 1 — the pinned TaskNotify.c has changed; re-derive the anchor"
+        ));
+    }
+    out = out.replacen(FROM, TO, 1);
+    if crlf {
+        out = out.replace('\n', "\r\n");
+    }
+    fs::write(&path, out)?;
+    println!("{}: patched (pin the PRNG seed)", path.display());
     Ok(())
 }
 
