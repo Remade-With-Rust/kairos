@@ -3150,3 +3150,61 @@ essentially complete, and what is left is **semantic conformance**, one C
 assertion at a time, in edge cases the corpus's nineteen scenarios do not
 reach. Several of those are likely to be kernel findings rather than seam
 findings, which is a good outcome and a different kind of work.
+
+## Tickless idle — two architectures, and two defects only hardware found (2026-09-19)
+
+Opt-in and **off unless asked for**: a build that does not set
+`Config::USE_TICKLESS_IDLE` passes the 19-scenario differential byte for byte.
+
+### The prize, sized before anything was built
+
+| fact | value | method |
+|---|---|---|
+| sleepable share of the corpus | **50.3 %** of 38,011 ticks; idle 63.6 % | `kairos power idle`, over the 18 pinned oracle traces |
+| and it is **bimodal**, which is the finding | 9 scenarios 65–99.9 % sleepable, 9 scenarios **0 %** | they idle up to 52.6 % but never for two consecutive ticks. Tickless is a property of the workload, not a tuning knob |
+| the projection is invariant | **18 of 18** | `kairos power diff`: strip every heartbeat line, project again, compare. Demonstrated, not asserted |
+
+### The mechanism, on QEMU and on silicon
+
+| fact | value | method |
+|---|---|---|
+| ARMv7-M, QEMU | **401 SysTick interrupts -> 0**, digest `94f229d7a5bd8f77` both arms | `cargo run --release` and `--features tickless` in `rusty_rtos_port/firmware/mps2-an385-qemu-tickless`. One pinned digest serves both arms, so a single run is a kill test |
+| **XIAO ESP32-S3, silicon** | **400 alarm interrupts -> 0**, digest `ebb908b74bccb99e` both arms | same two commands in `firmware/xiao-s3-tickless`, flashed over `espflash`. Board: rev v0.2, 8 MB flash, 40 MHz crystal, MAC 68:ee:8f:51:74:64 |
+| and the kernel runs from a tick on Xtensa at all | 400 ticks, 63 switches, 0 stalls | the control arm of that cell. A repo first: every other kernel-driving cell is Cortex-M under emulation |
+| poison | deleting the pended-last-tick line in `Kernel::step_tick` gives **421 ticks** — every lap one late — with the digest **unchanged** | the order digest cannot see a wake that is in the right sequence but late. That is why there is also a tick band, and the band is what fails |
+
+### The energy question, answered negative (M3c)
+
+Measured against a **fair** baseline — a control that halts the core in
+`waiti`, as FreeRTOS's idle task does. An earlier version busy-spun, which is
+valid for counting wakeups and useless for counting current.
+
+| fact | value | method |
+|---|---|---|
+| core duty cycle | control **0.6 %** · tickless **0.9 %** | active 2,506 us vs 3,722 us over a ~399,600 us run; time-halted accumulated off the free-running SYSTIMER. Three runs each way, reproducing to ~2 us |
+| so tickless costs ~48 % **more** core-active time | and 400 wakeups still became 0 | a `waiti` control is already **99.4 % halted**, so 0.6 % is the ceiling for any idle optimisation on this workload. Each sleep replaces ~20 interrupts at ~6.6 us with one suspend/reprogram/restore cycle at ~182 us |
+| verdict | **tickless is a lever on sleep DEPTH, not sleep COUNT** | a fitted sleep-length policy is pruned on arithmetic: no policy beats a 0.6 % ceiling. The next brick is `Rtc::sleep_light` |
+
+### Two defects, neither findable by building
+
+| defect | size | how it was found |
+|---|---|---|
+| **`waiti 0` destroys the caller's critical section** | the scheduler silently stopped working: **20 logical ticks where the arithmetic says 400** | it SETS `PS.INTLEVEL` to zero and leaves it there — the wake returns through `RFI`, restoring the PS `waiti` installed. Everything after the sleep ran with interrupts open on a kernel the idle task held `&mut` to. ARM's `wfi` leaves PRIMASK alone, so this is Xtensa-only. Fix: re-raise the mask the instant `waiti` returns |
+| **the tickless clock ran 0.99 % slow** | **38.7 seconds in an hour** | the tick was a free-running 1 ms period and the sleep restarted it *at the wake*, discarding whatever fraction had elapsed while the worker ran (~180 us a lap), compounding. 91 % of the 4,294 us wall gap is exactly the measured active time; a simulation of the old logic predicts +0.965 % against +0.99 % measured. Fix: drive the tick as a one-shot on an **absolute grid**. After: a 16 us gap, 0.0 % drift |
+
+**Why no test caught the second one, which is worth more than the bug.** Every
+check counted **logical** ticks, and both arms produce exactly 400 of those
+however badly the timer is driven. The schedule digest matched too, because no
+event was ever out of order.
+
+> **A gate that only compares the system to itself cannot catch the system's
+> shared reference drifting.**
+
+Both arms agreed with each other and both were wrong about the wall clock.
+There is now a check on wall-time-per-logical-tick against the free-running
+counter, bounded at 0.3 % — the only check in that cell comparing the kernel to
+anything outside itself. The hazard was already written down, in prose, in this
+repository, on the other port: the ARM cell implements boundary-sleeping
+deliberately and says why. It was simply not carried across. **A law the
+tooling does not enforce is a law you will break again.**
+
