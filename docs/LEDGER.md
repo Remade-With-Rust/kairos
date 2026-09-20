@@ -3792,3 +3792,64 @@ survivor list, which is the null-arm law wearing different clothes.
 **Long runs on this box fault intermittently**, unrelated to the hanging
 mutants. Shard them: four short runs completed where three full ones did
 not, and a fault then costs one shard instead of the measurement.
+
+## The Cortex-M port, measured on a Cortex-M3 (2026-09-20)
+
+`rusty_rtos_port-cortex-m` had **no tests**, and its host mutation score was
+meaningless: the source is arch-gated, so on x86-64 every mutation landed in
+code that is not compiled, the build succeeded, the tests passed, and all 87
+mutants were scored MISSED. The same artefact accounted for 47 in the riscv
+crate and 134 of the port workspace's 308 survivors.
+
+It now has a real number, taken by mutating the port and booting the real
+thing in QEMU:
+
+| | mutants | caught | missed | killed |
+|---|---:|---:|---:|---:|
+| `port-cortex-m`, judged by 3 QEMU cells | 84 | 13 | 71 | **15.5%** |
+
+### What the cells DO catch, and it is the right list
+
+`init_stack`'s arithmetic and its masks (7), `write_reg` removed,
+`yield_now` removed, `pend_switch` removed, `start_tick` removed, and
+`tick` removed. That is: the exception frame a task is started with, the
+fact that registers are written at all, the PendSV request, SysTick
+starting, and the tick running. Break any of those and the cells say so.
+
+### What they do NOT, which is the finding
+
+The 71 survivors are almost all BIT-LEVEL: `&` to `^`, `&` to `|`, `==` to
+`!=` on register masks and comparisons — 34 of them in the `Port` impl, 24
+in the tick and tickless code, 13 in the register and trap helpers. Twenty
+are in `suppress_ticks_and_sleep` alone.
+
+**So the cells prove the port WORKS; they do not prove its register
+handling is exact.** A mask that clears one bit too many leaves the switch
+still switching and the tick still ticking, and three passing cells say
+nothing about it. For a port that is meant to run on silicon that is the
+useful thing to know, and it is not knowable from "20 scenarios
+byte-identical on Cortex-M3", which is what the corpus cells already
+proved.
+
+### Two instrument defects found on the way, both fixed
+
+**A broken port HANGS rather than fails.** Pointing `ICSR.PENDSVSET` at the
+wrong bit leaves PendSV unrequested, so nothing reaches the semihosting
+exit and QEMU runs for ever: a clean port passes in 3.2s, the poisoned one
+ran 600s until it was killed from outside. The cell test therefore imposes
+its own deadline and launches QEMU as a direct child it can kill -- `cargo
+run` leaves QEMU orphaned on Windows. Nearly every CAUGHT mutant here is
+caught by that timeout rather than by an assertion.
+
+**An unsharded run reported 81 of 87 UNVIABLE, and none of them were.** The
+log said `Failure(-1073741502)` -- 0xC0000142, STATUS_DLL_INIT_FAILED:
+Windows refusing to start a process. The mutants it hit plainly compile
+(`replace init_stack -> usize with 0` on a `usize` function). It is
+cumulative -- the first six gave real verdicts and everything after failed
+-- because each mutant spawns cargo, rustc, a NESTED cargo build for the
+cell, and QEMU. Sharded into ten, the same 84 mutants produced **zero**
+process failures and zero unviable.
+
+That report would have passed for an ordinary one. The tell was that
+"unviable" is a claim about COMPILATION, and the mutants it was claimed
+for obviously compile.
