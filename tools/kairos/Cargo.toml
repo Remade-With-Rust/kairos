@@ -42,7 +42,7 @@ serde_json = { package = "rusty_json_turbo", version = "0.1.0", git = "https://g
 # (`oracle/traces/<scenario>.trace.zst`), round-tripped before it is kept.
 rusty_zstd = "=0.2.3"
 # The allocator, pinned EXACTLY in the seam crate and nowhere else.
-rusty_alloc-api = { version = "=2.0.4", default-features = false }
+rusty_alloc-api = { version = "=2.2.0", default-features = false }
 
 [profile.release]
 overflow-checks = true
