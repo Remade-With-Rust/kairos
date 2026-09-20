@@ -139,7 +139,11 @@ echo "pre-flight: one mutant, to prove cargo-mutants itself runs the cells..."
 (cd "$P" && cargo mutants --in-place --file "crates/$CRATE/src/$FILE" \
     --timeout 300 --shard 1/1000 -- "$FILTER" \
     >/tmp/mq-pre.txt 2>&1) || true
-if grep -q "running 0 tests" "$P/mutants.out/log/baseline.log" 2>/dev/null; then
+# Require that SOME target ran a test. Checking for "running 0 tests"
+# instead was wrong and aborted a working setup: a package has one test
+# binary per target, and the lib target legitimately reports zero while
+# the integration target runs the cell.
+if ! grep -qE "running [1-9][0-9]* test" "$P/mutants.out/log/baseline.log" 2>/dev/null; then
     echo "ABORT: cargo-mutants ran ZERO tests in its own baseline." >&2
     echo "It would score every mutant against nothing, and the report would" >&2
     echo "look exactly like a run that found a great many holes." >&2
