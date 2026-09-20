@@ -3708,3 +3708,87 @@ reads as twelve modified files); and its first real run **exited 0 with 55
 survivors**, because the EXIT trap's status was becoming the script's — the
 same "reports success having measured nothing" defect `bench/sweep.sh`
 carried.
+
+
+## `kernel.rs`: two oracles, 90.1%, and why neither number works alone (2026-09-20)
+
+`kernel.rs` was the last file in H4's nine, carried as "42 viable mutants,
+40 caught, two survivors outstanding and unlocated" from a shard of 47. It
+has now been run twice over its whole surface — once judged by the
+CONFORMANCE CORPUS and once by the kernel's OWN unit suite — and the two
+disagree about 239 mutants.
+
+| | mutants |
+|---|---:|
+| survived the corpus only | 37 |
+| survived the unit suite only | 202 |
+| **survived both — the real gap** | **41** |
+
+Together: **374 of 415 viable, 90.1%.** The corpus alone reads 75.4%, the
+unit suite alone about a third.
+
+**Neither number is usable on its own, and the reason is structural.** The
+corpus runs `PosixDemoConfig`, which leaves `USE_TICKLESS_IDLE` at its
+default of false — so it cannot execute the tickless path at all, and 23
+of its survivors were sitting in `expected_idle_time`, `step_tick` and
+`idle_suppress_ticks`. The unit suite has `TicklessConfig` and
+`SleepyPort` and reaches exactly there, and very little else. Quoting the
+corpus alone overstates the hole by 61; quoting the pair without
+intersecting understates the coverage by fifteen points.
+
+So: a mutant surviving ONE oracle is not a gap. One surviving BOTH is.
+
+### Sixteen tests, 80 -> 41
+
+The gap fell 80 -> 65 -> 41. Two of those tests are worth repeating.
+
+**`delay_until`'s tick-overflow arms held nine of the original 80.** The
+corpus runs 2,000 ticks and never overflows; no unit test went near it.
+Reaching them needs no simulation at all, because `previous_wake` is a
+CALLER variable — a wake time just below the maximum with a period that
+carries it over the top exercises both halves of
+
+    if( xConstTickCount < *pxPreviousWakeTime ) {
+        if( ( xTimeToWake < *pxPreviousWakeTime ) && ( xTimeToWake > xConstTickCount ) )
+
+The non-overflow half matters too, and its second case is the one a naive
+test misses: a task that OVERRAN its period must not sleep another whole
+one — it returns false, and still advances the wake time, or it never
+catches up.
+
+**`notify_value`'s survivors were `Ok(0)` and `Ok(1)`,** so the test pins
+it with `0xabcd_1234`. A test asserting any small value would have passed
+against a constant. Choosing the assertion to defeat the specific mutant is
+what makes a test kill rather than merely pass.
+
+The tickless cluster is closed: all five `expected_idle_time` survivors
+are dead. What remains is led by `set_priority` (4), `delay_until` (4) and
+a priority-inheritance cluster of six. That cluster is the interesting
+lead — `recmutex` and `GenQTest` hammer inheritance in the corpus, so
+survivors there point at the disinherit-after-TIMEOUT path, which no
+scenario reaches.
+
+### Three mutants HANG the kernel, and the "disk fault" was them
+
+`increment_tick` (`&` to `|`), `unwind_pended_ticks` (`>` to `>=`) and
+`tick_count` (to `0`) stop time rather than corrupting it. Each runs to the
+harness timeout; the killed test leaves the build directory held, and the
+next write fails with *"The device is not ready. (os error 21)"*.
+
+That was read as a transient drive fault at first, and it was not. The tell
+was free: repeated runs stopped at IDENTICAL counts — 151 of 474 twice,
+then 29 twice — and a flaky disk does not do that. Excluding them one at a
+time took the run from 151 to 388 to complete. **They are detections, not
+gaps**: a mutant that stops an RTOS ticking is caught by any observer.
+
+### Two ways to get a good-looking number that is not one
+
+**A truncated run understates the gap.** An intersection computed from a
+unit pass that died at 29 of 454 printed "real gap: 4", down from 65 — a
+sixteenfold overstatement of progress, and it looks exactly like success.
+The only guard is to check the run COMPLETED before believing its
+survivor list, which is the null-arm law wearing different clothes.
+
+**Long runs on this box fault intermittently**, unrelated to the hanging
+mutants. Shard them: four short runs completed where three full ones did
+not, and a fault then costs one shard instead of the measurement.
