@@ -1,10 +1,17 @@
 #!/bin/sh
 # Mutate the kernel and judge it with the CONFORMANCE CORPUS, self-verified.
 #
-#     wsl -e bash -lc 'sh tools/mutants-corpus.sh <file.rs> [extra cargo-mutants args]'
+#     sh tools/mutants-corpus.sh <file.rs> [extra cargo-mutants args]
 #
-# It must be a LOGIN shell: `wsl -e sh ...` does not load the profile, so
-# cargo is not on PATH (see bench/ksweep.sh for the same trap).
+# Run it under GIT BASH on this box, not WSL. Two reasons, and both are
+# silent:
+#
+#   * cargo-mutants is installed for the Windows toolchain, not inside the
+#     WSL distro;
+#   * Windows git has core.autocrlf=true and WSL git does not, so a tree
+#     that is CLEAN to one shows twelve modified files to the other. The
+#     dirty-tree guard below reads whichever git it is given, and under
+#     WSL it refuses to run on a perfectly clean checkout.
 #
 # ---- why this script exists rather than a command in the ledger ----------
 #
