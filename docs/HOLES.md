@@ -283,7 +283,112 @@ mutants (4%)**.
 
 ---
 
-## H4 — The mutant survey covers one file of nine, and two survivors remain
+## H4 — The mutant survey covers one file of nine — SEVEN OF NINE NOW MEASURED, 2026-09-20
+
+**Seven of the nine are measured**, and the two that are not are named
+below with what blocks them. 42 tests were written against what survived.
+
+| file | mutants | caught | missed | viable killed |
+|---|---:|---:|---:|---:|
+| `list.rs` + `arena.rs` (core) | 140 | 94 | 12 | **88.7%** |
+| `name.rs` | 9 | 6 | 3 | 66% |
+| `events.rs` | 120 | 67 | 38 | 64% |
+| `timer.rs` | 192 | 78 | 51 | 60% |
+| `stream.rs` | 163 | 84 | 65 | 56% |
+| `typed.rs` | 39 | 9 | 8 | 52% |
+| `system.rs` | **0** | — | — | *nothing to mutate* |
+| `queue.rs` | 255 | — | — | blocked, see below |
+| `kernel.rs` | — | — | — | 2 survivors still unlocated |
+
+`list.rs` and `arena.rs` are **closed**: every one of their twelve
+survivors is either in code this target does not compile or an equivalent
+mutant. Nothing reachable and non-equivalent is left alive in them.
+
+### `system.rs` has nothing to mutate, which is not the same as 0%
+
+Of its 58 `fn` lines, 57 are inside `#[cfg(test)]` and the one before them
+is `pub fn build` inside the `macro_rules! system!` body. cargo-mutants
+mutates neither test code nor macro bodies, so it generates **zero**
+mutants. That line item closes on a technicality, and the technicality is
+worth stating: a table that showed `0%` here would mean the opposite.
+
+### What the survivors taught, three times over
+
+**Blocking a task and never resuming it tests the blocking, not the
+waking.** `finish_wait` had twelve survivors and `finish_sync` sixteen,
+because every test stopped at the wake-up: a waiter was blocked, a set
+woke it, and nothing ever ran it again — so the code that decides what a
+resumed call ANSWERS never executed. A full round trip, and then a real
+two-task rendezvous, took `events.rs` from 41% to 64%.
+
+**A guard nothing approaches is a guard nothing is testing.** `is_sorted`
+and `insert_inner` carry the same `if guard > N`. The pair `>`/`>=`
+disagree only at exactly `N`, and `is_sorted` walks every item so a full
+list drives its guard there — which killed its pair. `insert_inner` stops
+one node short of the marker, so its guard reaches at most `N - 1` and
+**nothing constructible tells the two apart**. Same expression, reachable
+in one function and equivalent in the other.
+
+**21% of the first survivors were a surface nobody had touched**: the
+`_from_isr` and pended calls. Nine tests for them found that
+`xEventGroupSetBitsFromISR` sets no bits at all — its whole body is
+`xTimerPendFunctionCallFromISR`.
+
+### Two instrument defects, both of which produce plausible numbers
+
+**cfg-disabled code is counted MISSED, not unviable.** `end_index` and one
+of the two `is_marker_of` bodies are `#[cfg(target_pointer_width = "32")]`.
+cargo-mutants mutates the source anyway, the build succeeds because the
+function is not compiled, the tests pass, and it is scored as a survivor.
+Six of core's twelve are this. Killing them needs an i686 run, which
+`bench/sweep.sh` already targets for list-ir.
+
+**★ Concurrent `--in-place` runs across path-patched siblings corrupt each
+other.** `rusty_rtos_core` is patched into both the kernel and the port, so
+mutating core while those run means they build against a mutated core and a
+mutant is scored CAUGHT for the wrong reason. Measured, on the same
+population: a contaminated kernel run reported 209 caught / 119 missed /
+**152 unviable**, and the clean runs either side of it both reported
+**92 unviable** — the extra 60 were compile failures caused by the mutated
+core, which shrank the viable denominator and overstated the kill rate by
+about ten points.
+
+cargo-mutants catches the worst case itself: starting a run while a
+dependency was mutated gave *"cargo test failed in an unmutated tree, so no
+mutants were tested"*, and it refused to produce numbers. **The rule:
+never mutate two repos that are path-patched into one another at the same
+time.**
+
+### `queue.rs` is blocked on the corpus bridge, and the bridge was broken
+
+`queue.rs` is the largest file in the kernel and carries the whole IPC
+surface. Its oracle has to be the corpus, because the kernel's own
+`cargo test` catches 13 of 342 in `kernel.rs` by design — and the recorded
+recipe for that does not work today:
+
+* the demo declares `rusty_rtos_kernel = { version = "0.1.0" }`, a
+  **registry** dependency, patched to the local checkout only by its own
+  `.cargo/config.toml`;
+* cargo reads config from the **invocation** directory, which for that
+  recipe is the kernel repo, whose table is written by `kairos patches` and
+  lists only siblings that repo depends on;
+* v0.1.0 **is published**, so the registry resolution succeeds silently.
+
+Checked rather than reasoned: `cargo tree` from the demo resolves the
+kernel to a PATH, and the same query from the kernel repo resolves it to
+the registry. Run as recorded today, the corpus would test the PUBLISHED
+kernel and every mutant would survive.
+
+Whether the 2026-09-09 run was affected cannot be settled from here —
+v0.1.0 was not published until a week after it — so that number stands and
+the METHOD is what changed. `tools/mutants-corpus.sh` now proves the bridge
+before measuring: it plants a poison that cannot fail to fire, requires the
+gate to FAIL, removes it, requires the gate to PASS, and aborts on either
+surprise.
+
+*The measurement that opened this hole is kept below.*
+
+## H4 — the survey as it stood
 
 **Measured** (`docs/LEDGER.md`): `cargo mutants` has been run over
 `kernel.rs` only, judged by the corpus — 42 viable mutants, **40 now
