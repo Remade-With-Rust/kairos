@@ -92,6 +92,14 @@ cells() {
         >/tmp/mq.txt 2>&1)
 }
 
+# NOTE ON THE FILTER. cargo-mutants appends the args after `--` to EVERY
+# cargo test it runs, including one scoped to the MUTATED package -- and
+# `--test qemu_cells` is a TARGET selector that exists only in
+# rusty_rtos_port-core, so that invocation dies with "no test target named
+# qemu_cells" and the whole run is refused before a single mutant is
+# tested. A bare NAME filter is valid in any package: it selects the cell
+# tests where they exist and matches nothing, harmlessly, where they do not.
+
 echo "verifying the bridge with a poison that cannot fail to fire..."
 if cells; then :; else
     echo "ABORT: the cells FAIL on a clean tree -- fix that before mutating." >&2
@@ -125,7 +133,7 @@ set +e
     --file "crates/$CRATE/src/$FILE" \
     --test-package rusty_rtos_port-core \
     --timeout 300 "$@" \
-    -- --test qemu_cells "$FILTER")
+    -- "$FILTER")
 verdict=$?
 set -e
 
