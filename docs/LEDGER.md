@@ -3208,3 +3208,73 @@ repository, on the other port: the ARM cell implements boundary-sleeping
 deliberately and says why. It was simply not carried across. **A law the
 tooling does not enforce is a law you will break again.**
 
+## The instruments, measured against each other (2026-09-19)
+
+A campaign that had hammered `kernel-ir` to a standstill went looking for what
+was left. What it found was not a seam — it was that **the instrument used to
+gate kernel work barely measures the kernel.**
+
+### Every instruction counter in the tree, and what it is really counting
+
+| instrument | Ir | Ir/call | what dominates it |
+|---|---:|---:|---|
+| `kernel-ir` | 119,462,960 | 3,143/tick | **the harness** — see below |
+| `search-ir` | 21,361,060 | 356 | the query walk (halved this session) |
+| `json-ir` | 15,424,053 | 243 | validation |
+| `mqtt-ir` | 12,998,136 | 81 | topic matching — **at its floor** |
+| `khot-ir` | 8,212,073 | 86/op | **the kernel, cleanly** |
+| `hdr-ir` | 7,450,102 | 11 | 68% harness (found earlier) |
+| `kobj-ir` · `kipc-ir` · `ksched-ir` | 9,112,873 | — | the kernel, cleanly |
+| `heap4-ir` · `deser-ir` · `sntp-ir` | 4,569,552 | — | — |
+
+### ★ `kernel-ir` is 46% trace formatter and about 7% kernel
+
+| component of `kernel-ir` | Ir | share |
+|---|---:|---:|
+| `LineTrace<Digest>::event` (6 census rows) | 55,482,249 | **46.4%** |
+| `str::from_utf8` — 97,547 calls | 6,162,016 | 5.2% |
+| the runner | 4,746,959 | 4.0% |
+| `memcpy` — 102,689 calls | 3,109,775 | 2.6% |
+| **the kernel** (`switch_context`, `increment_tick`, `queue`, `kernel.rs`) | **8,222,510** | **6.9%** |
+
+**A 10% kernel improvement moves `kernel-ir` by 0.7%**, which is inside the
+layout noise that a rebuild produces. That is why the vein felt exhausted: the
+earlier kernel campaign was conducted through a lens that divided its results
+by roughly fourteen.
+
+`khot-ir` is the contrast and the cure. It uses `CountTrace`, its harness is
+**2.66%** of its total, and the rest is kernel and port. The four `k*-ir`
+instruments were already built that way; nothing had compared them to
+`kernel-ir` to notice the difference.
+
+**Standing rule from this:** `kernel-ir` is a REGRESSION GATE — it proves a
+change did not move the corpus — and is not an optimisation instrument. Kernel
+speed work reads `khot-ir`, `ksched-ir`, `kipc-ir` and `kobj-ir`, where the
+kernel is most of the number.
+
+### Three things inside that 46%, each worth knowing
+
+| finding | number | what it is |
+|---|---|---|
+| **`Name::as_str` re-validates UTF-8** | 97,547 calls, 6,162,016 Ir (5.2%) | `Name::new` truncates on a character boundary from a `&str`, so the bytes are valid **by construction** — and every read re-checks them. `&[u8] -> &str` has no cheaper safe path, so this is the **measured price of `forbid(unsafe)`** in the traced kernel, not a defect |
+| **the tick hook is copied twice per tick** | 76,026 memcpys of **144 bytes** | `TickHook: Copy` and `run_tick_hook` copies it out and back — deliberately, so it cannot alias while running in ISR context. The 144 bytes are the demo's `TickIsr`, an enum sized by its fattest variant. A real firmware's hook is small, so this is harness cost that scales with the hook |
+| **`Kind::carries_data` is already optimal** | 336,006 Ir (4.09% of `khot-ir`) | the enum's variant ORDER is load-bearing and documented as such, so the test is one comparison. The share is call frequency, not cost. Recorded so nobody re-opens it |
+
+### What was looked at and pruned, with the numbers
+
+Four candidates were sized before any code was written, and none survived:
+
+| candidate | why not |
+|---|---|
+| a skip gate on MQTT topic matching | `mqtt-ir` is **81 Ir/call** and rejects `finance` against `sport/…` on byte 0. A prefilter would add a pass to a path already at its floor |
+| hoisting the JSON absence proof across query parts | **1 pair in 200** |
+| an array-index bound for JSON, `idx > commas + 1` | sound, and **1 pair in 200** |
+| a rarest-byte anchor for the JSON scan | 47% fewer candidates, but choosing the byte needs the document histogram it would save |
+
+And one was built and **refuted by measurement**: restructuring the JSON scan
+to a stateful `position` loop measured **+18.9%** — the second time the
+census's `slice/iter` and `ptr/non_null` rows have been mistaken for removable
+overhead when they were the scanning itself.
+
+> **A census attributes cost to a line; it does not say the cost is
+> removable.** Two attempts on the same rows, one −1.5% and one +18.9%.
