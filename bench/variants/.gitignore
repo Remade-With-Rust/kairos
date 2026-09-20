@@ -1,0 +1,7 @@
+# Candidate `list.rs` files for `bench/sweep.sh`.
+#
+# Drop a full copy of `rusty_rtos_core/crates/rusty_rtos_core/src/list.rs`
+# here as `<name>.rs` and run `wsl -e sh bench/sweep.sh <name>`. They are
+# scratch by definition -- the sweep reads them and never writes them, and
+# nothing else in the tree refers to them.
+*.rs
