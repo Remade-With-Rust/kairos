@@ -3586,3 +3586,125 @@ matched the C.
 None. The harness moved to `pub(crate)` on a `#[cfg(test)]` module, so the
 release build is unchanged by construction and no instrument was re-run on
 that account. `conform --all` is 21 scenarios identical, clippy clean.
+
+
+## H4: the mutation survey, seven files to nine, and two broken instruments (2026-09-20)
+
+`cargo mutants` had been run over **one file of nine**. It has now been run
+over eight, plus a crate outside the list, and 48 tests were written against
+what survived.
+
+| target | oracle | mutants | caught | missed | viable killed |
+|---|---|---:|---:|---:|---:|
+| `list.rs` + `arena.rs` | core's own suite | 140 | 94 | 12 | **88.7%** |
+| `queue.rs` | **the corpus** | 255 | 125 | 55 | **69.4%** |
+| `name.rs` | kernel's suite | 9 | 6 | 3 | 66% |
+| `events.rs` | kernel's suite | 120 | 67 | 38 | 64% |
+| `timer.rs` | kernel's suite | 192 | 78 | 51 | 60% |
+| `stream.rs` | kernel's suite | 163 | 84 | 65 | 56% |
+| `typed.rs` | kernel's suite | 39 | 9 | 8 | 52% |
+| `system.rs` | — | **0** | — | — | *nothing to mutate* |
+| `port-core` (`SimPort`) | port's suite | 58 | 36 | 22 | 62% |
+
+`list.rs` and `arena.rs` are CLOSED: all twelve survivors are cfg-disabled
+or equivalent, so nothing reachable and non-equivalent remains alive.
+
+**`queue.rs`'s 69.4% is the number that justifies the architecture.** It is
+the largest file in the kernel and carries the whole IPC surface, it has no
+unit tests by design, and the corpus catches more than two thirds of its
+mutants — against the ~4% the kernel's own suite manages on `kernel.rs`.
+Keeping the two repositories as separate cargo workspaces and bridging them
+costs real trouble, and this is the measurement that says the trouble buys
+something.
+
+### What the survivors taught, and it was the same thing three times
+
+**Blocking a task and never resuming it tests the blocking, not the
+waking.** `finish_wait` had twelve survivors and `finish_sync` sixteen
+because every test stopped at the wake-up: a waiter was blocked, a set woke
+it, and nothing ever ran it again — so the code deciding what a RESUMED call
+answers never executed. A full round trip, then a real two-task rendezvous,
+took `events.rs` from 41% to 64%.
+
+The contract that fell out is worth more than the score: a woken participant
+is told **what satisfied it**, not what happens to be in the group when it
+reaches the CPU. Those differ by exactly one other task's clear-on-exit.
+
+**A guard nothing approaches is a guard nothing is testing** — and the same
+guard can be reachable in one function and equivalent in another.
+`is_sorted` and `insert_inner` both carry `if guard > N`; `>` and `>=`
+disagree only at exactly `N`. `is_sorted` walks every item, so a full list
+drives its guard there and the pair dies. `insert_inner` stops one node
+short of the marker, so its guard reaches at most `N - 1` and nothing
+constructible tells the two apart.
+
+**21% of the first survivors were a surface nobody had touched** — the
+`_from_isr` and pended calls. Testing them found that
+`xEventGroupSetBitsFromISR` sets no bits at all: its whole body is
+`xTimerPendFunctionCallFromISR`, so the answer means "the callback was
+queued" and the group is untouched until the daemon runs.
+
+### Two instrument defects, and both produce plausible numbers
+
+**cfg-disabled code is scored MISSED, not unviable.** `end_index`, one of
+the two `is_marker_of` bodies, and the whole of `port-cortex-m` and
+`port-riscv` are gated to targets this host does not build. cargo-mutants
+mutates the source anyway, the build succeeds because the function is not
+compiled, the tests pass, and it reads as a survivor. That is six of core's
+twelve and **134 of the port's 308**. The two arch ports scored 0 caught
+for that reason and because they have no tests at all; measuring them means
+mutating on thumbv7m and riscv32 through the QEMU cells.
+
+**★ Concurrent `--in-place` runs across path-patched siblings corrupt each
+other.** `rusty_rtos_core` is patched into both the kernel and the port, so
+mutating core while either runs means they build against a mutated core and
+a mutant is scored CAUGHT for the wrong reason. Measured on one population:
+
+| run | caught | missed | unviable |
+|---|---:|---:|---:|
+| clean, before the new tests | 163 | 220 | **92** |
+| contaminated | 209 | 119 | 152 |
+| clean, after the new tests | 205 | 178 | **92** |
+
+The two clean runs agree exactly on unviable; the contaminated one shows 60
+more, because a mutated core broke COMPILATION. That shrank the viable
+denominator and overstated the kill rate by about ten points. The honest
+delta for those tests is 42.6% -> 53.5%, not the 63.7% the bad run implied.
+
+cargo-mutants refuses outright in the worst case — starting a run while a
+dependency was mutated gave *"cargo test failed in an unmutated tree, so no
+mutants were tested"* and it produced nothing rather than producing
+fiction. **Never mutate two repos that are path-patched into one another at
+the same time.**
+
+### The corpus bridge did not work, and now proves itself
+
+Judging `queue.rs` and `kernel.rs` means building the DEMO against the
+mutated kernel, and the recorded recipe does not do that today:
+
+* the demo declares `rusty_rtos_kernel = { version = "0.1.0" }`, a
+  **registry** dependency, patched to the local checkout only by its own
+  `.cargo/config.toml`;
+* cargo reads config from the **invocation** directory, which for that
+  recipe is the kernel repo, whose table `kairos patches` fills with only
+  the siblings that repo depends on;
+* v0.1.0 **is published**, so the registry resolution succeeds silently.
+
+Checked rather than argued: `cargo tree` from the demo resolves the kernel
+to a PATH, the same query from the kernel repo resolves it to the registry.
+Whether the 2026-09-09 run was affected cannot be settled from here — v0.1.0
+was published a week after it — so that row stands and the METHOD changed.
+
+`tools/mutants-corpus.sh` borrows the demo's own patch rows (sibling-relative,
+so correct verbatim) and **proves the bridge before measuring**: it plants a
+poison that cannot fail to fire, requires the gate to FAIL, removes it,
+requires the gate to PASS, and aborts on either surprise. It refuses to
+start on a dirty tree and restores everything on exit.
+
+It took three corrections of its own, each of which would have produced
+confident wrong numbers: it must run under **Git Bash** (cargo-mutants is
+not in the WSL distro, and WSL git lacks `core.autocrlf` so a clean tree
+reads as twelve modified files); and its first real run **exited 0 with 55
+survivors**, because the EXIT trap's status was becoming the script's — the
+same "reports success having measured nothing" defect `bench/sweep.sh`
+carried.
