@@ -65,6 +65,17 @@ VAR="$here/bench/variants/$V.rs"
 LIST="$here/rusty_rtos_core/crates/rusty_rtos_core/src/list.rs"
 [ -f "$VAR" ] || { echo "MISSING VARIANT $VAR -- refusing to profile" >&2; exit 1; }
 
+# ...and it must not BE the committed file. A variant identical to HEAD is a
+# null arm wearing a candidate's name: it produces two full columns that agree
+# to within the noise floor, which reads as "measured, flat, refuted". That
+# has happened twice here -- once because a `cp` silently did not run, and
+# once because this script restores the tree on exit and an edit was applied
+# before the restore rather than after it.
+if cmp -s "$VAR" "$LIST"; then
+    echo "VARIANT $V IS IDENTICAL TO HEAD -- that is a null arm, not a change" >&2
+    exit 1
+fi
+
 restore() { (cd "$here/rusty_rtos_core" && git checkout -- crates/rusty_rtos_core/src/list.rs); }
 trap restore EXIT
 
