@@ -5917,3 +5917,35 @@ admissions:
 
 Each row carries **the condition that closes it**, because a waiver without
 one is a decision nobody revisits.
+
+### ★★ And the library units' plans are the KERNEL's plan, unedited
+
+The 22–31% figures are worse than low — **they are measuring the wrong unit.**
+Every library package's `use-protection-please.md` was scaffolded from the
+kernel's and never specialised, so:
+
+| package | what its H-26 row says | what the package actually ships |
+|---|---|---|
+| `rusty_rtos_json` | *"no parser yet"* | a JSON parser, `jsontestsuite.rs`, `no_panic.rs` |
+| `rusty_rtos_mqtt` | *"no parser yet"* | `connect`, `connack`, `disconnect`, `header` parsers |
+| `rusty_rtos_http` | *"no parser yet"* | `headers`, `readheader`, `range` parsers |
+| `rusty_rtos_tcp` | *"no parser yet"* | `address`, `checksum` parsers — and **fifteen defects found in the pinned C** |
+| `rusty_rtos_heap` | *"no parser yet"* | an allocator whose input is a length from a caller |
+
+Their H-01 evidence rows still describe *"a kernel with no network stack, no
+filesystem and no dynamic loading"* — a sentence about the kernel, sitting in
+the plan of a package whose entire job is to parse bytes off a wire.
+
+**So the fleet percentages understate and misdescribe at the same time.** Some
+gates are open that the evidence would close — the fuzz and no-panic suites
+K7 built are exactly H-26's subject — and the threat sketches name the wrong
+adversary for the unit they are in. A parser unit's highest-value attack path
+is crafted input; the kernel's is a wrong scheduling decision. Copying one
+into the other produces a plan that cannot be audited against.
+
+**The lesson is the scaffold's, not the packages'.** `kairos new` gives a unit
+a hardening plan so the gate exists from the first commit, which is right —
+but a scaffolded plan is a TEMPLATE, and a template that is never specialised
+reads exactly like a completed one. Nothing in the tooling distinguishes
+"this row was considered and is genuinely N/A" from "this row is still the
+kernel's".
