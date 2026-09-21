@@ -5705,3 +5705,80 @@ has to say WHICH, and a `bool` cannot.
 **And diff on the instrument, not the text.** The event stream agreed for
 another thirteen lines after the counts stopped agreeing; reading the events
 alone pointed at a `cTxLock` deferral that was a consequence, not a cause.
+
+## `ApiSweep`: the oracle does not have to be a DEMO, and two poisons that prove it works (2026-09-21)
+
+`docs/HOLES.md` H2 listed public kernel APIs that no corpus scenario reaches,
+so nobody had asked whether the Rust answers what the C answers. Six of them
+have a direct C twin and **no upstream demo calls any of them** — checked
+against `FreeRTOS/Demo/Common/Minimal`, not assumed.
+
+So there was nothing to port, and the hole's own note said closing them
+"means writing a scenario rather than porting one" — which had been read as
+*too expensive to do*. It is not, because of one thing:
+
+> **The oracle does not have to be an upstream DEMO. It has to be the C
+> KERNEL.**
+
+`oracle/harness/ApiSweep.c` is the only scenario in this corpus whose C was
+written here rather than compiled verbatim from FreeRTOS, and both files say
+so at the top. It drives those six against **real FreeRTOS**, and the Rust
+twin is diffed against it like any other scenario.
+
+| | |
+|---|---|
+| `conform ApiSweep` | **4,898 lines identical, first attempt** |
+| `conform ApiSweep --ticks 100000` | **243,101 lines identical** |
+| `conform --all` | **26 scenarios**, up from 25 |
+| pinned | digest `0x2438_48b2_612f_ff91`, 143,106 bytes |
+
+### ★ The trace does not move, and that is the interesting part
+
+Five of the six emit no trace event at all. It would be easy to conclude a
+trace cannot judge them. It judges them **twice**, and the two halves catch
+different things:
+
+1. **The clock.** Every one takes a critical section, and an outermost exit
+   is a sixteenth of a tick here. An API that takes a different NUMBER of
+   sections than the C moves every event after it.
+2. **The values.** The C side checks what each call answered and latches a
+   failure into its own `xAreApiSweepTasksStillRunning`.
+
+**Both were poisoned before either was believed**, because a differential
+that has never failed is not evidence:
+
+| poison | result |
+|---|---|
+| `timer_period` returns `period + 1` | `ours: KAIROS_RESULT ApiSweep **fail**` / `oracle: ... **pass**` |
+| `set_trigger_level` accepts a level the buffer cannot hold | the same |
+
+In **both** cases the trace was **byte-identical for all 4,897 lines** —
+same ticks, same yields, same 3,505 exits — and only the verdict line
+differed. So:
+
+- the clock alone would have passed both defects;
+- the value check alone is what caught them;
+- and a scenario written without that second half would have shipped a wrong
+  `xTimerGetPeriod` green.
+
+The second poison is the one worth keeping. `xStreamBufferSetTriggerLevel`
+promises two things — accept a level the buffer can hold, **refuse one it
+cannot** — and the refusal is the half a port is likely to get wrong,
+because it is the half no happy path exercises. It is checked here
+explicitly, and removing the check is what the poison did.
+
+### What closed and what could not
+
+H2 closed at eleven, and closing it meant separating two claims it had
+conflated. *Coverage* ("called by no unit test") was largely **stale** —
+ten of the eleven had call sites; only `queue_send_to_front_from_isr` had
+none. *Conformance* ("never compared to FreeRTOS") stood, and split five
+ways: six closed by this scenario; `with_tick_hook` a **false positive** in
+the hole's own list, since `Kernel::new` IS `Self::with_tick_hook(...)`;
+`notify_value` proven under another name, its field reached by
+`xTaskNotifyAndQuery` and `ulTaskNotifyValueClear` which `TaskNotify`
+already compares; and `task_at`, `ready_cursor`, `ready_items` **have no C
+twin at all** — asking a differential about them is a category error.
+
+**"No evidence from the C differential" read as one defect and was five
+different things.**
