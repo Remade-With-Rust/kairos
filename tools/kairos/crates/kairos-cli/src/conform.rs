@@ -23,7 +23,7 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 21] = [
+const SCENARIOS: [&str; 22] = [
     "dynamic",
     "AbortDelay",
     "PollQ",
@@ -38,6 +38,7 @@ const SCENARIOS: [&str; 21] = [
     "QueueSetPolling",
     "IntSemTest",
     "StreamBufferInterrupt",
+    "StreamBufferDemo",
     "TaskNotify",
     "TimerDemo",
     "EventGroupsDemo",
@@ -56,8 +57,13 @@ const SCENARIOS: [&str; 21] = [
 /// anything — so at 2,000 ticks the run ends ON the first creation and
 /// deletes NOTHING. It would pass, and the pass would mean nothing.
 ///
+/// `StreamBufferDemo` is the other: both echo servers open with a 350-tick
+/// receive that has to time out before either creates its client, so
+/// nothing echoes at all until then and the check task's first two passes
+/// see counters that have never moved.
+///
 /// A floor rather than a fixed value, so `--ticks` can still be raised.
-const MIN_TICKS: [(&str, u64); 1] = [("death", 4_000)];
+const MIN_TICKS: [(&str, u64); 2] = [("death", 4_000), ("StreamBufferDemo", 2_000)];
 
 /// The ticks a scenario must be run for at least.
 fn min_ticks(scenario: &str) -> u64 {

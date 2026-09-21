@@ -1060,29 +1060,99 @@ fn nm_mentions_allocator(rlib: &Path) -> Result<bool> {
     Ok(text.contains("__rust_alloc") || text.contains("__rust_dealloc"))
 }
 
-/// Every cargo project directly under `tools/`.
+/// How far below `tools/` to look. `tools/vertical/firmware/<cell>` is
+/// three, which is the deepest thing that exists.
+const TOOL_SCAN_DEPTH: usize = 3;
+
+/// Every cargo project under `tools/` that nothing else builds.
+///
+/// Directly under `tools/`, and also NESTED. `tools/vertical/k7-battery`
+/// declares its own `[workspace]`, so the `cargo check` run in
+/// `tools/vertical` stops at that boundary and never reaches it -- the same
+/// hole `gate-xml`'s `host/` fell through, one level further down.
 fn tool_crates(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    let Ok(entries) = fs::read_dir(root.join("tools")) else {
-        return out;
+    collect_tool_crates(&root.join("tools"), 0, &mut out);
+    out.sort();
+    out
+}
+
+/// Walk one directory looking for cargo projects, recursing for nested
+/// workspaces.
+fn collect_tool_crates(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+    if depth > TOOL_SCAN_DEPTH {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
     };
     for entry in entries.flatten() {
-        let dir = entry.path();
+        let child = entry.path();
+        if !child.is_dir() {
+            continue;
+        }
+        let name = child
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        // Build output and dotfiles are never source.
+        if name == "target" || name.starts_with('.') {
+            continue;
+        }
+        // A `templates/` directory holds SCAFFOLDS -- what `kairos new`
+        // copies to start a package. Their manifests carry `__NAME__`
+        // placeholders and cannot compile by design, so descending into
+        // one fails the gate with `could not compile __NAME__`. Source for
+        // a future project is not a project.
+        if name == "templates" {
+            continue;
+        }
         // A tool that ships its own runner owns its own pass/fail policy
         // and is not this gate's business. `house-gate` is the case that
         // forces it: its workspace deliberately contains an EXPECTED
         // failure (`gate-xml`, the category nothing in Kairos will ever
         // parse), so building its members from here would make `check`
         // fail for ever, on purpose, for the wrong reason.
-        if dir.join("run.sh").is_file() {
+        if child.join("run.sh").is_file() {
             continue;
         }
-        if dir.join("Cargo.toml").is_file() {
-            out.push(dir);
+        // A crate that pins a cross TARGET is a firmware cell. It needs an
+        // emulator and a toolchain this gate does not promise, so it is its
+        // own runner's business -- `tools/vertical/chip.sh` -- exactly as a
+        // `run.sh` directory is. Without this, adding one Cortex-M cell
+        // would silently make `kairos check` require thumbv7m-none-eabi on
+        // every machine that runs it.
+        if pins_a_target(&child.join(".cargo").join("config.toml")) {
+            continue;
         }
+        let manifest = child.join("Cargo.toml");
+        if manifest.is_file() {
+            // At the top level every tool is taken. Below it, only a crate
+            // that is its OWN workspace: ordinary members are already built
+            // by their parent, and some cannot build alone.
+            if depth == 0 || declares_a_workspace(&manifest) {
+                out.push(child.clone());
+            }
+        }
+        collect_tool_crates(&child, depth + 1, out);
     }
-    out.sort();
-    out
+}
+
+/// Whether a manifest opens its own `[workspace]`, and so is invisible to
+/// any `cargo` invocation above it.
+fn declares_a_workspace(manifest: &Path) -> bool {
+    fs::read_to_string(manifest).is_ok_and(|text| {
+        text.lines()
+            .any(|line| line.split('#').next().unwrap_or("").trim() == "[workspace]")
+    })
+}
+
+/// Whether a cargo config names a default `target`, which is what makes a
+/// directory a firmware cell rather than a host tool.
+fn pins_a_target(config: &Path) -> bool {
+    fs::read_to_string(config).is_ok_and(|text| {
+        text.lines()
+            .any(|line| line.split('#').next().unwrap_or("").trim().starts_with("target ="))
+    })
 }
 
 fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
@@ -1433,9 +1503,16 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     // same reason: a hand-written list is how one gets forgotten.
     if only.is_empty() {
         for tool in tool_crates(root) {
+            // RELATIVE TO `tools/`, not just the last component: a
+            // nested crate printed by its own directory name reads as a
+            // path that does not exist (`tools/k7-battery` for what is
+            // really `tools/vertical/k7-battery`), and a line that names
+            // the wrong tool is worse than one that names none.
             let name = tool
-                .file_name()
-                .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
+                .strip_prefix(root.join("tools"))
+                .unwrap_or(&tool)
+                .to_string_lossy()
+                .replace('\\', "/");
             ran += 1;
             // Name it: a bare `cargo check --all-targets` in the log says
             // nothing about which tool it checked, and two of them look

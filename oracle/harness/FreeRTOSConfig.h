@@ -85,6 +85,27 @@ extern void vAssertCalled( const char * const pcFileName, unsigned long ulLine )
 #define configASSERT( x )    if( ( x ) == 0 ) { vAssertCalled( __FILE__, __LINE__ ); }
 
 /* ---------------------------------------------------------------------------
+ * The Kairos SIM contract, version 2: the blind-call tick.
+ *
+ * `xStreamBufferSend` and `xStreamBufferReceive` are the only kernel calls
+ * in this corpus that can return without taking a critical section -- the
+ * zero-wait path reads the ring and leaves. Under contract v1 a task that
+ * did nothing but that took no time at all and stopped the clock for every
+ * other task (docs/HOLES.md, H9).
+ *
+ * These four hooks are FreeRTOS's own, no-ops by default. The port decides
+ * what a blind call costs; see `vPortKairosApiReturn`.
+ * ------------------------------------------------------------------------ */
+
+extern void vPortKairosApiEnter( void );
+extern void vPortKairosApiReturn( void );
+
+#define traceENTER_xStreamBufferSend( xStreamBuffer, pvTxData, xDataLengthBytes, xTicksToWait )     vPortKairosApiEnter()
+#define traceRETURN_xStreamBufferSend( xReturn )                  vPortKairosApiReturn()
+#define traceENTER_xStreamBufferReceive( xStreamBuffer, pvRxData, xBufferLengthBytes, xTicksToWait )     vPortKairosApiEnter()
+#define traceRETURN_xStreamBufferReceive( xReceivedLength )       vPortKairosApiReturn()
+
+/* ---------------------------------------------------------------------------
  * The Kairos trace contract, version 1. One macro per event in the K1/K2 set;
  * rusty_rtos_core::trace::Event names every one of these. The ~470
  * traceENTER_* / traceRETURN_* pairs stay undefined (no-ops) on purpose.

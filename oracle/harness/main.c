@@ -36,6 +36,7 @@
 #include "TaskNotify.h"
 #include "AbortDelay.h"
 #include "IntSemTest.h"
+#include "StreamBufferDemo.h"
 #include "StreamBufferInterrupt.h"
 #include "TimerDemo.h"
 #include "PollQ.h"
@@ -153,6 +154,11 @@ static void prvStartIntSemTest( void )
     vStartInterruptSemaphoreTasks();
 }
 
+static void prvStartStreamBuffer( void )
+{
+    vStartStreamBufferTasks();
+}
+
 static void prvStartStreamBufferInterrupt( void )
 {
     vStartStreamBufferInterruptDemo();
@@ -196,6 +202,7 @@ static const Scenario_t xScenarios[] =
     { "QueueOverwrite", prvStartQueueOverwrite, xIsQueueOverwriteTaskStillRunning },
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
+    { "StreamBufferDemo", prvStartStreamBuffer, xAreStreamBufferTasksStillRunning },
     { "StreamBufferInterrupt", prvStartStreamBufferInterrupt, xIsInterruptStreamBufferDemoStillRunning },
     { "TimerDemo", prvStartTimerDemo, prvTimerDemoStillRunning },
     { "EventGroupsDemo", prvStartEventGroups, xAreEventGroupTasksStillRunning },
@@ -313,6 +320,10 @@ void vApplicationTickHook( void )
     else if( strcmp( pxScenario->pcName, "IntSemTest" ) == 0 )
     {
         vInterruptSemaphorePeriodicTest();
+    }
+    else if( strcmp( pxScenario->pcName, "StreamBufferDemo" ) == 0 )
+    {
+        vPeriodicStreamBufferProcessing();
     }
     else if( strcmp( pxScenario->pcName, "StreamBufferInterrupt" ) == 0 )
     {

@@ -169,7 +169,7 @@ struct Scenario {
     amp: bool,
 }
 
-const SCENARIOS: [Scenario; 19] = [
+const SCENARIOS: [Scenario; 20] = [
     Scenario {
         name: "death",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/death.c"],
@@ -243,6 +243,11 @@ const SCENARIOS: [Scenario; 19] = [
     Scenario {
         name: "IntSemTest",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/IntSemTest.c"],
+        amp: false,
+    },
+    Scenario {
+        name: "StreamBufferDemo",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/StreamBufferDemo.c"],
         amp: false,
     },
     Scenario {
@@ -482,6 +487,51 @@ void vPortKairosTick( void )
 {
     vPortEnterCritical();
     vPortSystemTickHandler( SIGALRM );
+    vPortExitCritical();
+}
+
+/*-----------------------------------------------------------*/
+
+/* KAIROS sim contract v2: a kernel call that took no critical section is
+ * itself a kernel-visible point.
+ *
+ * v1 had exactly two tick sources, the idle hook and every 16th outermost
+ * critical-section exit, and both are kernel-visible points. That left one
+ * hole: a task that is always ready and whose no-progress path takes no
+ * critical section takes NO TIME, never yields, and stops the clock for
+ * everybody. `prvNonBlockingReceiverTask` is such a task -- it polls with
+ * sbDONT_BLOCK, and xStreamBufferReceive's zero-wait path reads
+ * prvBytesInBuffer without a section when the buffer is empty. Measured
+ * under v1, the run froze at ticks=1 exits=16 and never moved again
+ * (docs/HOLES.md, H9).
+ *
+ * Every other object closes the hole by accident: uxQueueMessagesWaiting,
+ * eTaskGetState and uxTaskPriorityGet all take a section. The stream
+ * buffer's query and zero-wait paths are the ones that do not.
+ *
+ * So a blind call costs exactly what one critical section costs. Not a new
+ * clock -- the SAME clock, reached through an empty section, so the count,
+ * the every-16th rule, the FreeRTOS-thread test and the switch all reuse
+ * the paths v1 already proved. `ulKairosExits` keeps its meaning: the
+ * number of kernel-visible points. */
+static unsigned long ulKairosCallExits = 0UL;
+
+void vPortKairosApiEnter( void )
+{
+    ulKairosCallExits = ulKairosExits;
+}
+
+void vPortKairosApiReturn( void )
+{
+    /* The call took a section, so the clock has already seen it. This also
+     * covers a call that BLOCKED: the thread stops inside it, other tasks
+     * run, and the counter has moved by the time this is reached. */
+    if( ulKairosExits != ulKairosCallExits )
+    {
+        return;
+    }
+
+    vPortEnterCritical();
     vPortExitCritical();
 }
 ";
