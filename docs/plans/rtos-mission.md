@@ -1091,11 +1091,22 @@ worse than no gate, because it teaches the reader to discount it.
       stayed 19/19 byte-identical throughout, and ARM turned out to be
       affected too — its window opened 199 times in 200 rounds and is now 0
       (`mps2-an385-qemu-preempt`, `docs/LEDGER.md`)
-- [ ] ...and LINKED against a real `esp-radio` — blocked on a COMPANION SET,
-      not on a C6: the only published radio pins `esp-hal ~1.1.0` + driver
-      **0.3.0**, every Kairos S3 cell pins `esp-hal =1.2.1`, and `xtensa-lx-rt`
-      is a `links` crate so cargo refuses the pair. `esp-radio` supports the
-      S3 fully, so no C6 is needed for this half — a pin decision is
+- [ ] ...and LINKED against a real `esp-radio` — **the companion-set blocker
+      is GONE, re-checked 2026-09-21, and what remains is different and
+      smaller.** The old entry said the only published radio pinned `esp-hal
+      ~1.1.0` + driver **0.3.0** against every Kairos cell's `esp-hal =1.2.1`,
+      with `xtensa-lx-rt` a `links` crate so cargo refused the pair. That was
+      true then. Now `esp-radio 1.0.0-beta.1` with `esp-radio-rtos-driver
+      0.4.2` **resolves and builds against our exact `esp-hal =1.2.1`** — 193
+      packages, exit 0, no `esp-hal` complaint at all. The cell's driver pin
+      is bumped to `=0.4.2` accordingly.
+      **But adding the dependency links nothing**, measured as a clean A/B
+      with the binaries compared byte for byte: 276,820 bytes and 2,416
+      symbols either way, the 64 symbols differing each way being our own
+      names whose crate-disambiguator hash moved between compilations. LTO
+      drops esp-radio because nothing in the cell CALLS it. Meeting this item
+      needs a real Wi-Fi controller path and the board to verify it — which is
+      **unblocked work rather than a pin decision nobody could take**
 - [ ] Janus S1 on a Kairos kernel — needs **2x ESP32-C6** in hand
 - [ ] ...and its esp-rtos baseline, which **Janus must take first**; §2.8
 

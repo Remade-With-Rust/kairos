@@ -5782,3 +5782,66 @@ twin at all** — asking a differential about them is a category error.
 
 **"No evidence from the C differential" read as one defect and was five
 different things.**
+
+## K5b's blocker was stale, and the A/B says the item still is not met (2026-09-21)
+
+K5's §6.1 checklist says of its two open items: *"Neither K5b item can be
+moved by work in this repository."* One of them could.
+
+### The recorded blocker, re-checked
+
+> the only published radio pins `esp-hal ~1.1.0` + driver **0.3.0**, every
+> Kairos S3 cell pins `esp-hal =1.2.1`, and `xtensa-lx-rt` is a `links` crate
+> so cargo refuses the pair
+
+That was measured on 2026-09-11 against `esp-radio 1.0.0-beta.0`. **A version
+claim about a public registry is the most perishable kind of fact a plan can
+hold**, and this one had gone off: `esp-radio` is now `1.0.0-beta.1` and
+`esp-radio-rtos-driver` is `0.4.2`.
+
+Resolved against our own cell, unchanged except for the radio lines:
+
+```text
+error: failed to select a version for `esp-radio-rtos-driver`
+    ... required by package `esp-radio v1.0.0-beta.1`
+versions that meet the requirements `^0.4.2` are: 0.4.2
+  previously selected package `esp-radio-rtos-driver v0.4.1`
+```
+
+**No `esp-hal` complaint at all** — the whole recorded cause is gone, and the
+only conflict left was our own `=0.4.1` pin. Bumping it to `=0.4.2`:
+
+```text
+Locking 193 packages to latest compatible versions
+  Adding esp-hal v1.2.1 (available: v1.2.2)
+```
+
+`esp-hal 1.2.1` — our exact pin — beside `esp-radio 1.0.0-beta.1`. It builds,
+exit 0.
+
+### And then the A/B said the item is still not met
+
+It would have been easy to tick the box there. The checklist says **LINKED**,
+so the question is whether esp-radio is in the binary, and the honest test is
+an A/B on a clean build with the artifacts compared byte for byte:
+
+| | bytes | symbols |
+|---|---:|---:|
+| without `esp-radio` | 276,820 | 2,416 |
+| with `esp-radio` | 276,820 | 2,416 |
+
+The hashes differ and 64 symbols differ each way — **and every one of those
+64 is one of our own names whose crate-disambiguator hash moved between
+compilation sessions.** No esp-radio code is in the binary at all. LTO drops
+it because nothing in the cell calls it, which is exactly what the original
+note said and is still the live reason.
+
+**Same size, different hash was the tell.** Two binaries that differ in
+content but agree to the byte in length are almost never differing in code.
+
+### What actually changed
+
+The item moved from *blocked on a decision nobody could take* to *unblocked
+work that needs a Wi-Fi controller path and the board to verify*. That is a
+real change in a plan row that said the half could not be moved from here —
+and it was found by re-running the claim rather than re-reading it.
