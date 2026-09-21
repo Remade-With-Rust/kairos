@@ -1,0 +1,54 @@
+[package]
+name = "kairos-vertical"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Umbrella-only: proves the Kairos K7 packages COMPOSE, by running one over another."
+
+# A standalone workspace, like the other tools. It path-depends on three
+# sibling packages, which is exactly why it lives here and not in any of
+# them: `rusty_rtos_http` and `rusty_rtos_tcp` are both unpublished, so a
+# dependency between them would break the rule that every package's
+# checked-in Cargo.lock must work in a FRESH CLONE (hardening gate H-07).
+# The umbrella has no such obligation -- it is never published and never
+# cloned alone.
+[workspace]
+resolver = "3"
+
+[dependencies]
+rusty_rtos_http-core = { path = "../../rusty_rtos_http/crates/rusty_rtos_http-core" }
+rusty_rtos_tcp-core = { path = "../../rusty_rtos_tcp/crates/rusty_rtos_tcp-core" }
+rusty_rtos_mqtt-core = { path = "../../rusty_rtos_mqtt/crates/rusty_rtos_mqtt-core" }
+smoltcp = { version = "0.12", default-features = false, features = [
+    "medium-ip",
+    "medium-ethernet",
+    "proto-ipv4",
+    "socket-tcp",
+    "socket-udp",
+    "alloc",
+] }
+
+# A TAP device is a privileged thing, and smoltcp only offers one on Unix.
+# So EVERY binary that opens one is behind a feature and declares it as
+# REQUIRED, which keeps `cargo check --all-targets` clean on a machine that
+# has neither -- this one, outside WSL.
+#
+# `throughput` was added without its stanza and `kairos check` caught it:
+# without the feature there is no `TunTapInterface` and no `Instant::now`,
+# so the umbrella gate failed to compile a binary that can never run on the
+# machine running the gate. A new bin here needs a new stanza; there is
+# nothing that infers it.
+[features]
+tap = ["smoltcp/phy-tuntap_interface", "smoltcp/std"]
+
+[[bin]]
+name = "interop"
+required-features = ["tap"]
+
+[[bin]]
+name = "mqtt_interop"
+required-features = ["tap"]
+
+[[bin]]
+name = "throughput"
+required-features = ["tap"]

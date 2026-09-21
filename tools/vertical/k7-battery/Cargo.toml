@@ -1,0 +1,24 @@
+[package]
+name = "k7-battery"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Umbrella-only: the same K7 work, run on the host and on a chip, digested."
+
+# A standalone workspace, and umbrella-only, for the same reason
+# `kairos-vertical` is: it path-depends on six unpublished packages at once,
+# and a dependency between unpublished packages would break the rule that
+# every package's checked-in Cargo.lock must work in a FRESH CLONE (H-07).
+[workspace]
+resolver = "3"
+
+# `default-features = false` is the whole point. It takes each core down to
+# pure `core` -- no `std`, no `alloc`, and for the TCP package no smoltcp
+# engine -- which is the configuration a Cortex-M3 can actually link.
+[dependencies]
+rusty_rtos_tcp-core = { path = "../../../rusty_rtos_tcp/crates/rusty_rtos_tcp-core", default-features = false }
+rusty_rtos_http-core = { path = "../../../rusty_rtos_http/crates/rusty_rtos_http-core", default-features = false }
+rusty_rtos_mqtt-core = { path = "../../../rusty_rtos_mqtt/crates/rusty_rtos_mqtt-core", default-features = false }
+rusty_rtos_json-core = { path = "../../../rusty_rtos_json/crates/rusty_rtos_json-core", default-features = false }
+rusty_rtos_sntp-core = { path = "../../../rusty_rtos_sntp/crates/rusty_rtos_sntp-core", default-features = false }
+rusty_rtos_backoff-core = { path = "../../../rusty_rtos_backoff/crates/rusty_rtos_backoff-core", default-features = false }

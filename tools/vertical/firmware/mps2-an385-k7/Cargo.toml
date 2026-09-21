@@ -1,0 +1,30 @@
+[package]
+name = "mps2-an385-k7"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "The chip arm: the K7 battery, on a Cortex-M3, against the host pins."
+
+# Its own workspace, like every other firmware cell: it builds for
+# thumbv7m-none-eabi and must not be dragged into a host workspace.
+[workspace]
+resolver = "3"
+
+[dependencies]
+# The SAME battery the host test runs, and the SAME pin table. The cell
+# carries no expected values of its own -- see src/main.rs.
+k7-battery = { path = "../../k7-battery" }
+
+cortex-m-rt = "0.7"
+cortex-m-semihosting = "0.5"
+panic-semihosting = "0.6"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+# ON PURPOSE. A wrap that the host silently tolerates in release should stop
+# the chip, because the packages parse attacker-supplied lengths and a wrap
+# there is the bug class this whole campaign has been finding in the C.
+overflow-checks = true

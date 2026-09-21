@@ -177,3 +177,27 @@ no_std_crates = ["rusty_rtos_mqtt-core"]
 targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
 uses = ["rusty_rtos_core"]
 plan = "docs/plans/rusty_rtos_mqtt.md"
+
+[[package]]
+name = "rusty_rtos_http"
+kind = "function"
+status = "scaffold"
+visibility = "private"
+description = "coreHTTP remade in Rust: the HTTP/1.1 request serializer and response reader, no allocator and no socket"
+crates = ["rusty_rtos_http", "rusty_rtos_http-core"]
+no_std_crates = ["rusty_rtos_http-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_http.md"
+
+[[package]]
+name = "rusty_rtos_tcp"
+kind = "function"
+status = "scaffold"
+visibility = "private"
+description = "FreeRTOS-Plus-TCP's API remade in Rust over a memory-safe engine: sockets, addressing and the packet codecs, no allocator on any hot path"
+crates = ["rusty_rtos_tcp", "rusty_rtos_tcp-core"]
+no_std_crates = ["rusty_rtos_tcp-core"]
+targets = ["thumbv7em-none-eabihf", "thumbv8m.main-none-eabihf", "riscv32imac-unknown-none-elf", "riscv32imafc-unknown-none-elf"]
+uses = ["rusty_rtos_core"]
+plan = "docs/plans/rusty_rtos_tcp.md"
