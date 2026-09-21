@@ -56,7 +56,7 @@ list exists to prevent. Closing a hole is two commits, not one.
 
 ---
 
-## H2 — 13 public APIs have no evidence from the C differential
+## H2 — 11 public APIs have no evidence from the C differential
 
 **Measured.** Of 130 public kernel APIs, these are called by no conformance
 scenario, no runner code, no other kernel code, and no unit test:
@@ -89,6 +89,31 @@ stream-buffer demo; `stream_buffer_set_trigger_level` is set at create time
 by every scenario in the corpus and never changed afterwards. Neither has a
 standard demo that reaches it, so closing them means writing a scenario
 rather than porting one.
+
+**Two more came off on 2026-09-21**, when `MessageBufferDemo` and
+`QueueSet` landed. `stream_buffer_next_message_length` is exactly the
+message-buffer call the note above predicted would need a message-buffer
+demo to reach — `prvSingleTaskTests` in `MessageBufferDemo` calls it
+eight times, around every send and every read, and it is now compared
+against the C on 1,017,915 lines. `queue_remove_from_set` has five call
+sites in `QueueSet`, one of them a deliberate FAILURE (removing a queue
+from a set it does not belong to) — and that failing call is what caught
+a real defect: the C tests both of its refusals OUTSIDE the critical
+section and this kernel took the section unconditionally, which is one
+exit, one tick, and a divergence thirty lines in.
+
+**That is the argument for closing the rest of this hole rather than
+shrinking it.** Two of the last three APIs to gain a scenario gained a
+DEFECT with it. The nine that are left answer with Rust behaviour that
+has never been compared to FreeRTOS's, and the evidence so far is that
+the comparison is where the bugs are, not a formality.
+
+The eleven that remain: `name_of`, `task_at`, `with_tick_hook`,
+`notify_value`, `queue_send_to_front_from_isr`, `ready_cursor`,
+`ready_items`, `timer_expiry_time`, `timer_period`,
+`timer_pend_function_call` and `stream_buffer_set_trigger_level` — the
+last of which every scenario sets at create time and none ever changes,
+so closing it still means writing a scenario rather than porting one.
 
 They are **not dead**: `rusty_rtos-capi` calls most of them, so a C program
 linking the shim reaches them. `vTimerDelete`, `xQueueRemoveFromSet`,
