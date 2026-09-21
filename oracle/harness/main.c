@@ -37,6 +37,7 @@
 #include "AbortDelay.h"
 #include "IntSemTest.h"
 #include "StreamBufferDemo.h"
+#include "MessageBufferDemo.h"
 #include "StreamBufferInterrupt.h"
 #include "TimerDemo.h"
 #include "PollQ.h"
@@ -159,6 +160,14 @@ static void prvStartStreamBuffer( void )
     vStartStreamBufferTasks();
 }
 
+/* Unlike its stream-buffer twin this one takes the stack size, and
+ * Posix_GCC/main_full.c passes configMINIMAL_STACK_SIZE. The value is not
+ * cosmetic: the demo derives xBlockingStackSize from it. */
+static void prvStartMessageBuffer( void )
+{
+    vStartMessageBufferTasks( configMINIMAL_STACK_SIZE );
+}
+
 static void prvStartStreamBufferInterrupt( void )
 {
     vStartStreamBufferInterruptDemo();
@@ -203,6 +212,7 @@ static const Scenario_t xScenarios[] =
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
     { "StreamBufferDemo", prvStartStreamBuffer, xAreStreamBufferTasksStillRunning },
+    { "MessageBufferDemo", prvStartMessageBuffer, xAreMessageBufferTasksStillRunning },
     { "StreamBufferInterrupt", prvStartStreamBufferInterrupt, xIsInterruptStreamBufferDemoStillRunning },
     { "TimerDemo", prvStartTimerDemo, prvTimerDemoStillRunning },
     { "EventGroupsDemo", prvStartEventGroups, xAreEventGroupTasksStillRunning },

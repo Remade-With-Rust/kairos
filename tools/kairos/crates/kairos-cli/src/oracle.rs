@@ -169,7 +169,7 @@ struct Scenario {
     amp: bool,
 }
 
-const SCENARIOS: [Scenario; 20] = [
+const SCENARIOS: [Scenario; 21] = [
     Scenario {
         name: "death",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/death.c"],
@@ -248,6 +248,11 @@ const SCENARIOS: [Scenario; 20] = [
     Scenario {
         name: "StreamBufferDemo",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/StreamBufferDemo.c"],
+        amp: false,
+    },
+    Scenario {
+        name: "MessageBufferDemo",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/MessageBufferDemo.c"],
         amp: false,
     },
     Scenario {

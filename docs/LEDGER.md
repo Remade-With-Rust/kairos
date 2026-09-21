@@ -5413,3 +5413,85 @@ derive it: `{ list_slots_for(24, 32, 41) }`.
 They are nested workspaces, so `kairos check`'s 18 packages never reached
 them. **That is the second time this session a nested workspace hid a
 breakage I caused** -- the first was `hosted/capi-host`.
+
+## `MessageBufferDemo`: the 21st scenario, and a dead `#ifndef` worth 2,407 lines (2026-09-21)
+
+The last of the four K2 scenarios that was buildable. `IntQueue` is out of
+scope and `QueueSet` needs an owner decision; this one needed only work.
+
+### It was never kernel work
+
+Every API the scenario calls already existed and was already proved by
+another scenario — checked BEFORE a line was written, because a missing one
+would have made this kernel work rather than demo work. The byte arena's
+reclamation was already built too: `take_bytes` serves first fit from what
+deleted buffers returned, which is what lets the echo servers create and
+delete a message buffer on **every** loop, as the C does to prove it leaks
+nothing.
+
+What was missing was the scenario: a `messagebuffer.rs` twin of the C's
+~660 live lines, and its registration in five places.
+
+### Roughly a third of the C file is dead code
+
+`configSUPPORT_STATIC_ALLOCATION` is 0 and `configRUN_ADDITIONAL_TESTS` is
+undefined, so 310 of the 971 lines never compile in. Establishing that first
+meant not remaking the sender/receiver pair, the coherence actors, or the
+static-allocation half of the still-running check.
+
+### The C's own comments are stale, and the const is not
+
+`mbBYTES_TO_STORE_MESSAGE_LENGTH` is `sizeof( configMESSAGE_BUFFER_LENGTH_TYPE )`,
+which is `size_t` — **eight** bytes on the oracle's machine. The file's
+comments are written as though it were four ("a maximum of 5 6 bytes items
+can be added"). Taking the comment would have put three messages where five
+were expected and diverged immediately. `LENGTH_BYTES` is read from
+`PosixDemoConfig`, which already carried the right value.
+
+### The divergence: a `#ifndef` block that cannot run
+
+First conformance run agreed for **2,407 lines** and then put a tick two
+events early. With `KAIROS_TRACE_EXITS=1` both sides agreed to the
+instruction — exit #4108 — and then the C spent **1** charged exit where we
+spent **4**.
+
+The cause is four lines of C that never execute:
+
+```c
+xReturned = xMessageBufferSend( ..., mbMESSAGE_BUFFER_LENGTH_BYTES, mbDONT_BLOCK );
+#ifndef configMESSAGE_BUFFER_LENGTH_TYPE
+    ... three more sends ...
+#endif
+```
+
+`FreeRTOS.h:2889` defaults `configMESSAGE_BUFFER_LENGTH_TYPE` to `size_t`
+when the application has not set it, and `MessageBufferDemo.c` includes
+`FreeRTOS.h` long before that `#ifndef` is read. **The macro is always
+defined, so the block is unreachable** — one send there, not four.
+
+Under sim contract v2 each of the three extra sends is a *blind call*: a
+zero-wait send of a message too large to fit takes no critical section, and
+`vPortKairosApiReturn` charges exactly one exit for that. Three extra blind
+charges moved the tick, and nothing else about the scenario was wrong.
+
+**The lesson is about reading C, not about the kernel**: a `#ifndef` on a
+config macro tests whether the APPLICATION set it, and a kernel header that
+supplies a default makes the guarded arm dead. Checking which of
+`IsEmpty`/`SpacesAvailable`/`NextLengthBytes` take a critical section
+(none do) is what narrowed it to the sends.
+
+### Result
+
+| | |
+|---|---|
+| `conform MessageBufferDemo` | **19,588 lines identical**, second attempt |
+| `conform MessageBufferDemo --ticks 100000` | **1,017,915 lines identical** |
+| the C's own verdict | pass, ticks=2000 yields=2560 exits=28097 |
+| `conform --all` | **23 scenarios identical**, up from 22 |
+| pinned | digest `0x5cb3_12f2_6ca3_18f9`, 620,657 bytes, all 22 pins pass |
+
+The C oracle needs 1,000 ticks before its own check passes — the echo
+servers spend the first 250 blocked on data that cannot arrive yet, by
+design — so at the 200 ticks the trace command defaults to it reports
+`fail`. That is the scenario working, not failing, and it is why the trace
+is taken at 2,000.
