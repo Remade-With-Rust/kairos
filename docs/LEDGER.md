@@ -5618,3 +5618,90 @@ differs is whether the lock window overlaps the tick, which is a timing
 question a level below the one defect 1 fixed. Recorded as open rather than
 pinned away: the scenario is pinned at the corpus standard of 2,000 ticks,
 where it is exact.
+
+## `IntQueue` at 100,000 ticks: a queue call has MORE THAN ONE resume point (2026-09-21)
+
+The open item from earlier today. `IntQueue` was exact at the corpus standard
+and held 362,065 lines at 100,000 before diverging at tick 16,260.
+
+### The first reading of it was wrong
+
+It looked like a `cTxLock` deferral difference -- the C waking a task at the
+END of the interrupt where we woke it on the first send. That was a real
+difference but it was DOWNSTREAM. Diffing on the exit column instead of the
+event text found the actual first divergence 13 lines earlier, and it is not
+an event difference at all:
+
+```text
+362051 | 16260 TASK_SWITCHED_IN L1QRx #258118      | 16260 TASK_SWITCHED_IN L1QRx #258118
+362052 | 16260 QUEUE_RECEIVE_FAILED q2 #258121     | 16260 QUEUE_RECEIVE_FAILED q2 #258120
+```
+
+Same event, same tick, **one extra critical-section exit**. Everything above
+is identical to the instruction.
+
+### What the census said
+
+`QUEUE_RECEIVE_FAILED` happens **16 times in 100,000 ticks**, and the cost of
+each one -- exits from the line before -- separates cleanly:
+
+| | cost 8 | cost 3 | cost 2 | cost 1 |
+|---|---:|---:|---:|---:|
+| ours | 10 | 5 | 1 | 0 |
+| oracle | 10 | 0 | 4 | 2 |
+
+**The ten expensive ones agree exactly; every cheap one costs us one more.**
+A cheap failing receive is one the caller RESUMED into, and paying one extra
+there means resuming at a coarser point than the C does.
+
+### The mechanism, from the trace rather than from reading code
+
+```text
+361964 16256 TASK_SWITCHED_IN L1QRx #258061
+361965 16256 TASK_INCREMENT_TICK 16256 #258064   <- the tick, inside the call
+361966..74   the ISR
+361975 16256 TASK_INCREMENT_TICK 16256 #258067   <- the SAME tick number, AGAIN
+361976 16257 TASK_SWITCHED_OUT L1QRx #258067
+```
+
+**A tick number printed twice is the signature of a PENDED tick.** The
+scheduler was suspended -- L1QRx was inside the `vTaskSuspendAll()` window of
+its blocking receive -- so `xTaskIncrementTick` pended it, and
+`xTaskResumeAll()` replayed it. Replaying it switched L1QRx away, with
+`prvIsQueueEmpty` still to run.
+
+So the preemption was **not** at the sampling exit. This morning's fix gave
+the queue path one resume point, below that exit. `xTaskResumeAll` in the
+timed-out branch is a second one, and there was nothing to name it with:
+`queue_resume` was a `bool`.
+
+### The fix
+
+`QueueResume` is now a three-valued resume POINT -- `No`, `BelowSample`,
+`BelowTimedOutResume` -- and the timed-out tail is split into
+`queue_take_timed_out` so a call can re-enter there. The send path keeps one
+point on purpose: its timed-out branch has nothing after `resume_all` that
+costs an exit, so being switched away there changes no count.
+
+| | |
+|---|---|
+| `conform IntQueue` | 44,285 lines identical |
+| `conform IntQueue --ticks 100000` | **2,220,518 lines identical** |
+
+**No regression**, and the check was made at 100,000 rather than 2,000
+because this is the queue blocking path: BlockQ 1,344,460, semtest
+1,503,634, recmutex 1,385,862, GenQTest 1,253,579, QPeek 486,871 and
+QueueSet 318,143 lines identical. `conform --all` remains 25 scenarios.
+
+### The transferable part
+
+**A "one more exit" difference is not an arithmetic error, it is a resume
+point.** The kernel's own `stream_resume` / `stream_timed` pair already said
+so -- two one-shot markers for two different exits inside one stream-buffer
+call -- and the queue path was given one marker for a call that has two.
+Anywhere a call can be preempted at more than one section exit, the marker
+has to say WHICH, and a `bool` cannot.
+
+**And diff on the instrument, not the text.** The event stream agreed for
+another thirteen lines after the counts stopped agreeing; reading the events
+alone pointed at a `cTxLock` deferral that was a consequence, not a cause.
