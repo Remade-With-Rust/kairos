@@ -618,7 +618,41 @@ in the files and what the tools reported.
 
 ---
 
-## H8 — `mps2-an385-qemu-kernel` does not compile in this checkout
+## H8 — `mps2-an385-qemu-kernel` does not compile — CLOSED 2026-09-21
+
+**Closed by making the cell name its siblings by PATH**, which is what the
+other three Cortex-M cells already do and what this hole's own diagnosis
+pointed at. The two `rusty_rtos_core v0.1.0` are one again, `CortexMPort`
+implements the `Port` the kernel expects, and the cell builds.
+
+It does more than build. It boots on a Cortex-M3 under QEMU and passes its
+own six checks:
+
+```text
+ticks 401  switches 121  high-priority laps 40 (expected about 40)
+woke early 0
+RESULT: PASS -- the Kairos scheduler drove real tasks on a Cortex-M3
+```
+
+**The deeper defect is the one worth keeping.** Its sibling
+`mps2-an385-qemu-preempt` had already made this trade, and its manifest
+names this cell in the comment explaining why:
+
+> a git dependency resolves to the published kernel, so the cell would build
+> green against code that is not the code under test — which is what the
+> sibling `mps2-an385-qemu-kernel` cell does today, and why it has never
+> exercised a local kernel edit.
+
+So this cell was not merely broken. **It was a gate that could not see the
+thing it gates**, and had it been building, it would have been reporting
+green against a published kernel while the local one changed underneath it.
+A broken gate announces itself; a gate pointed at the wrong target does not.
+
+The cost is stated rather than hidden, and is the sibling's: this cell cannot
+be built from a standalone clone of `rusty_rtos_port`. `kairos check` skips
+firmware cells anyway, so nothing in the fleet gate regresses.
+
+## H8 — as it stood
 
 **Measured 2026-09-20**, while wiring the port's QEMU cells up as a
 mutation oracle. Three of the four Cortex-M cells pass; this one fails to
