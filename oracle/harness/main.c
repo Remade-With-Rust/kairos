@@ -46,6 +46,7 @@
 #include "QueueSetPolling.h"
 #include "QueueSet.h"
 #include "IntQueue.h"
+#include "ApiSweep.h"
 #include "blocktim.h"
 #include "countsem.h"
 #include "death.h"
@@ -169,6 +170,12 @@ static void prvStartIntQueue( void )
     vStartInterruptQueueTasks();
 }
 
+/* KAIROS-authored rather than ported; see oracle/harness/ApiSweep.c. */
+static void prvStartApiSweep( void )
+{
+    vStartApiSweepTasks();
+}
+
 static void prvStartIntSemTest( void )
 {
     vStartInterruptSemaphoreTasks();
@@ -231,6 +238,7 @@ static const Scenario_t xScenarios[] =
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
     { "QueueSet", prvStartQueueSet, xAreQueueSetTasksStillRunning },
     { "IntQueue", prvStartIntQueue, xAreIntQueueTasksStillRunning },
+    { "ApiSweep", prvStartApiSweep, xAreApiSweepTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
     { "StreamBufferDemo", prvStartStreamBuffer, xAreStreamBufferTasksStillRunning },
     { "MessageBufferDemo", prvStartMessageBuffer, xAreMessageBufferTasksStillRunning },
@@ -351,6 +359,10 @@ void vApplicationTickHook( void )
     else if( strcmp( pxScenario->pcName, "QueueSet" ) == 0 )
     {
         vQueueSetAccessQueueSetFromISR();
+    }
+    else if( strcmp( pxScenario->pcName, "ApiSweep" ) == 0 )
+    {
+        vApiSweepAccessFromISR();
     }
     else if( strcmp( pxScenario->pcName, "IntQueue" ) == 0 )
     {

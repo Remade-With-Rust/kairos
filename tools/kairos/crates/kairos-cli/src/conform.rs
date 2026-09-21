@@ -23,7 +23,7 @@ use crate::{Result, fail, has_flag, option};
 
 /// The scenarios `rusty_rtos_demo` can run. The C oracle knows the same
 /// names; `kairos oracle` refuses one it does not have.
-const SCENARIOS: [&str; 25] = [
+const SCENARIOS: [&str; 26] = [
     "dynamic",
     "AbortDelay",
     "PollQ",
@@ -42,6 +42,7 @@ const SCENARIOS: [&str; 25] = [
     "MessageBufferDemo",
     "QueueSet",
     "IntQueue",
+    "ApiSweep",
     "TaskNotify",
     "TimerDemo",
     "EventGroupsDemo",

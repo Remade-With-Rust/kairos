@@ -56,7 +56,67 @@ list exists to prevent. Closing a hole is two commits, not one.
 
 ---
 
-## H2 — 11 public APIs have no evidence from the C differential
+## H2 — 11 public APIs have no evidence from the C differential — CLOSED 2026-09-21
+
+**Six were closed by writing the scenario. The other five cannot be closed by
+a differential, and each one's reason is different.** The hole conflated two
+claims that needed separating first: *coverage* ("called by no unit test")
+and *conformance* ("never compared to FreeRTOS"). Re-measured, the coverage
+claim was largely stale — ten of the eleven had call sites in unit tests, the
+no-panic suites, the capi shim or firmware. Only
+`queue_send_to_front_from_isr` had none at all. The conformance claim stood.
+
+### The six, closed by `ApiSweep`
+
+**No upstream demo calls any of them** — checked against
+`FreeRTOS/Demo/Common/Minimal`, not assumed — so there was nothing to port.
+But **the oracle does not have to be an upstream DEMO; it has to be the C
+KERNEL.** `oracle/harness/ApiSweep.c` is KAIROS-authored, drives these six
+against real FreeRTOS, and is diffed against a Rust twin like any other
+scenario:
+
+| C | here |
+|---|---|
+| `pcTaskGetName` | `name_of` |
+| `xQueueSendToFrontFromISR` | `queue_send_to_front_from_isr` |
+| `xTimerGetPeriod` | `timer_period` |
+| `xTimerGetExpiryTime` | `timer_expiry_time` |
+| `xTimerPendFunctionCall` | `timer_pend_function_call` |
+| `xStreamBufferSetTriggerLevel` | `stream_buffer_set_trigger_level` |
+
+**4,898 lines identical, first attempt; 243,101 at 100,000 ticks.**
+
+Most of these emit no trace event, which makes it look as though a trace
+cannot judge them. It judges them twice: every one takes a critical section,
+and an outermost exit is a sixteenth of a tick — an API taking a different
+NUMBER of sections moves every event after it — and the C side checks the
+values itself and latches a failure into its own check function, so a kernel
+that answers differently fails even where the trace would not move.
+
+### The five a differential cannot close, and why each is not a gap
+
+* **`with_tick_hook` was a false positive in this hole's own list.**
+  `Kernel::new` is `Self::with_tick_hook(port, trace, H::default())`, so
+  every scenario in the corpus reaches it. The hole's stated method says it
+  "excludes everything with an internal caller"; this one slipped through.
+* **`notify_value` has no distinct C spelling.** The C reaches the same field
+  through `xTaskNotifyAndQuery` and `ulTaskNotifyValueClear`, and **both are
+  already compared against C by the `TaskNotify` scenario**. The field's
+  behaviour is proven; only this spelling of the read is uncalled, and it
+  exists because the C ABI needed it.
+* **`task_at`, `ready_cursor` and `ready_items` have no C twin at all.** They
+  are diagnostics this port adds — their own docs say so ("A diagnostic",
+  "The companion to `ready_cursor`"). FreeRTOS has no `xTaskGetReadyCursor`.
+  Asking a differential about them is a category error: there is nothing on
+  the other side to differ from. They are exercised by unit tests and by the
+  firmware cells, which is the evidence available to them.
+
+**The distinction is the point.** "No evidence from the C differential" reads
+as one defect and was five different things: one mistake in the list, one API
+whose behaviour is proven under another name, and three that no differential
+can ever reach.
+
+## H2 — as it stood
 
 **Measured.** Of 130 public kernel APIs, these are called by no conformance
 scenario, no runner code, no other kernel code, and no unit test:

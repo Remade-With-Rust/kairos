@@ -169,7 +169,7 @@ struct Scenario {
     amp: bool,
 }
 
-const SCENARIOS: [Scenario; 23] = [
+const SCENARIOS: [Scenario; 24] = [
     Scenario {
         name: "death",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/death.c"],
@@ -248,6 +248,12 @@ const SCENARIOS: [Scenario; 23] = [
     Scenario {
         name: "IntQueue",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/IntQueue.c"],
+        amp: false,
+    },
+    Scenario {
+        // No demo file: this scenario's C lives in oracle/harness.
+        name: "ApiSweep",
+        demo_files: &[],
         amp: false,
     },
     Scenario {
@@ -864,6 +870,11 @@ fn build(root: &Path, name: &str) -> Result<()> {
     sources.push("oracle/FreeRTOS-Kernel/portable/MemMang/heap_3.c".into());
     sources.push("oracle/harness/main.c".into());
     sources.push("oracle/harness/kairos_trace.c".into());
+    // KAIROS-authored, not a demo port. See oracle/harness/ApiSweep.c for
+    // why the oracle for those six APIs is a scenario we wrote: no upstream
+    // demo calls any of them, so there was nothing to port -- but the C
+    // KERNEL is still the oracle, which is what the differential needs.
+    sources.push("oracle/harness/ApiSweep.c".into());
     // Every scenario's demo file goes into every binary: the harness's
     // table names them all, and one build serves the whole corpus.
     let _ = sc;
