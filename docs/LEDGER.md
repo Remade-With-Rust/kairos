@@ -5495,3 +5495,126 @@ servers spend the first 250 blocked on data that cannot arrive yet, by
 design — so at the 200 ticks the trace command defaults to it reports
 `fail`. That is the scenario working, not failing, and it is why the trace
 is taken at 2,000.
+
+## `QueueSet` and `IntQueue`: the last two, and two kernel defects they found (2026-09-21)
+
+Both of K2's remaining scenarios. Neither was blocked on kernel FEATURES --
+and both turned out to be blocked on kernel BEHAVIOUR that no other scenario
+reached.
+
+### `QueueSet`: the seed was the whole blocker
+
+Upstream seeds its generator from the address of one of the sending task's
+own stack locals, and that seed decides which of the three queues every write
+goes to for the rest of the run. Reproducible on the C side, unknowable to a
+second implementation, and not stable across builds.
+
+`kairos oracle patch` now pins it to a constant. **This is not a new
+decision**: `TaskNotify.c` already carried exactly this edit, for exactly
+this defect, and the machinery to apply it was already there. A constant
+changes nothing the demo tests -- which queue a write picks is arbitrary by
+design, and the property under test is that ALL THREE get used, which
+`xAreQueueSetTasksStillRunning` checks directly.
+
+| | |
+|---|---|
+| `conform QueueSet` | **6,281 lines identical**, second attempt |
+| `conform QueueSet --ticks 100000` | **318,143 lines identical** |
+| pinned | digest `0x2f8a_570d_f721_e2bc`, 167,059 bytes |
+
+### `IntQueue`: the file did not compile, and now it does
+
+`IntQueue.c` includes `IntQueueTimer.h`, which no demo directory supplies
+because every BOARD project writes its own. That is why it was out of the
+corpus: **the file did not compile, so nothing downstream of it could be
+judged**. `oracle/harness/IntQueueTimer.h` is this harness's, and 34 of 34
+demo files now compile where it was 33.
+
+**What it proves, and what it does not.** Every queue access the demo makes
+-- two interrupt handlers, six tasks at three priorities, suspend/resume
+sequencing, a duplicate-and-missing audit over a 200-entry log -- is
+trace-identical. The property the demo was WRITTEN for is not: its own
+comment says "the interrupts are prioritised such to ensure that nesting
+occurs", and this port has one interrupt source and no nesting. Nothing in
+the C detects the difference, because `xAreIntQueueTasksStillRunning` checks
+only that the four counted tasks are cycling -- which is exactly why it is
+written down here and in the header rather than left to be inferred from a
+passing trace.
+
+| | |
+|---|---|
+| `conform IntQueue` | **44,285 lines identical** |
+| `conform IntQueue --ticks 100000` | holds **362,065 lines**, then diverges at tick 16,260 -- OPEN, below |
+| pinned | digest `0x595e_402b_5576_5d65`, 1,279,335 bytes |
+
+### KERNEL DEFECT 1: a queue call preempted at its sampling exit
+
+The first `IntQueue` run agreed for **135 lines** and then recorded a
+blocking send under the wrong task. The interleaved trace located it exactly:
+
+```text
+125 4 TASK_SWITCHED_IN H1QTx
+    # body=FirstHigherFull pc=4        <- enters queue_send
+126 4 TASK_INCREMENT_TICK 4            <- the tick fires INSIDE the send
+134 5 TASK_SWITCHED_OUT H1QTx          <- the tick switches away
+135 5 TASK_SWITCHED_IN H1QRx
+136 5 BLOCKING_ON_QUEUE_SEND q1        <- the same call, still running
+137 5 MOVED_TASK_TO_DELAYED_LIST H1QRx <- naming whoever is current NOW
+```
+
+`xQueueGenericSend` exits its sampling section before suspending the
+scheduler to block, and **that exit can release a tick which switches the
+caller away**. The C's thread stops inside the exit; everything below it runs
+when the task is scheduled again, and so names the right task. Our kernel ran
+straight on.
+
+The cure already existed for the other half of the API: `stream_resume`, a
+per-TCB marker `xStreamBufferSend` uses for precisely this case. `queue_send`
+and `queue_receive` had **no equivalent**. Both now split at the sampling
+exit and re-enter below it through `queue_resume`.
+
+135 -> 2,325 lines on the send fix, then the receive fix took it to all
+44,285. **No regression anywhere**: BlockQ 26,949, semtest 30,100, recmutex
+27,739 and GenQTest 25,127 are unmoved, and they are the scenarios that live
+on that path.
+
+### KERNEL DEFECT 2: a refusal that charged the clock
+
+`QueueSet` agreed for 30 lines and put a tick one event early.
+`xQueueRemoveFromSet` tests both of its refusals **outside** the critical
+section and only enters it to do the removal -- and `xQueueAddToSet`, three
+functions up, puts its whole body including both refusals **inside** one
+section. The asymmetry is upstream's, ours took the section unconditionally,
+and `QueueSet`'s setup makes a deliberately-failing remove to prove a queue
+cannot be removed from a set it is not in. One exit, one tick, thirty lines.
+
+*(Checked before it was "fixed": the first guess was that `xQueueAddToSet`
+had the same shape. It does not -- reading the C is what stopped a
+non-defect being patched.)*
+
+### Also added
+
+`queue_is_full_from_isr` and `queue_select_from_set_from_isr`, both `&self`
+or section-free as their C originals are, and both previously unreachable
+because no scenario called them.
+
+`KAIROS_TRACE_UNBUFFERED` drops the trace sink's capacity to one byte so a
+diagnostic `eprintln!` interleaves with the trace in the right ORDER. That
+ordering is the whole reason defect 1 was found rather than guessed at: it
+showed the blocking bookkeeping happening with **no body step between it and
+the tick**, which named the kernel instead of the scenario.
+
+### Result
+
+**`conform --all`: 25 scenarios identical to the C kernel**, up from 23.
+
+### Open: `IntQueue` beyond 16,260 ticks
+
+At tick 16,260 the C defers a waiting task's wake to the end of the interrupt
+-- the `cTxLock` path, where a task holds the queue locked inside a blocking
+receive -- and ours wakes on the first send because the lock is not held at
+that instant. The deferral mechanism is implemented on both sides; what
+differs is whether the lock window overlaps the tick, which is a timing
+question a level below the one defect 1 fixed. Recorded as open rather than
+pinned away: the scenario is pinned at the corpus standard of 2,000 ticks,
+where it is exact.

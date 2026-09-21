@@ -44,6 +44,8 @@
 #include "QPeek.h"
 #include "QueueOverwrite.h"
 #include "QueueSetPolling.h"
+#include "QueueSet.h"
+#include "IntQueue.h"
 #include "blocktim.h"
 #include "countsem.h"
 #include "death.h"
@@ -150,6 +152,23 @@ static void prvStartQueueSetPolling( void )
     vStartQueueSetPollingTask();
 }
 
+static void prvStartQueueSet( void )
+{
+    vStartQueueSetTasks();
+}
+
+/* The board half of IntQueue. See oracle/harness/IntQueueTimer.h for what
+ * this harness does instead of two nested timer interrupts, and for what
+ * that does and does not buy. */
+void vInitialiseTimerForIntQueueTest( void )
+{
+}
+
+static void prvStartIntQueue( void )
+{
+    vStartInterruptQueueTasks();
+}
+
 static void prvStartIntSemTest( void )
 {
     vStartInterruptSemaphoreTasks();
@@ -210,6 +229,8 @@ static const Scenario_t xScenarios[] =
     { "AbortDelay", prvStartAbortDelay, xAreAbortDelayTestTasksStillRunning },
     { "QueueOverwrite", prvStartQueueOverwrite, xIsQueueOverwriteTaskStillRunning },
     { "QueueSetPolling", prvStartQueueSetPolling, xAreQueueSetPollTasksStillRunning },
+    { "QueueSet", prvStartQueueSet, xAreQueueSetTasksStillRunning },
+    { "IntQueue", prvStartIntQueue, xAreIntQueueTasksStillRunning },
     { "IntSemTest", prvStartIntSemTest, xAreInterruptSemaphoreTasksStillRunning },
     { "StreamBufferDemo", prvStartStreamBuffer, xAreStreamBufferTasksStillRunning },
     { "MessageBufferDemo", prvStartMessageBuffer, xAreMessageBufferTasksStillRunning },
@@ -326,6 +347,19 @@ void vApplicationTickHook( void )
     else if( strcmp( pxScenario->pcName, "QueueSetPolling" ) == 0 )
     {
         vQueueSetPollingInterruptAccess();
+    }
+    else if( strcmp( pxScenario->pcName, "QueueSet" ) == 0 )
+    {
+        vQueueSetAccessQueueSetFromISR();
+    }
+    else if( strcmp( pxScenario->pcName, "IntQueue" ) == 0 )
+    {
+        /* On a board these are two interrupts of different priority, so
+         * the second can nest inside the first. Here they are one tick,
+         * first then second, and the ORDER is the contract: the Rust side
+         * calls them the same way round. */
+        ( void ) xFirstTimerHandler();
+        ( void ) xSecondTimerHandler();
     }
     else if( strcmp( pxScenario->pcName, "IntSemTest" ) == 0 )
     {

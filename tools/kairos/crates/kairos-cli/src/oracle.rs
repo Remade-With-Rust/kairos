@@ -169,7 +169,7 @@ struct Scenario {
     amp: bool,
 }
 
-const SCENARIOS: [Scenario; 21] = [
+const SCENARIOS: [Scenario; 23] = [
     Scenario {
         name: "death",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/death.c"],
@@ -241,6 +241,16 @@ const SCENARIOS: [Scenario; 21] = [
         amp: false,
     },
     Scenario {
+        name: "QueueSet",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/QueueSet.c"],
+        amp: false,
+    },
+    Scenario {
+        name: "IntQueue",
+        demo_files: &["FreeRTOS/Demo/Common/Minimal/IntQueue.c"],
+        amp: false,
+    },
+    Scenario {
         name: "IntSemTest",
         demo_files: &["FreeRTOS/Demo/Common/Minimal/IntSemTest.c"],
         amp: false,
@@ -309,6 +319,17 @@ fn kernel_dir(root: &Path) -> PathBuf {
 
 fn classic_dir(root: &Path) -> PathBuf {
     root.join("oracle").join("FreeRTOS")
+}
+
+/// The queue-set demo, whose PRNG seed has to be pinned for the same reason
+/// `TaskNotify.c`'s does. See [`patch_queue_set`].
+fn queue_set_c(root: &Path) -> PathBuf {
+    classic_dir(root)
+        .join("FreeRTOS")
+        .join("Demo")
+        .join("Common")
+        .join("Minimal")
+        .join("QueueSet.c")
 }
 
 /// The notification demo, whose PRNG seed has to be pinned. See
@@ -586,7 +607,8 @@ fn patch(root: &Path) -> Result<()> {
     }
     fs::write(&path, out)?;
     println!("{}: patched (6 edits + vPortKairosTick)", path.display());
-    patch_task_notify(root)
+    patch_task_notify(root)?;
+    patch_queue_set(root)
 }
 
 /// Pin `TaskNotify.c`'s PRNG seed, which upstream takes from a function
@@ -651,6 +673,73 @@ fn patch_task_notify(root: &Path) -> Result<()> {
     if n != 1 {
         return fail(format!(
             "TaskNotify.c patch \"pin the PRNG seed\": anchor matched {n} times, expected exactly 1 — the pinned TaskNotify.c has changed; re-derive the anchor"
+        ));
+    }
+    out = out.replacen(FROM, TO, 1);
+    if crlf {
+        out = out.replace('\n', "\r\n");
+    }
+    fs::write(&path, out)?;
+    println!("{}: patched (pin the PRNG seed)", path.display());
+    Ok(())
+}
+
+/// Pin `QueueSet.c`'s PRNG seed.
+///
+/// The SAME defect `TaskNotify.c` has, in a worse place. Upstream seeds from
+/// the address of one of the sending task's own stack locals:
+///
+/// ```c
+/// prvSRand( ( size_t ) &ulTaskTxValue );
+/// ```
+///
+/// That is reproducible on the C side — two oracle runs of one build ARE
+/// byte-identical — and unknowable to any second implementation, because the
+/// seed decides which of the three queues every single write goes to for the
+/// rest of the run. It is also not stable across builds or machines, so the
+/// checked-in trace would rot.
+///
+/// A constant changes nothing the demo tests: `QueueSet` is about contention
+/// between three queues in one set and the overwrite-into-a-set corner, and
+/// which queue a given write picks is arbitrary by design. This is the house
+/// decision already taken for `TaskNotify.c`, applied where it was already
+/// blocking a scenario.
+fn patch_queue_set(root: &Path) -> Result<()> {
+    let path = queue_set_c(root);
+    if !path.is_file() {
+        return fail(format!(
+            "{}: not found (run `kairos oracle fetch` first)",
+            path.display()
+        ));
+    }
+    git(
+        &classic_dir(root),
+        &["checkout", "--", "FreeRTOS/Demo/Common/Minimal/QueueSet.c"],
+    )?;
+    let text = fs::read_to_string(&path)?;
+    if text.contains(MARKER) {
+        return fail(
+            "QueueSet.c still carries KAIROS edits after `git checkout`; the checkout is not the pinned tree",
+        );
+    }
+    let crlf = text.contains("\r\n");
+    let mut out = if crlf {
+        text.replace("\r\n", "\n")
+    } else {
+        text
+    };
+    const FROM: &str = "        prvSRand( ( size_t ) &ulTaskTxValue );";
+    const TO: &str = r"        /* KAIROS: upstream seeds from the ADDRESS of a stack local, which is
+         * reproducible on this side and unknowable to any second
+         * implementation -- and the seed decides which of the three queues
+         * every write goes to for the whole run. A constant changes nothing
+         * the demo tests; the same edit is made to TaskNotify.c, for the
+         * same reason. */
+        prvSRand( ( size_t ) 0x0dc0ffeeUL );";
+    let n = out.matches(FROM).count();
+    if n != 1 {
+        return fail(format!(
+            "QueueSet.c patch \"pin the PRNG seed\": anchor matched {n} times, expected exactly 1 — the pinned QueueSet.c has changed; re-derive the anchor"
         ));
     }
     out = out.replacen(FROM, TO, 1);
