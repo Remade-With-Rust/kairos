@@ -5845,3 +5845,75 @@ The item moved from *blocked on a decision nobody could take* to *unblocked
 work that needs a Wi-Fi controller path and the board to verify*. That is a
 real change in a plan row that said the half could not be moved from here —
 and it was found by re-running the claim rather than re-reading it.
+
+## K8's hardening half, measured — and the tables were not reproducible (2026-09-21)
+
+K8 asks for "every hardening row complete". Nobody had measured how far that
+was, so the first move was to run the gate rather than read the READMEs.
+
+### The fleet position
+
+| package | v1.0.0 gates | overall |
+|---|---:|---:|
+| `rusty_rtos_demo` | 10/12 | 63% |
+| `rusty_rtos_core` | 10/16 | 50% |
+| **`rusty_rtos_kernel`** | **13/16** | **58%** |
+| `rusty_rtos_port` | 10/16 | 42% |
+| `rusty_rtos_backoff` | 7/12 | 46% |
+| `rusty_rtos_heap`, `rusty_rtos-capi`, `rusty_rtos_json` | 7/16 | 31% |
+| `rusty_rtos_mqtt`, `rusty_rtos_http`, `rusty_rtos_sntp`, `rusty_rtos_tcp` | 6/16 | 22% |
+
+**K8's hardening clause is a long way out**, and now it is a number instead
+of an impression.
+
+### ★ The tables did not regenerate from their plans
+
+`kairos harden --all` **updated ten of twelve READMEs** — which should have
+been a no-op. It was not a no-op because it was a REGRESSION:
+
+```text
+- **Audited** 2026-09-16 (v0.1.0 release pass) · **v1.0.0 gates** 10/17 · [checklist](https://github.com/...)
++ **Audited** 2026-09-09 (survey)              · **v1.0.0 gates** 10/16 · [checklist](docs/plans/...)
+```
+
+Every README in the fleet claims an audit on **2026-09-16 (v0.1.0 release
+pass)**, and **no plan in the repository records that pass** — the last stamp
+in every plan is 2026-09-09, and the `**Audited**` metadata line the tool
+actually reads still said 2026-09-09 too. The line was hand-edited into the
+READMEs at release time and the source was never updated.
+
+Three consequences, and the third is the one that matters:
+
+1. The published status is **not reproducible** — regenerating it produces
+   different numbers and a different date.
+2. Running the tool **silently reverts** the published tables, which is how
+   this was found: the regeneration was assumed to be a formality.
+3. **A hardening status that cannot be regenerated is not evidence, whatever
+   number it shows.** The whole point of generating the table from a plan is
+   that the plan is the auditable artefact; a hand-edited README is an
+   assertion.
+
+The ten regressed READMEs were reverted rather than committed. **Which side is
+true is an owner question** — whether a real re-audit happened on 2026-09-16
+— and inventing an answer in either direction would be worse than recording
+the disagreement. The kernel's is fixed at source and now regenerates.
+
+### The one unit moved: the kernel, 10/16 → 13/16
+
+`rusty_rtos_kernel/docs/threat-model.md` closes **H-01**, and with it two more
+that were waiting on it: **H-20** (secrets) and **H-41** (residual risks).
+
+The register is the part worth reading, because writing it is what forces the
+admissions:
+
+- **no privilege separation between tasks** — that is what an RTOS is, and
+  the MPU package is what would change it;
+- **Kani proves the data structures, not the running kernel** — measured, not
+  asserted: lists, arenas and names converge in 2–4 s and pass, and anything
+  that creates a task does not converge in 240 s;
+- **the corpus is a floor** — trace-identity proves agreement on what the
+  demos do, and two scenarios added this year found two kernel defects
+  precisely because they reached what the demos did not.
+
+Each row carries **the condition that closes it**, because a waiver without
+one is a decision nobody revisits.
