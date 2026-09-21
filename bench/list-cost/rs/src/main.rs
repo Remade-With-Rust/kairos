@@ -9,7 +9,7 @@
 //! Nothing here is timed. See the C arm's header for how the counts are
 //! taken and why the run happens twice.
 
-use rusty_rtos_core::list::Lists;
+use rusty_rtos_core::list::{Lists, slots_for};
 
 /// How many items are in a list at once: a plausible ready-list depth.
 const ITEMS: u16 = 8;
@@ -39,7 +39,11 @@ fn main() {
         .and_then(|a| a.parse().ok())
         .unwrap_or(100_000);
 
-    let mut lists: Lists<{ ITEMS as usize }, LISTS> = Lists::new();
+    // `N` is the SLOT count now: the end markers are nodes in the same
+    // array, which is what makes the walk test-free. `slots_for` rounds
+    // items + lists up to a power of two so every link can be followed
+    // with a mask instead of a bounds check.
+    let mut lists: Lists<{ slots_for(ITEMS as usize, LISTS) }, LISTS> = Lists::new();
     let mut sum: u64 = 0xcbf2_9ce4_8422_2325;
     let mut state: u32 = 0x1234_5678;
 

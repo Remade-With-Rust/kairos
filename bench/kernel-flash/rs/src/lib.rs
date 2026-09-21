@@ -37,7 +37,7 @@ use rusty_rtos_core::hooks::NoTickHook;
 use rusty_rtos_core::trace::NoTrace;
 use rusty_rtos_core::handle::TaskHandle;
 use rusty_rtos_kernel_core::kernel::{Kernel, NotifyAction};
-use rusty_rtos_kernel_core::{items_for, lists_for};
+use rusty_rtos_kernel_core::{list_slots_for, lists_for};
 use rusty_rtos_port_riscv::RiscvPort;
 
 const PRIOS: u8 = 5;
@@ -58,7 +58,7 @@ pub type K = Kernel<
     NoTrace,
     NoTickHook,
     TASKS,
-    { items_for(TASKS, TIMERS) },
+    { list_slots_for(TASKS, TIMERS, lists_for(PRIOS, QUEUES, GROUPS)) },
     { lists_for(PRIOS, QUEUES, GROUPS) },
     QUEUES,
     SLOTS,

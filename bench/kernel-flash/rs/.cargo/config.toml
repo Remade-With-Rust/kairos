@@ -21,3 +21,13 @@ rusty_rtos_kernel-core = { path = "../../../rusty_rtos_kernel/crates/rusty_rtos_
 [patch."https://github.com/Remade-With-Rust/rusty_rtos_port"]
 rusty_rtos_port-core = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port-core" }
 rusty_rtos_port-riscv = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port-riscv" }
+
+# AND the registry, which is the one that was missing. `rusty_rtos_kernel`
+# names `rusty_rtos_core` as `{ version = "0.1.0" }`, a CRATES-IO dependency,
+# so the git-URL tables above never applied to it: this cell has been
+# building the local kernel against the PUBLISHED core. The symptom only
+# appears when the two have diverged, which is exactly when the measurement
+# matters, and it reads as a compile error in the kernel rather than as a
+# wiring fault in the bench.
+[patch.crates-io]
+rusty_rtos_core = { path = "../../../rusty_rtos_core/crates/rusty_rtos_core" }

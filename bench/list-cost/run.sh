@@ -43,12 +43,30 @@ cd "$ROOT"
 echo "building the C arm (gcc -O2 and -O3, FreeRTOS-Kernel/list.c unmodified)"
 gcc -O2 $CFLAGS $SRC -o "$BUILD/c-O2" -pthread
 gcc -O3 $CFLAGS $SRC -o "$BUILD/c-O3" -pthread
+# AND at the TARGET's width. Every Kairos target is 32-bit, and a cost
+# shaped like a `usize` is invisible on a 64-bit host -- `heap4.rs` carried
+# one worth 7.6% that measured byte-identical here. A bench that only ever
+# runs 64-bit cannot report on the code that ships.
+if gcc -m32 -O2 $CFLAGS $SRC -o "$BUILD/c32-O2" -pthread 2>/dev/null; then
+    HAVE32=yes
+else
+    HAVE32=no
+    echo "  (no 32-bit C arm: gcc-multilib absent)"
+fi
 
 echo "building the Rust arm (cargo release: opt-level 3, lto, one codegen unit)"
 # `sh -lc` is not a login shell, so cargo may not be on PATH yet.
 CARGO=${CARGO:-$(command -v cargo || echo "$HOME/.cargo/bin/cargo")}
 ( cd bench/list-cost/rs && CARGO_TARGET_DIR="$BUILD/rs" "$CARGO" build --release -q )
 cp "$BUILD/rs/release/list-cost" "$BUILD/rust"
+if [ "$HAVE32" = yes ]; then
+    if ( cd bench/list-cost/rs && CARGO_TARGET_DIR="$BUILD/rs"             "$CARGO" build --release -q --target i686-unknown-linux-gnu 2>/dev/null ); then
+        cp "$BUILD/rs/i686-unknown-linux-gnu/release/list-cost" "$BUILD/rust32"
+    else
+        HAVE32=no
+        echo "  (no 32-bit Rust arm: rustup target add i686-unknown-linux-gnu)"
+    fi
+fi
 
 echo
 echo "correctness gate — the two arms must agree on every returned value:"
@@ -57,6 +75,17 @@ b=$( "$BUILD/rust" 1000 )
 echo "  C    $a"
 echo "  Rust $b"
 [ "${a#*checksum=}" = "${b#*checksum=}" ] || { echo "MISMATCH: the arms did different work"; exit 1; }
+if [ "$HAVE32" = yes ]; then
+    # The 32-bit arms are gated too. An arm that is measured but not
+    # checked is a number with nothing behind it, and these two are the
+    # ones that describe the code Kairos ships.
+    c=$( "$BUILD/c32-O2" 1000 )
+    d=$( "$BUILD/rust32" 1000 )
+    echo "  C   32 $c"
+    echo "  Rust 32 $d"
+    [ "${c#*checksum=}" = "${a#*checksum=}" ] || { echo "MISMATCH: the 32-bit C arm"; exit 1; }
+    [ "${d#*checksum=}" = "${a#*checksum=}" ] || { echo "MISMATCH: the 32-bit Rust arm"; exit 1; }
+fi
 
 count() {
     valgrind --tool=callgrind --callgrind-out-file="$BUILD/cg.out" "$1" "$2" \
@@ -66,7 +95,9 @@ count() {
 
 echo
 echo "instructions, by arm and run length (callgrind, 40 list operations per round):"
-for arm in c-O2 c-O3 rust; do
+ARMS="c-O2 c-O3 rust"
+[ "$HAVE32" = yes ] && ARMS="$ARMS c32-O2 rust32"
+for arm in $ARMS; do
     n1=$( count "$BUILD/$arm" 100000 )
     n2=$( count "$BUILD/$arm" 200000 )
     n3=$( count "$BUILD/$arm" 300000 )

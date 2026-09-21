@@ -26,6 +26,10 @@ Thumbs.db
 
 # Recordings from bench/kernel-ir: callgrind dumps, 16MB and regenerable.
 bench/kernel-ir/out/
+# Same, from bench/sb-ir. `out3` is the third corpus shape a kernel-wide
+# probe has to be checked against; both are rebuilt by one run.
+bench/sb-ir/out/
+bench/sb-ir/out3/
 
 # K7 library oracles, cloned at their ORACLES.md pins by
 # `kairos oracle fetch --lib <name>`. Pinned, not vendored: the same
@@ -36,3 +40,14 @@ oracle/coreSNTP/
 oracle/coreMQTT/
 oracle/coreHTTP/
 oracle/FreeRTOS-Plus-TCP/
+
+# The interop and throughput rigs write their peer config, their peer script
+# and their per-rep output beside themselves and delete them on exit. They
+# are visible only while a rig is MID-RUN -- which is exactly when someone
+# is most likely to stage a commit -- so they are ignored rather than
+# trusted to clean up.
+/tools/vertical/.mosquitto.conf
+/tools/vertical/.rumqttd.toml
+/tools/vertical/.peer.py
+/tools/vertical/.peer.*.out
+/tools/vertical/.rates

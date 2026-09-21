@@ -34,7 +34,7 @@ use rusty_rtos_core::config::PosixDemoConfig;
 use rusty_rtos_core::hooks::NoTickHook;
 use rusty_rtos_core::trace::NoTrace;
 use rusty_rtos_kernel_core::kernel::Kernel;
-use rusty_rtos_kernel_core::{items_for, lists_for};
+use rusty_rtos_kernel_core::{list_slots_for, lists_for};
 use rusty_rtos_port_core::sim::SimPort;
 
 /// `PosixDemoConfig::MAX_PRIORITIES`, which sizes the ready lists. Written
@@ -45,8 +45,9 @@ const PRIOS: u8 = 5;
 /// One geometry's size, in bytes, on the target.
 ///
 /// A macro rather than a generic type alias because stable Rust will not let
-/// a generic const parameter feed a const expression: `items_for(TASKS, ..)`
-/// is rejected where `items_for(8, 16)` is fine. Substituting literals first
+/// a generic const parameter feed a const expression:
+/// `list_slots_for(TASKS, ..)` is rejected where `list_slots_for(8, 16, 9)`
+/// is fine. Substituting literals first
 /// sidesteps that, and costs only that each geometry is written out.
 ///
 /// The trace and the tick hook are the no-op ones, so what is measured is
@@ -61,7 +62,7 @@ macro_rules! ksize {
                 NoTrace,
                 NoTickHook,
                 $tasks,
-                { items_for($tasks, $timers) },
+                { list_slots_for($tasks, $timers, lists_for(PRIOS, $queues, $groups)) },
                 { lists_for(PRIOS, $queues, $groups) },
                 $queues,
                 $slots,
