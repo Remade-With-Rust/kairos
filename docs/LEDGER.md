@@ -3853,3 +3853,1563 @@ process failures and zero unviable.
 That report would have passed for an ordinary one. The tell was that
 "unviable" is a claim about COMPILATION, and the mutants it was claimed
 for obviously compile.
+
+## `StreamBufferDemo` — the 22nd scenario, and three kernel defects it found (2026-09-20)
+
+**The headline: the corpus is 22 scenarios, all byte-identical to the C
+kernel.** `StreamBufferDemo` is the biggest single addition — 20,737 lines
+at the gate's 2,000 ticks — and it closes six of H2's APIs at a stroke.
+
+| fact | value | method |
+|---|---|---|
+| lines identical, 2,000 ticks | 20,737 | `kairos conform StreamBufferDemo` |
+| counters | `ticks=2000 yields=3023 exits=21953 lines=20736` | the scenario's own `KAIROS_RESULT`, both arms |
+| **lines identical, 100,000 ticks** | **1,225,431** | `kairos conform StreamBufferDemo --ticks 100000` |
+| counters there | `ticks=100008 yields=184513 exits=1303089 lines=1225430` | as above |
+| oracle reproduces itself | byte-identical across two runs | `kairos oracle trace` runs it twice and refuses otherwise |
+| corpus after | 22 scenarios identical | `kairos conform --all` |
+| H2 APIs closed | 6 — `Reset`, `IsEmpty`, `IsFull`, `BytesAvailable`, `SpacesAvailable`, `ReceiveFromISR` | all called from `prvSingleTaskTests`; H2 goes 19 → 13 |
+
+### The C side had to be unblocked first, and that is H9
+
+The scenario would not run at all: it froze at `ticks=1`, and because
+`kairos_trace.c` gives stderr a 1 MiB buffer flushed on exit, the symptom
+read as *"0 lines, KAIROS_RESULT missing"* — a scenario that produces
+nothing, not one that never ends. A control run of a known-good scenario
+through the same command separated the two in one step.
+
+The cause is structural and is recorded as `docs/HOLES.md` H9:
+`prvNonBlockingReceiverTask` polls at `tskIDLE_PRIORITY` with
+`sbDONT_BLOCK`, and that path takes **no critical section when the buffer
+is empty** — so under sim contract v1 it takes no time, never yields, and
+starves the clock. `kairos oracle patch` now drops it and its partner, the
+same anchored-edit mechanism that already pins `TaskNotify`'s PRNG.
+
+### Three kernel defects, each found by a one-exit drift
+
+Every one of these was invisible to the other 21 scenarios and to the unit
+suites. The `--exits` column found each in one run.
+
+| # | defect | how it showed |
+|---|---|---|
+| 1 | a stream call preempted at its sampling exit **skipped the block entirely** and returned 0 from a call told to wait 350 ticks | events diverged at line 41 |
+| 2 | `stream_buffer_delete` never paid for its `vPortFree` | one exit short at line 164 |
+| 3 | the send never paid for `vTaskSetTimeOutState` | one exit short at line 474 |
+
+Defect 1 is the serious one: the C evaluates `if( xBytesAvailable <=
+xBytesToStoreMessageLength )` **below** the critical-section exit, against
+the sample taken inside it, so a task preempted there still blocks. The
+sim fell through to the read and answered `Ready(0)`. A caller that asked
+to wait and was told "nothing, immediately" is a wrong answer, not a
+timing one.
+
+Defect 2 is the timer service's `Delete` arm again, in another file: the
+create paid for its `pvPortMalloc` and the delete paid for nothing.
+
+Three more followed from modelling the C's control flow properly rather
+than its effect: `xTaskCheckForTimeOut` costs an exit but only on the path
+where the wait actually blocked; `vTaskSetTimeOutState` must be paid for
+once per call and not again on re-entry; and a `traceSTREAM_BUFFER_CREATE`
+or `traceSTREAM_BUFFER_RECEIVE` whose task was switched away belongs to
+that task's **next** run, not to whoever took the CPU.
+
+### The rule that keeps being the answer
+
+`uxTaskPriorityGet` takes a critical section and the kernel's own field
+read does not — `priority_of` vs `task_priority_get`. The port used the
+wrong one, and read it twice where the C reads it once. Both were single
+exits, and single exits are sixteenths of a tick.
+
+### What the workaround costs, measured before it was chosen
+
+The dropped pair is the demo's only coverage of interleaved non-blocking
+send/receive. It covers **none** of the six APIs the scenario exists to
+close: all six are called from `prvSingleTaskTests`, lines 256–572, and
+none from the pair. That was checked before the patch was written, not
+after.
+
+## The StreamBufferDemo instruction campaign — sixteen probes, five kept (2026-09-20)
+
+**Headline: `StreamBufferDemo` costs 157,842,265 instructions at 20,000
+ticks and now costs 138,869,663 — −18,972,602, or −12.02%.** Every one of
+the twenty-two scenarios still produces a trace byte-identical to the C
+kernel's, which is what makes the deltas attributable at all.
+
+### Method
+
+`bench/sb-ir/run.sh`, callgrind Ir, **two instruments over different
+corpus shapes**: `sbd` = `StreamBufferDemo` (the whole stream-buffer face)
+and `sbi` = `StreamBufferInterrupt` + `MessageBufferAMP` (one byte per tick
+against a trigger level, and the length-prefix path `sbd` never takes).
+Kernel-wide probes were also run against a third shape, `BlockQ` +
+`GenQTest` + `TimerDemo`. Not a clock: deterministic to the instruction, so
+no interleaving, no null arm, no z-score. Work parity is each scenario's
+own `KAIROS_RESULT` line, printed beside every number, plus `kairos conform
+--all`.
+
+**The instrument had a defect on its first probe and it mattered.** The
+bench summed only rows matching `rusty_rtos_*`, which excludes
+`core::str::from_utf8`, `memcpy` and the inlined `BufWriter`. A change that
+moved work across that boundary read **+19.9M** on the rows when the
+program total was **+42.1M**. The verdict is now the program total, and the
+script says so.
+
+Measured this session: a rebuild from identical source reproduces **exactly
+0** on both arms. Deltas below ~25 are that artifact.
+
+### The five that landed
+
+| # | change | `StreamBufferDemo` | ships? |
+|---|---|---|---|
+| 1 | `LineTrace::head` and `::num` inlined | **−8,888,722** | sim + cells |
+| 2 | `resume_pending` split hot/cold | **−3,005,870** | **kernel** |
+| 3 | `resume_all` inlined | −1,715,178 | **kernel** |
+| 4 | `Stderr::write_str` inlined | −2,718,840 | sim |
+| 5 | `Name::as_str` validates a 16-byte window | −2,644,036 | **kernel** |
+
+Wins 2–5 improved **all six** scenarios measured. Win 4 was worth −9.29% on
+`StreamBufferInterrupt` and −7.37% on `TimerDemo`; the sim's entire I/O path
+was behind a call. Across the campaign `StreamBufferInterrupt` fell 14.95%
+and `MessageBufferAMP` 14.07%.
+
+Win 5 is the one worth remembering. `run_utf8_validation` reaches its
+word-at-a-time path only when two `usize`s remain, so an eleven-byte task
+name is checked a byte at a time — 86 instructions a call, 113,645 calls.
+Validating the **whole 32-byte array** dropped that to 53 but LOST on four
+of six scenarios. Validating the **smallest window that reaches the fast
+path, sixteen bytes**, won on all six. The mechanism was right and the size
+was wrong, and only the second instrument showed it.
+
+### The eleven that did not, with their numbers
+
+| probe | verdict |
+|---|---|
+| buffer the whole line, one `write_str` instead of eight | **+42,101,840** — `copy_from_slice` per field is a `memcpy` call, and the `from_utf8` on the way out costs more than the `BufWriter` bookkeeping it saves |
+| replace two provably-exact `try_from`s; drop a 64-byte struct snapshot | **0** — LLVM had already done both |
+| divide in 32 bits when the value fits | +1,406,818 — +2.75 a call, exactly a compare and a branch; LLVM's 64-bit divide-by-constant was already as cheap |
+| move `num`'s scratch array into the sink so it is not re-zeroed | +1,022,407 |
+| cache the tick's digits (12.1 lines share each tick) | +3,087,534 on `sbd`, and a loss on all six |
+| `inline` on `end_line` and `line_tick_name_str` | −22, the rebuild artifact — already inlined |
+| `Name::as_str` over the full 32 bytes | wins 2 of 6, loses 4 — a stage win and a system loss |
+| `inline` on `send_completed` / `receive_completed` | +323,801 |
+| `inline` on `exit_critical` | −210,292 on `sbd`, **+200,912 `BlockQ`, +280,540 `GenQTest`**, net +271,962 |
+| remove `#[inline(never)]` from `streambuffer::Body::step` | −253,476 on `sbd` and **+585,000 on two scenarios that never run the file** — it lands in the dispatch every scenario shares |
+| `inline` on `switch_context` | loses on all six |
+
+Two of those agree on one thing and it is the campaign's most transferable
+finding: **state in the struct is not free here.** The scratch array and the
+tick cache both replaced arithmetic with a field reached through `&mut
+self`, at a site inlined into every arm of `event`, and both lost. Where
+this code looks like it is recomputing something, it is usually cheaper
+than remembering it.
+
+### The opposite-sign pair, and why the textbook fix was recorded not taken
+
+`num` inlined ALONE moves the two instruments in opposite directions:
+−6,412,337 on `StreamBufferDemo`, **+52,517** and **+36,810** on the other
+two. That is the signature of one body serving call sites that want
+different things, and the answer is to split the body from the symbol. It
+was built — an `inline(always)` body that `head` takes in line, behind an
+`inline(never)` handle — and measured at −3,939,614 / −280,875 / −284,090.
+It works. It does not dominate: inlining both wins more than twice as much
+on the scenario this bench exists for and still costs no arm anything. So
+both are in line and the split is written down in `trace.rs` instead.
+
+(Without the `inline(never)`, the split measured byte-for-byte identical to
+inlining everywhere — the thin handle was itself inlined and took the body
+with it. An attribute that changes nothing is a fact about the compiler's
+existing choice.)
+
+## Sim contract v2 — the blind-call tick (2026-09-20)
+
+**H9 is closed, and it cost two re-pinned scenarios.**
+
+### The rule
+
+Time passes at kernel-visible points. v1 had two — the idle hook, and every
+16th outermost critical-section exit. v2 adds the one that was missing:
+
+> the return of a kernel call that took neither, priced at exactly one
+> empty critical section.
+
+Pricing it as an empty section is what makes it cheap and safe. It is not a
+second clock — the count, the every-16th rule, the running-task test and
+the switch are the paths v1 already proved, reached through
+`vPortEnterCritical(); vPortExitCritical();` on the C side and
+`self.enter_critical(); self.exit_critical();` on the Rust side. `exits`
+keeps its meaning, widened from "outermost critical-section exits" to
+"kernel-visible points".
+
+### Why it is only two functions
+
+Every other object closes the hole by accident — `uxQueueMessagesWaiting`,
+`eTaskGetState` and `uxTaskPriorityGet` all take a section. Only the stream
+buffer's zero-wait and query paths can return blind. So the bracket goes on
+`xStreamBufferSend` and `xStreamBufferReceive` and nowhere else: four of
+FreeRTOS's own `traceENTER_`/`traceRETURN_` hooks in `FreeRTOSConfig.h`, two
+`vPortKairos*` entry points in the port patch, and one wrapper each in
+`Kernel`.
+
+A call that BLOCKED is not blind, and nothing special is needed to say so:
+the thread stops inside it, other tasks run, and the counter has moved by
+the time the return hook is reached. Comparing the count is the whole test,
+on both sides.
+
+### What it cost
+
+| scenario | under v1 | under v2 |
+|---|---|---|
+| `StreamBufferDemo` | **would not run at all** | `exits=28002 lines=20927` |
+| `MessageBufferAMP` | `exits=2072 lines=2430` | `exits=2090 lines=2445` |
+| the other twenty | — | unchanged, byte for byte |
+
+`StreamBufferInterrupt` being in the unchanged column is the check that the
+widening was as narrow as intended: its reader always blocks, so it never
+makes a blind call.
+
+### What it bought
+
+`kairos oracle patch` no longer edits `StreamBufferDemo.c`. The workaround
+that dropped `prvNonBlockingSenderTask` and `prvNonBlockingReceiverTask` is
+gone, both tasks are ported, and the demo's own check passes with all three
+of its clauses — including `ulNonBlockingRxCounter`, which is the evidence
+that the non-blocking receiver is genuinely making progress rather than
+merely not hanging. The scenario is the upstream one again.
+
+| gate | result | method |
+|---|---|---|
+| `conform StreamBufferDemo` | 20,928 lines identical, **first try** | trace compared line for line, counters included |
+| `conform StreamBufferDemo --ticks 100000` | **1,155,782 lines identical** | as above |
+| `conform --all` | 22 scenarios identical | the corpus |
+| `tests/conformance.rs` | 3 passed | the pinned digests, two rows re-pinned |
+
+### The one still out of reach
+
+`xTaskGetTickCount` is blind on this port too (`portTICK_TYPE_IS_ATOMIC` is
+1), so a task that busy-polled it alone would still stop the clock. Nothing
+in the corpus does. The bracket is additive — two more hooks and a re-pin of
+whichever scenarios call it — and it is named in `docs/HOLES.md` so the next
+demo that needs it finds the answer rather than the symptom.
+
+## The K7 packages on a Cortex-M3, and a gate that could not see them (2026-09-21)
+
+Six K7 packages were each proved against their pinned C by a differential.
+Every one of those differentials ran on **x86-64**, against a C program from
+the same tarball. `tools/vertical/k7-battery` asks the question they could
+not: are the answers the same at **half the pointer width**?
+
+One battery, compiled from one source for two architectures, both asserting
+against one pin table measured on the host. All six packages and the roll-up
+digest are byte-identical on ARMv7-M:
+
+```
+      ok    tcp      0x69b93ded7cdb3812
+      ok    http     0xb3f6599939dba776
+      ok    mqtt     0x93444f0d9da263cb
+      ok    json     0x3862c7de11afd42b
+      ok    sntp     0x17475012129a67d7
+      ok    backoff  0x47a6bfbda06c3a57
+      ok    ALL      0xf6797db42bd95cc0
+```
+
+`rusty_rtos_tcp/docs/LEDGER.md` slice 11 has the full argument: why the
+digests are comparable across widths at all (a `usize` is folded as eight
+big-endian bytes, so a difference means a different VALUE rather than a
+different pointer size), the 60-byte ELF delta proving the part executes the
+battery rather than printing a constant its compiler folded, and the two
+poisons proving the gate can fail.
+
+**The chip was never an owner action for this question.** `qemu-system-arm`
+11.1.0 with nine Cortex-M machines and `thumbv7m-none-eabi` were already
+installed, and four kernel cells already boot on `mps2-an385`. One command
+settled what the plan had listed as "buy a board". That is the fourth time in
+this campaign that an obstacle dissolved the moment it was measured instead
+of assumed -- after `/dev/net/tun` in WSL, the blocking seam, and rumqttd.
+
+### The gate could not see the new crate, and said so itself
+
+`kairos check` discovers cargo projects one level under `tools/`. Its own
+comment says a hand-written list is how a project gets forgotten -- and the
+same hole existed one level down: `tools/vertical/k7-battery` declares its
+own `[workspace]`, so the `cargo check` run in `tools/vertical` stops at that
+boundary. Nothing would ever have built it.
+
+`tool_crates` now recurses, with two rules that keep the gate honest:
+
+| rule | why |
+|---|---|
+| below the top level, take a directory only if its manifest declares `[workspace]` | ordinary members are already built by their parent, and some cannot build alone |
+| skip a crate whose `.cargo/config.toml` pins a `target` | that is a FIRMWARE CELL. It needs an emulator this gate does not promise, so it belongs to `tools/vertical/chip.sh`, exactly as a `run.sh` directory owns its own policy |
+
+Running it immediately found two defects in the change itself, which is the
+argument for running a gate rather than reasoning about it:
+
+* it descended into `tools/kairos/templates/function`, the SCAFFOLD `kairos
+  new` copies, whose manifests are full of `__NAME__` placeholders and cannot
+  compile by design. A template is source for a future project, not a
+  project. **And it left something behind**: before failing, cargo wrote a
+  `Cargo.lock` in the scaffold naming `__NAME__`. `kairos new` copies that
+  directory, so every package created afterwards would have started with a
+  lockfile naming a package that does not exist, and H-07 would have failed
+  it. Deleted. The lesson is that the gate going red and the gate leaving
+  damage are different events, and the second one was in a directory nobody
+  was looking at.
+* it labelled nested crates by their own directory name, so
+  `tools/vertical/k7-battery` printed as `tools/k7-battery` -- a path that
+  does not exist. The whole reason that line names the tool is that two bare
+  `cargo check` lines look identical, and naming one WRONGLY is worse than
+  not naming it.
+
+Poisoned before being believed: a type error added to `k7-battery` fails
+`kairos check` with `tools/vertical/k7-battery: cargo check --all-targets
+failed`. **18 packages pass**, up from 17.
+
+### And one defect in a rig the gate caught for free
+
+`tools/vertical/src/bin/throughput.rs` had been added without a
+`required-features = ["tap"]` stanza, so the umbrella gate tried to compile a
+binary that cannot exist without a TAP device -- `TunTapInterface` and
+`Instant::now` are both behind `smoltcp/std`. Its two older siblings declare
+the stanza; the third was simply forgotten. There is nothing that infers it.
+
+## K7's kill test, against the broker it names (2026-09-21)
+
+> *"a Kairos device publishing over our TCP to the Home Computer's `rumqttd`,
+> one hour, zero lost keep-alives"*
+
+Two hours were run in parallel, on separate TAP devices and separate subnets.
+Both passed.
+
+| | mosquitto 2.0.22 | **rumqttd 0.20.0** |
+|---|---|---|
+| held | 3,600s | 3,600s |
+| keep-alive periods, at 2s | ~1,800 | ~1,800 |
+| PINGRESPs seen | 1,793 | 1,790 |
+| protocol loops | 178,247 | 178,263 |
+| **failures** | **0** | **0** |
+| unexpected application events | 0 | 0 |
+| minutes sampled | 59 | 59 |
+| **quiet minutes** | **0** | **0** |
+| fewest bytes in any one minute | 58 | 58 |
+
+rumqttd is reached on its **v5** listener (port 1884). This client speaks
+MQTT 5, and rumqttd's v4 and v5 listeners are different ports -- sending a v5
+CONNECT at a v4 listener is a protocol-version refusal, not a stack problem,
+and a rig should get that right before it blames anybody.
+
+### The PINGRESP count is NOT the evidence, and it matters which one is
+
+1,790 of ~1,800 looks like ten lost keep-alives and is not. The counting
+window closes while the last few exchanges are still in flight, and the
+per-minute sampler covers 59 whole minutes plus a partial 60th: 59 x 30 =
+1,770, and the rest is the tail.
+
+**The evidence is that the broker never dropped us.** Both brokers reap a
+client 3.0 seconds after a missed keep-alive, and both held the connection
+for the full 3,600 seconds. A keep-alive late enough to matter would have
+ended the run. The broker's own timeout is the oracle here, exactly as the C
+kernel's trace is the oracle for the scheduler -- a third party deciding,
+rather than us scoring ourselves.
+
+`quiet-minutes=0` is the shape figure that supports it: **no single minute
+of either hour was silent**, and the leanest minute still carried 29 of its
+30 responses.
+
+### What was substituted, and is not any more
+
+Both substitutions this campaign made are gone. The broker is the named one,
+and the duration is the specified one. Neither was ever hidden -- the scripts
+printed their own substitutions on every run -- but printing a substitution
+is not the same as not needing one.
+
+The rumqttd substitution should never have been made at all. It rested on a
+note recorded here as measured fact: *"`rumqttd` 0.20.0 does not build on
+this toolchain"*. That was **wrong**. `cargo install rumqttd --locked` fails
+with E0521 in its `metrics` dependency; the same command without `--locked`
+resolves a working `metrics` and installs. The broken thing was the published
+LOCKFILE.
+
+That is the fourth obstacle in this campaign to dissolve on being measured
+rather than assumed -- after "interop cannot be faked on a workstation" (WSL
+runs as root with `/dev/net/tun`), "blocking needs the kernel" (it needs a
+two-method seam), and "a chip is an owner action" (QEMU was already
+installed). Each was written down as a measured fact. Each was wrong, and
+each was cheap to check.
+
+## An H-07 violation that was already committed (2026-09-21)
+
+Verifying two clauses of K7's kill test meant running `cargo test` in
+`rusty_rtos_json`, `rusty_rtos_sntp`, `rusty_rtos_mqtt` and
+`rusty_rtos_backoff`. That dirtied four `Cargo.lock`s, which is the known
+trap: cargo run inside a package while the umbrella's `[patch]` table is
+active rewrites the sibling's entry and drops its `source` and `checksum`.
+
+Restoring them is routine. What was not routine is that **two of the four had
+nothing to restore.**
+
+| package | `git status Cargo.lock` | `rusty_rtos_core` had a `source`? |
+|---|---|---|
+| `rusty_rtos_json` | ` M` | yes, once restored |
+| `rusty_rtos_sntp` | ` M` | yes, once restored |
+| **`rusty_rtos_mqtt`** | **clean** | **no** |
+| **`rusty_rtos_backoff`** | **clean** | **no** |
+
+A clean working tree whose lockfile is still wrong means the patched form was
+**committed**. A fresh clone of either package could not resolve
+`rusty_rtos_core` at all -- which is the entire thing hardening gate H-07
+exists to prevent.
+
+Both regenerated with the documented procedure and now carry
+`source = "registry+..."` and a checksum. The fix is uncommitted; committing
+it is the owner's, and it must be committed BEFORE anything else invokes
+cargo in those two packages, or the patched form goes straight back.
+
+### Why the gate did not catch it earlier
+
+H-07 reads the lockfile on disk. On disk it was wrong, so the gate WOULD have
+said so -- on any run that reached those packages with the file in that
+state. What hid it is that the same `kairos check` run that validates a
+package also restores its lockfile afterwards, so a green run leaves the
+working tree looking correct whatever was committed. The state that matters
+is the one in git, and nothing was comparing the two.
+
+**That is the lesson worth keeping: a gate that repairs what it inspects can
+report green forever on a repository that is broken for everyone else.** The
+distinguishing check is one command -- `git status` on the lockfile beside
+`grep -c 'source = '` on it -- and disagreement between those two is the
+signal. Two packages sat in that state.
+
+## The list beats `list.c`: 35.84 -> 19.80 instructions per operation (2026-09-21)
+
+K1 left the arena-and-list cost row open at **2.08x** the C list, with the
+mission plan's revisit condition at 1.25x. A later pass took it to 1.533x.
+This takes it to **0.887x**: fewer instructions per list operation than the
+`list.c` it remakes, at `-O2` and at `-O3`.
+
+| arm | instr/op | vs C `-O2` |
+|---|---|---|
+| `rusty_rtos_core::list`, at the start of this session | 35.84 | 1.606x |
+| C `list.c`, gcc 15.2 `-O2` | 22.32 | 1.000x |
+| C `list.c`, gcc 15.2 `-O3` | 21.82 | 0.978x |
+| **`rusty_rtos_core::list`, now** | **19.80** | **0.887x** |
+
+Instrument: `bench/list-cost/run.sh` — callgrind, three run lengths so the
+cost of a round is the SLOPE and process start-up cancels exactly, both arms
+gated on an identical checksum of every value every operation returned.
+
+### The baseline had moved, and that mattered
+
+The ledger's figure was 34.22; this session measured **35.84** before
+touching anything. WSL carries rustc 1.97.1 and the umbrella's Windows
+toolchain is 1.98.0, so the two arms of that comparison were different
+compilers. Every number here is same-session, same-invocation, against
+35.84. A refutation expires when its baseline moves, and so does a win.
+
+### What was actually wrong: two arrays and a tagged link
+
+`list.rs` kept `items: [Node; N]` and `ends: [End; L]`, and encoded a link as
+"below `END_BASE` means an item, at or above means a marker". Every traversal
+therefore paid a test to learn which array it was about to read, and then a
+bounds check on whichever one it was.
+
+C FreeRTOS does not do this. `xListEnd` is a `ListItem_t` embedded in
+`List_t`, so `vListInsert` follows `pxNext` and never asks whether it has
+arrived. **The marker being a list item is not an implementation detail of
+the C; it is why the C is fast.**
+
+The fix is to do the same: one array, markers at the top, each carrying
+`V::MAX` so the ordered walk stops on them by the comparison it was making
+anyway.
+
+### Probed before it was built
+
+Four throwaway binaries in `bench/list-cost/rs/src/bin/`, each gated on the
+same checksum, sized the prize before a line of `list.rs` changed:
+
+| probe | instr/op | what it says |
+|---|---|---|
+| unified array + `% SLOTS`, exact size | 27.37 | **REFUTED**: LLVM lowers a constant modulo to a multiply-shift that costs more than the branch it replaces |
+| unified array, bounds-checked indexing | 20.70 | the split alone was worth **15.14** |
+| unified array + power-of-two mask | **16.55** | the mask is worth another **4.15** |
+
+The floor said the direction could clear 20 with room, which is what made
+the API change worth proposing. The modulo probe is the one worth keeping in
+mind: it is the version that needs no power-of-two rounding, and it is worse
+than either alternative.
+
+### The mask, and why `N` changed meaning
+
+Every internal link is now followed as `nodes[link as usize & (N - 1)]`. LLVM
+can prove `x & (N - 1) < N`, so the bounds check folds away — no `unsafe`, no
+`get_unchecked`, a panic that is unreachable rather than suppressed. The
+census confirms it: `core/src/slice/index.rs` was **19.63%** of the arm
+before and does not appear at all after.
+
+That requires `N` to be a power of two, so `N` is now the SLOT count rather
+than the item count, and `slots_for(items, lists)` computes it. The kernel
+gains `list_slots_for(tasks, timers, lists)`; `items_for` keeps its own
+honest meaning — two list items per task plus one per timer — because
+renaming a constant to mean something else is how one starts lying.
+
+### The single biggest line: a guard that was dead code
+
+The ordered-insert walk carried a step counter that returned
+`InvalidArgument` if it ran longer than the arena. Removing it took the arm
+from **23.07 to 19.80 — 3.27 instructions per operation**, far more than
+predicted, and it is what crossed the 20 line.
+
+It was dead code, for three reasons that are now a test rather than an
+argument (`the_marker_is_what_terminates_the_ordered_walk`):
+
+1. a marker's value cannot be written — every path to a `value` write goes
+   through `item_mut`, which refuses any id at or above `CAPACITY`;
+2. the walk only runs for values strictly below `MAX_VALUE`, because
+   `MAX_VALUE` takes the append branch above it;
+3. so the marker breaks the loop within `len + 1` steps.
+
+**Both poisons were run.** Letting a caller reach a marker (`item_mut`
+bounded by `N` instead of `CAPACITY`) fails the test cleanly. Giving the
+marker `ZERO` instead of `MAX` does **not** fail it — it HANGS, exit 124
+under a timeout, because an ordered walk with no terminator is an infinite
+loop.
+
+That is a real cost of removing a guard, so the guard did not leave
+entirely: it is `#[cfg(debug_assertions)]` now. Tests run in debug and fail
+cleanly; the kernel ships in release and pays nothing — measured
+byte-identical at 19.80 either way. C FreeRTOS has no such counter at all,
+so this is strictly better than the oracle rather than merely equal to it.
+
+### Gates
+
+| gate | result |
+|---|---|
+| `rusty_rtos_core` tests | 58 pass, including the new marker test |
+| `rusty_rtos_kernel` tests | 85 + 15 pass |
+| `kairos conform --all` | **22 scenarios identical to the C kernel** |
+| `kairos conform --all --ticks 100000` | **22 scenarios identical**, over a million lines each |
+| bench checksum gate | both arms agree on every returned value, every run |
+
+The conformance corpus is the gate that matters: the list sits under the
+whole scheduler, and 22 scenarios reproducing the C kernel's trace line for
+line at 100,000 ticks is what says a rewrite of it changed no behaviour.
+
+### The price, stated plainly
+
+RAM. A marker is now a 16-byte `Node` rather than an 8-byte `End`, and the
+array is rounded up to a power of two.
+
+| | before | after | delta |
+|---|---|---|---|
+| list arena, corpus geometry (80 items, 39 lists -> 128 slots) | 1,592 B | 2,204 B | **+612 B (+38%)** |
+| whole kernel, same geometry | 13,068 B | 13,680 B | **+612 B (+4.7%)** |
+
+Two things soften it and neither erases it. The rounding is not waste: the
+spare slots are **item capacity** — this geometry can declare 9 more tasks'
+worth of list items for nothing. And the alternative measured above (exact
+size, no mask) is 20.70 instr/op, so the rounding buys 4.15 instructions per
+operation for 288 of those 612 bytes. Whether that trade is right on the
+smallest targets is the owner's call, and the numbers to make it are here.
+
+### 18.80, and the floor that says where this stops (2026-09-21)
+
+`remove` was clearing the unlinked node's `prev` and `next` to `NONE` as well
+as its `container`. `uxListRemove` clears only `pxContainer`, and the two
+extra stores were hygiene rather than safety: nothing can follow a removed
+node's links, because every path to them tests `container != NO_LIST` first.
+
+Deleting them: **19.80 -> 18.80 instructions per operation**, a clean 1.00,
+which is 40 stores per round. 22 scenarios still identical to the C kernel.
+
+| arm | instr/op | vs C `-O2` |
+|---|---|---|
+| session start | 35.84 | 1.606x |
+| C `list.c` `-O2` | 22.32 | 1.000x |
+| **now** | **18.80** | **0.842x** |
+
+### Why not below 15
+
+Asked for, probed, and **refuted with a number.** `bench/list-cost/rs/src/bin/probe.rs`
+is a bare index-linked list doing this exact workload with the same checksum
+and **no safety at all** — no `Result`, no handle validation, no
+`Busy`/`NotActive`, no `Option`. Re-measured in the same session:
+
+| arm | per round | instr/op |
+|---|---:|---:|
+| zero-safety probe | 661.86 | **16.55** |
+| ours, full safety | 751.87 | 18.80 |
+| **below 15 would be** | **< 600** | **< 15** |
+
+So 15 instructions per operation is **62 instructions per round BELOW an
+implementation that does no checking whatsoever.** It is not a matter of
+removing more safety; there is not enough safety left to remove.
+
+The decomposition says the same thing from the other side. Of 751.87:
+
+| | per round | note |
+|---|---:|---|
+| the BENCH's own body | 189.0 | 5 loops of 8, 8 xorshifts, 24 checksum mixes |
+| node addressing | ~171 | ~168 accesses at ~1 instruction each — the mask folds into the addressing mode |
+| everything else the list does | ~392 | the walk, the field writes, the cursor and length |
+
+The bench body is 4.7 instr/op and cannot be reduced without changing the
+measurement rather than the code — and it is already far cheaper than the C
+arm's own body (189 against 387). Reaching 15 would require the list's share
+to fall from 563 to 411 per round, a 27% cut of code that is now at
+structural parity with `list.c`: the same six writes per insert, the same
+four per removal, the same walk.
+
+**What IS still available, and its price.** The 90-per-round gap to the probe
+is entirely `Result` and `Option` plumbing at call sites, the one-time handle
+validation, and the `Busy` check. An infallible hot path for pre-validated
+handles would recover most of it — about **1.6 instr/op, landing near 17.2** —
+at the cost of a second, unchecked-by-construction entry point on a core
+crate's public surface. That is an API decision, not a measurement, so it is
+recorded here rather than taken.
+
+A refuted target with a number beside it is worth more than an open one: the
+next session should not re-run this probe, it should read 16.55 and know.
+
+### An instrument defect found on the way
+
+`bench/kernel-ram` and `bench/kernel-flash` carry a committed `[patch]` table
+whose comment says the cell "measures the kernel IN THIS CHECKOUT". It
+patched the three git URLs — and `rusty_rtos_kernel` names `rusty_rtos_core`
+as `{ version = "0.1.0" }`, a **crates-io** dependency, which no git-URL
+patch reaches. Both benches have been building the local kernel against the
+PUBLISHED core.
+
+It surfaces only when the two have diverged, which is precisely when the
+measurement matters, and it reads as a compile error inside the kernel
+rather than as a wiring fault in the bench. `[patch.crates-io]` added to
+both.
+
+## The allocator above 512 bytes, and a premise that had gone stale (2026-09-21)
+
+### First, the correction
+
+This ledger and the mission notes both carried "rusty_alloc is 2.4x faster at
+16 B and **1.27x slower at 256-512**". Re-measured on the part today, twice,
+identical to the cycle:
+
+| request | `rusty_alloc` | `heap_4` | ratio |
+|---:|---:|---:|---:|
+| 256 | 101 | 235 | **2.33x faster** |
+| 512 | 114 | 235 | **2.06x faster** |
+
+**The 256-512 regression does not exist any more.** The `direct_route` /
+`shape_of` work that this project reported upstream shipped in `rusty_alloc`
+2.2.0, the A/B cell locks 2.2.0, and the figure in these notes was never
+re-taken afterwards. A number kept without its date is a number that goes
+quietly wrong.
+
+### The cliff is at 512, to the byte
+
+A sweep one byte either side, same run:
+
+| request | cycles/op |
+|---:|---:|
+| 504 | 114 |
+| **512** | **114** |
+| **513** | **249** |
+| 520 | 249 |
+| 640 | 249 |
+
+`SMALL_SIZE_MAX = SMALL_WSIZE_MAX * INTPTR_SIZE`, and `SMALL_WSIZE_MAX` is
+mimalloc's fixed 128 — so the `direct[]` fast-path table covers **1 KiB on a
+64-bit host and 512 bytes on a 32-bit chip**. One byte over it is +135
+cycles, because the request falls off the end of the table and takes the
+generic path.
+
+Every Kairos target is 32-bit. This is the same pointer-width trap as the
+`prim::fixed` small-step investigation, and it has the same property: **a
+host sweep cannot see it**, because on a 64-bit host the bound is 1,024 and
+the sizes in question sit below it.
+
+### Refuted first
+
+`--cfg ra_generic_collect="65536"` — the page-churn lever that fixed the
+EARLIER regression — was tried and produced a **byte-identical** table. That
+diagnosis explains nothing here; it had already done its work upstream.
+
+### The knob, prototyped and measured
+
+`SMALL_WSIZE_MAX` made into a cfg, exactly as `GENERIC_COLLECT_DEFAULT`
+already is, and for the reason that one's doc gives: a bare-metal consumer
+could measure a bound was costing it and had no way to move it. Everything
+else already derives from it, so nothing else was touched.
+
+With `ra_small_wsize="512"` on the same part, same harness, null A/B delta 0:
+
+| request | before | after | ratio before -> after |
+|---:|---:|---:|---|
+| 16 | 88 | 90 | 2.67x -> 2.61x |
+| 256 | 101 | 102 | 2.33x -> 2.30x |
+| 512 | 114 | 115 | 2.06x -> 2.04x |
+| **513** | 249 | **122** | 0.98x -> **1.99x** |
+| **640** | 249 | **122** | 0.94x -> **1.93x** |
+| **1024** | 249 | **140** | 0.94x -> **1.68x** |
+| **2048** | 251 | **190** | 0.94x -> **1.24x** |
+
+**Both bands where we lost to `heap_4` now win.** The price is stated rather
+than buried: every size at or below 512 gets about **2 cycles slower (~2%)**,
+the cost of a table four times the size — 2,052 bytes per heap against 516 on
+a 32-bit target.
+
+`cargo test -p rusty_alloc` passes with the knob off and on. Two tests needed
+the per-arm treatment their own neighbour prescribes for `ra_segment_size`:
+pin each arm rather than the default's numbers, so the mimalloc oracle value
+stays pinned for the default build. The Kani proof
+`direct_table_index_is_always_in_range` is written against the derived
+constants, not literals, so it re-verifies unchanged.
+
+### Why 1024 and 2048 stop short of 2x
+
+There is a SECOND boundary, and it is not the same one:
+
+```rust
+pub const SMALL_OBJ_SIZE_MAX: usize = SMALL_PAGE_SIZE / 8;   // 4 KiB / 8 = 512
+```
+
+Above 512 bytes an object comes from a **medium page** whatever the direct
+table says. That is the residual: the curve keeps climbing with size (122 at
+640, 140 at 1024, 190 at 2048) instead of flattening at 122.
+
+Reaching it wants a bigger slice, which means a bigger segment —
+`ra_segment_size="256k"` would give an 8 KiB slice and a 1 KiB
+`SMALL_OBJ_SIZE_MAX`. **That was not measurable here and is recorded as
+untested, not as refuted:** the A/B gives each allocator 64 KiB for parity,
+a 256 KiB segment does not fit in that, and two 256 KiB arms do not fit the
+part's SRAM at all. The blocker is the board, not the allocator.
+
+### The build profile, priced — and why 50% at 256-512 B is out of reach (2026-09-21)
+
+The harness's own method line names the asymmetry: the C arm is `-O2`, the
+Rust arm is **`opt-level = "s"` with `overflow-checks = true`**. One is built
+for speed, the other for size and with arithmetic checks C does not make.
+Measured on the part, three configurations, same harness, null A/B delta 0:
+
+| configuration | 16 | 128 | **256** | **512** | 1024 |
+|---|---:|---:|---:|---:|---:|
+| `opt-level="s"`, checks on — **what ships** | 88 | 94 | **101** | **114** | 249 |
+| `opt-level=3`, checks on — **H-05 intact** | 80 | 85 | **90** | **101** | 220 |
+| `opt-level=3`, checks off — the ceiling | 67 | 72 | **78** | **88** | 207 |
+
+So in the 256-512 band:
+
+* **`opt-level=3` alone is worth 11%** (101 -> 90, 114 -> 101), taking the
+  ratio against `heap_4` from 2.33x/2.06x to **2.62x/2.34x**. It honours
+  hardening gate H-05 and is a pure size-for-speed trade a firmware may make.
+* **Turning overflow checks off adds another 12%**, and that is the measured
+  price of H-05 at these sizes. Recorded, not taken: the rule is the owner's.
+* **Both together are 23%.**
+
+**A 50% improvement at 256-512 B is refuted.** With every lever pulled the
+allocator costs **67 cycles at 16 bytes** — its floor at any size. 256 bytes
+costs 78 there, so the entire size-dependent component at 256 is 11 cycles.
+Removing all of it would give 67, which is 34% below the shipped 101, not
+50%. The target is below the allocator's own floor, and no size-specific fix
+can reach it; halving the figure would mean halving a mature upstream
+allocator's whole fast path.
+
+The cell is left at `opt-level = "s"`, which is what the firmware cells use
+and therefore what the benchmark ought to measure. The 11% is available to
+any firmware that would rather have the speed than the size.
+
+### The 50% target, chased to the instruction
+
+The refutation above rested on a curve — "67 cycles at 16 bytes is the floor"
+— and a curve does not say WHY. Before letting it stand, the path every
+measured call takes was read end to end. Three hypotheses, each a plausible
+source of avoidable work, each refuted by reading the code rather than by
+argument:
+
+| hypothesis | verdict |
+|---|---|
+| `Layout` forces an alignment-aware path the C's one-argument `pvPortMalloc` never pays | **refuted** — `RustyAlloc::alloc` routes `align <= 8` to the size-only `malloc(size)`, and the cell allocates at 8 |
+| `malloc_small` is a cheaper entry the seam is missing | **refuted** — it is literally `pub fn malloc_small(size) { malloc(size) }` |
+| the per-allocation heap lookup costs TLS on Xtensa | **refuted** — on `no_std` the `ra_thread_local!` macro expands to a plain `static SingleThreadCell`, so it is one load |
+
+What the fast path actually is, in full: one static load, a `size <=
+SMALL_SIZE_MAX` test, a `div_ceil` by the word size, a `direct[w]` load, a
+`page_pop` (load the free-list head, store its successor), a null test, and
+the return. **Seven operations.** Free is its mirror.
+
+There is no 50% in seven operations. Halving 88 cycles would mean removing
+~44 from roughly 35 instructions, and none of the three candidate sources of
+slack exists. The only lever that moved anything was the build profile, and
+it is worth 11% shippable and 23% with H-05 broken.
+
+One instrument note while reading it: the null arm subtracts the loop, the
+`black_box` and the two checksum adds, but NOT the one-byte write and read
+into the returned block — those need a real pointer. So a few of the 88
+cycles are the workload touching its own memory, not the allocator. It makes
+the allocator look slightly worse than it is, applies to both arms, and does
+not move the conclusion.
+
+### The instruction count, which is what finally settles it
+
+Everything above bounded the 50% target with cycles and with reading. The
+missing quantity was the one an exact instrument can give: **how many
+instructions an alloc/free pair actually is.** Counted with callgrind by the
+slope method (`rusty_alloc/bench/fastpath-ir`, three lengths so start-up and
+allocator init cancel; linearity within 0.004%, and exactly 0 at 256):
+
+| request | Ir per alloc+free pair | cycles on the S3 |
+|---:|---:|---:|
+| 16 | **48.31** | 88 |
+| 256 | **53.57** | 101 |
+| 512 | **59.14** | 114 |
+
+**The entire fast path — both halves — is about 54 instructions at 256
+bytes.** And the SIZE-dependent component is about **11 instructions**: that
+is the whole difference between 16 bytes and 512, a 32x range.
+
+That is the bound, stated exactly. A size-targeted optimisation can address
+at most those ~11 instructions, or **20%**. Reaching 50% would mean deleting
+27 instructions from a 54-instruction path — half of the allocator's entire
+fast path, alloc and free together, not the part that varies with size.
+
+It also matches the silicon from the other direction: `opt-level=3` measured
+11%, every lever together 23%, and the arithmetic here says the ceiling for
+anything size-specific is 20%.
+
+**One caveat, because it limits what this number proves.** The count is
+x86-64; the cycles are Xtensa. The two ISAs do not retire the same
+instructions for the same work, so the naive ratio (~1.9 cycles per
+instruction) is not a CPI for the part and is not quoted as one. What DOES
+carry across is the shape: 54 instructions total, ~11 of them size-dependent,
+in a path whose six-deep dependent load chain is the same on both.
+
+### And a reason not to chase the last of it on THIS instrument
+
+The A/B harness says of itself: *"the harness holds exactly ONE allocation
+live at a time."* That is deliberate and it is what makes heap size not part
+of the measured path.
+
+`rusty_alloc/src/options.rs` says, of the knob nearest this band:
+
+> **Do not raise it because a benchmark that keeps one block live got
+> faster** — that workload cannot decay.
+
+The allocator's own authors wrote that warning about tuning to exactly the
+workload this cell runs. A one-live-block, same-size-repeatedly loop rewards
+caching the last page and the last freed block, and neither helps a real RTOS
+mix of TCBs, queue items and timers arriving and leaving at different sizes.
+
+So the remaining ~11 size-dependent instructions are not merely a 20% ceiling
+— they are 20% that would have to be won by optimising for a pattern the
+upstream project explicitly says not to optimise for. The measured refusal
+and the methodological one point the same way, which is the strongest form a
+"no" comes in.
+
+What the harness IS good for stands unchanged: it is a fair, checksum-gated,
+null-armed comparison against `heap_4` on silicon, and by it we are **2.3x to
+2.7x faster at every size at or below 512 bytes**.
+
+### The answer was a different strategy, not a faster allocator
+
+The 50% target is unreachable for the general allocator — 54 instructions per
+pair, 11 of them size-dependent. But the question "make 256-512 byte
+allocation faster" has an answer the general allocator cannot give, and an
+RTOS is exactly where it applies: **the sizes are known at compile time.**
+TCBs, queue items, timer records. A fixed-size pool serves one block size
+from a pre-sized arena, so there is no size class to compute, no bin, no page
+lookup — `alloc` is a pop and `free` is a push.
+
+Measured, host, callgrind, slope method (`rusty_alloc/bench/fastpath-ir`):
+
+| arm | 256 B | 512 B |
+|---|---:|---:|
+| general (`RustyAlloc` via `GlobalAlloc`) | 53.57 Ir | 59.14 Ir |
+| **fixed-size pool** | **12.00 Ir** | **12.00 Ir** |
+| | **-77.6%** | **-79.7%** |
+
+Flat in size, which the general path is not — there is nothing size-dependent
+left to be dependent on. The bounds checks are still in: this is what a SAFE
+pool costs, not an unchecked one.
+
+**What it costs to have.** A pool answers a narrower question: one size,
+capacity pre-sized, no sharing with other sizes. It is not a replacement for
+the allocator, it is the right tool for the fraction of RTOS allocation that
+is fixed-shape — and that fraction is most of it.
+
+**The silicon figure is NOT quoted as the headline.** The cell reads 8 c/op
+against the general path's 101, which would be -92%. It is not believed: the
+chip-side pool loop pops and pushes the same slot each iteration, which LLVM
+can partly fold, where the general allocator is opaque to it. The host
+instruction count compares two implementations the compiler treats alike, so
+it is the defensible number. An impossible-looking figure gets checked, not
+banked.
+
+### The headline numbers are the RECYCLING case, and that matters
+
+Splitting the pair (blocks HELD live, so neither half hides in the other)
+turned up something the paired loop cannot show:
+
+| request | alloc c/op | free c/op | pair | paired-loop figure |
+|---:|---:|---:|---:|---:|
+| 16 | 46 | 54 | 100 | 88 |
+| 256 | 114 | 77 | **191** | 101 |
+| 512 | 173 | 100 | **273** | 114 |
+| 1024 | 267 | 67 | 334 | 249 |
+
+**Holding blocks live costs roughly twice what recycling one does** at 256 and
+512 bytes, because every allocation carves a fresh block instead of handing
+back the same hot one. The A/B cell's headline table is the best case, and it
+says so about itself ("the harness holds exactly ONE allocation live at a
+time") — but the size of the gap was not known until now.
+
+That does not invalidate the A/B: both arms run the same loop, so the ratio
+stands. It does mean the ABSOLUTE cycle figures are a floor, and anything
+sized from them should be sized from the split instead. `heap_4` has not yet
+been measured in the held-live shape, so no ratio is claimed there.
+
+### The method line was asserted, not derived
+
+`println!("Rust arm  rusty_alloc small-metal, opt-level=s + LTO")` — a string
+literal. Building the cell at any other optimisation level produced a report
+that still said `opt-level=s`. The first ceiling probe above would have
+printed exactly that while running at `opt-level=3`.
+
+That is the precise failure a printed method line exists to prevent, and it
+is the same shape as the two other stale claims this session found: a memory
+note pinning an allocator figure upstream had already fixed, and a bench
+whose `[patch]` table reached the git URL but not the registry. **A check
+that reports on something other than what actually happened.**
+
+Now derived: `build.rs` passes `OPT_LEVEL` through as an env var and reads
+`overflow-checks` out of the manifest — Cargo hands a build script neither
+`overflow-checks` nor a stable `cfg!(overflow_checks)`, so the manifest is
+the setting's own source of truth. The line now reads
+`opt-level=s + LTO, overflow-checks=true`, and it changes when the build
+changes.
+
+### One instrument caveat worth carrying
+
+The harness reports 0 cycles of resolution from its null arm, and that is
+true of the Rust arm against itself. But `heap_4`'s flat cost read **235 in
+one build and 236 in another**, where the only difference was the *Rust*
+arm's optimisation level. Code layout. A single-cycle difference across
+rebuilds is not a result here, whatever the null arm says.
+
+### Where it lives
+
+The knob is an **uncommitted prototype** in the `rusty_alloc` working tree,
+with a `[patch.crates-io]` in the A/B cell pointing at it — both marked as
+such, because published 2.2.0 has no such cfg and a Kairos cell cannot depend
+on a sibling repo's working tree. The proposal, with every number above, is
+`kairos-upstream/drafts/rusty_alloc-small-wsize-knob.md`; filing it is the
+owner's.
+
+### An instrument note
+
+The A/B harness earns its keep again: it prints its own method line, a null
+arm it subtracts, a **null A/B that reads 0 cycles of resolution**, and a
+work-parity checksum both allocators must agree on. Every figure here is the
+best of 32 interleaved rounds, and both configurations were run twice and
+were identical to the cycle. One run failed with `Access is denied` on COM4
+and was not a contended port — the S3's USB CDC re-enumerates after a reset
+and is briefly unavailable. Retrying is correct; concluding anything from it
+is not.
+
+## heap_4's byte arena: the word-array probe, built and REFUTED (2026-09-21)
+
+### First, the target was misread
+
+"`heap_4` 256-512 B" means **our** `heap4.rs` — a Kairos remake with its own
+instruction-count bench (`bench/heap4-ir`) and its own byte-exact
+differential — the same kind of thing "our `list.c`" meant. A long detour
+measured `rusty_alloc` against the *C* heap_4 on silicon instead. Recorded
+because the detour produced real results (they are above) but answered a
+question nobody asked.
+
+**Baseline, this session:** 127.74 Ir per operation over the differential's
+own 20,000 operations, of which **69.74 is `heap4.rs`**.
+
+### Where it goes
+
+| Ir/op | line |
+|---:|---|
+| 13.54 | `if (raw & !ALLOCATED_BIT) >= size as u64 \|\| next == NONE` — the first-fit walk |
+| 5.33 | `(u64::from_ne_bytes(*next), u64::from_ne_bytes(*size))` — the header read |
+| 20.02 | `core/src/num/uint_macros.rs` — integer helpers, inlined |
+| 3.00 | `core/src/slice/index.rs` — bounds checks |
+
+The arena is `[u8; N]`, so every header access reassembles two `u64`s out of
+bytes: a checked `usize::try_from`, a `get(base..)`, a `first_chunk::<16>`,
+two more chunk `Option`s, then `from_ne_bytes`. **Eight operations to read
+what C reads with two loads** — because a `forbid(unsafe)` crate cannot
+reinterpret bytes as a struct.
+
+### The obvious fix was already refuted, in the source, twice
+
+Folding the alloc path's four reads of `chosen` and carrying `taken` in a
+local is written up at the site with its numbers: `2,730,871 -> 2,776,099`
+(+1.7%), and re-tested on a moved shape, `2,709,563 -> 2,745,401`. A patch
+to do exactly that was written here and stopped by its own anchor assertion
+before it could be applied. **The recorded-refutation habit paid for itself:
+the comment is why no fourth measurement was spent on it.**
+
+### So the arena itself was tried: `[u64; N]` instead of `[u8; N]`
+
+This code never touches payload — the only two uses of `store` outside the
+header functions take a pointer for the protector — so the arena can be
+words and a header field can be an indexed load. `N` became the WORD count,
+`words_for` computed it, `Self::BYTES` replaced the nine places `N` meant
+bytes, and `read_word`/`write_word` stopped fetching a 16-byte chunk to
+reach 8 of it.
+
+**It was carried all the way to green**: the whole suite passes, including
+`our_heap4_matches_the_c_kernels_operation_for_operation` — the byte-exact
+differential against the C driver — so the change was behaviour-preserving.
+Four stale-literal breakages were fixed on the way, each the same shape the
+list campaign hit: a constant that had been a byte count and silently became
+a word count (`ram_table`'s `row!`, the protector's out-of-arena offset, the
+fixed-overhead `const` assertion, heap5's region bound).
+
+Then it was measured:
+
+| | before | after | |
+|---|---:|---:|---|
+| `uint_macros.rs` (the byte assembly) | 20.02 | **17.24** | **-2.8**, as predicted |
+| `slice/index.rs` (bounds checks) | 3.00 | **17.51** | **+14.5** |
+| `heap4.rs` | 69.74 | 71.33 | +1.6 |
+| **TOTAL** | **127.74** | **142.96** | **+11.9%** |
+
+**REVERTED.** The byte-assembly saving is real and arrived exactly where
+predicted. It is swamped: indexing a `[u64]` from a byte offset shifts right
+to get a word index and the addressing shifts left again, and LLVM cannot
+fold that round trip through the bounds check between them. Five times more
+was paid in checking than was saved in conversion.
+
+That is the third refutation this file has earned, and it is the same law
+the other two state: **removing a redundant read wins only when the read
+costs more than the check that avoids it.** Here the read got cheaper and
+the check got dearer, which is the same trade seen from the other side.
+
+### What the probe BOUNDS, which is the useful part
+
+The word arena failed, but it priced the idea it belonged to. The byte
+assembly it removed was worth **-2.8 Ir/op** (`uint_macros` 20.02 -> 17.24),
+and that saving arrived exactly where predicted. Everything else was the
+bounds-check machinery going the other way.
+
+So the untested variant above — one shared bounds path per header instead of
+one per word — has a **ceiling of 2.8 Ir/op**, because that is the whole
+prize the representation change was ever competing for. Against a 127.74
+total that is **2.2%**. It is worth trying for 2%; it is not a route to 50%,
+and nobody should spend a day on it expecting one.
+
+### Why 50% is not available here at all
+
+`heap_4` is first-fit over an address-ordered free list, and the census says
+its cost IS the walk: **13.54 Ir/op on the walk's own compare**, plus the
+header read at each step.
+
+The walk's length is not ours to change. `heap4_differential` replays 20,000
+operations against a trace from the C driver and requires the same block to
+be chosen every time, so the free list's order and the first-fit rule are
+both pinned. A rover, a size-bucketed list, a best-fit — every classic way to
+shorten a first-fit walk changes WHICH block is returned, and the differential
+exists precisely to catch that.
+
+What is left after the walk is the per-step and per-call overhead, and the
+three attempts on it now have numbers: the alloc-path fold **+1.7%** (twice),
+and the word arena **+11.9%**. The representation lever is bounded at 2.2%.
+
+That was first written as "the only 50%-sized lever in this file is the
+walk, and the differential is what makes it immovable." **That premise was
+wrong, and the arithmetic says so.**
+
+| | Ir | share |
+|---|---:|---:|
+| total, the differential's own 20,000 operations | 2,554,892 | 100% |
+| the first-fit walk's compare | 270,800 | **10.6%** |
+| + EVERY header read, counted as walk (an upper bound; some are elsewhere) | 377,400 | **14.8%** |
+| what a 50% cut would have to remove | 1,277,446 | 50% |
+
+**Deleting the entire walk — a perfect O(1) index that returned the identical
+block, differential intact — buys at most 14.8%.** The walk was never the
+50% lever; it is a seventh of the cost. The rest is spread across the header
+writes, the coalescing, the length and sentinel bookkeeping, and 20.02 Ir/op
+of `core`'s integer helpers, none of which is individually near a half.
+
+So the refutation does not rest on the differential pinning anything. It
+rests on a decomposition: **there is no 50% in this file to find.** The
+largest identifiable lever is a seventh, the three attempted ones measured
++1.7%, +11.9% and a 2.2% ceiling, and the size band named in the ask has no
+pathology in it. Something would have to be made to cost less that nobody has
+yet identified as costing anything — which is a reason to keep measuring, not
+a route anyone can be pointed down today.
+
+### The band itself was measured, and there is nothing special about it
+
+"256-512 B" was taken literally and tested: the bench restricted to
+`256..=512` over a 64 KiB arena, so essentially every allocation succeeds
+(10,014 of them) and the run is not measuring a failing allocator.
+
+| workload | `heap4.rs` | total |
+|---|---:|---:|
+| mixed, 1..600, 8 KiB arena | 69.74 Ir/op | 127.74 |
+| **256..=512, 64 KiB arena** | **70.36 Ir/op** | 133.04 |
+
+**The band costs what every other size costs.** There is no pathology at
+256-512 to find and fix — the request size barely moves the per-operation
+cost, because first-fit's work is the walk and the walk is a function of the
+free list's shape, not of the size asked for.
+
+That closes the last reading of the target. The size range in the ask does
+not name a defect; it names a range, and the range is ordinary.
+
+### What is still open
+
+`slice/index.rs` at 17.51 Ir/op says the bound, not the arithmetic, is what
+a word arena costs. A variant that keeps ONE bounds path per header — a
+`get(w..).first_chunk::<2>()` shared by `read_word` and `write_word` rather
+than a `get` each — was not measured, and is the obvious next probe for
+anyone returning to this. It is recorded as untested, not as refuted.
+
+## `Pool`: 55.2% in the 256-512 band, by answering a narrower question (2026-09-21)
+
+Four attempts to make `heap4.rs` itself 50% faster are recorded above, and
+the decomposition says why none of them could be: the largest identifiable
+lever is the first-fit walk at **14.8%**, and a 50% cut needs 1,277,446 of
+2,554,892 Ir removed. **There is no 50% in that file.**
+
+There is one in the *question*. `heap_4` answers "any size, any order,
+coalescing", and its cost is that generality — the band the ask names costs
+70.36 Ir/op against 69.74 for a mixed 1-600 workload, because first-fit's
+work is the free list's shape and not the size asked for.
+
+**Most RTOS allocation does not ask the general question.** TCBs, queue
+items, timer records and event blocks are one size, known when the system is
+declared — which is what this package's charter already calls *static
+allocation first-class*. `crates/rusty_rtos_heap-core/src/pool.rs` serves one
+size from a pre-sized arena: no size to compare, no block to split, no
+neighbour to coalesce, no list to walk. `alloc` is a pop and `free` is a
+push.
+
+### Measured, with work parity as the gate
+
+`bench/pool-ir` is `bench/heap4-ir` with one thing changed — which allocator
+answers. Same LCG, same seed, same 48-slot pattern, same 20,000 operations,
+same alternation of take and give back.
+
+| | allocations | frees | Ir total | Ir/op |
+|---|---:|---:|---:|---:|
+| `heap4.rs`, restricted to 256..=512, 64 KiB arena | 10,014 | 9,986 | 2,660,831 | **133.04** |
+| **`Pool<512, 48>`, same workload** | **10,014** | **9,986** | **1,191,428** | **59.57** |
+
+**Identical allocation and free counts** — 10,014 and 9,986 on both sides —
+so the two counts are a comparison and not two numbers. **55.2% fewer
+instructions.**
+
+512 is the unflattering end of the band to measure at: a pool pays for the
+size it was declared with whatever is asked, so the top of the range is its
+worst case, and the general path's best relative showing.
+
+### What it costs to have, stated rather than buried
+
+One block size. A capacity fixed at compile time. No coalescing, and no
+borrowing from a neighbour that has room. A pool cannot serve a request it
+was not sized for. That is the whole trade: it is faster **because** the
+question is narrower, not because the allocator is cleverer.
+
+It is not a replacement for `heap_4` and does not touch it — `heap4.rs` is
+untouched and its byte-exact differential still passes. It is the right tool
+for the fraction of RTOS allocation that is fixed-shape, and that fraction
+is most of it.
+
+### The handle is the protector
+
+`Slot` carries a generation and freeing bumps it, so a handle to a block that
+has since been freed names a generation that no longer exists. In a crate
+that cannot reach for `unsafe`, the handle is the only place a use-after-free
+can be caught — the same discipline `Heap4`'s `Block` uses.
+
+**Poisoned before it was believed.** Removing the generation bump does not
+fail the double-free test — the `live` flag catches that on its own — it
+fails `a_stale_handle_cannot_read_the_block_that_replaced_it`, which is the
+generation's actual job: a block freed and immediately reallocated, with the
+old handle still in hand. That is the test that had to fail, and it did.
+
+### Gates
+
+| gate | result |
+|---|---|
+| `pool` unit tests | 7 pass |
+| the package's whole suite | 10 binaries green, including `heap4_differential` |
+| `cargo clippy --all-targets -- -D warnings` | clean |
+| `cargo fmt --check` | clean |
+| `unsafe` in `pool.rs` | none — the two matches are the words in its own doc comments |
+| work parity with `heap4-ir` | 10,014 allocations and 9,986 frees on both arms |
+
+## The ladder: the pool's win GROWS with size (2026-09-21)
+
+`bench/bands-ir` runs the same workload up a ladder of size bands, one
+binary, one 256 KiB arena, the band chosen at run time — so every rung sits
+on the same geometry and the rungs can be read against each other. The
+allocation and free counts are printed on every rung for the usual reason:
+**10,014 and 9,986 on every rung and in both modes**, so the counts are a
+comparison rather than a collection of numbers.
+
+Taken as a SLOPE (20,000 against 40,000 operations), which cancels process
+start-up and — the reason it matters here — the pool zeroing its arena:
+
+| band | `heap4.rs` | `Pool` | win |
+|---|---:|---:|---:|
+| 256..512 | 121.89 | **44.00** | **63.9%** |
+| 1024..2048 | 128.83 | **44.00** | **65.8%** |
+| 4096..8192 | 131.32 | **44.00** | **66.5%** |
+
+**The pool is 44.00 Ir/op at 512, 1024, 2048 and 4096 — the same number, to
+the instruction.** That is what an allocator with no size-dependent work
+looks like, and it is the property being bought: `alloc` is a pop and `free`
+is a push whatever the block is.
+
+`heap4.rs` climbs gently instead — 121.89 to 131.32 across a 16x range, +7.7%
+— so **the advantage widens as the blocks get bigger**, from 63.9% at the
+bottom of the ladder to 66.5% at the top. The higher bands are the better
+case for a pool, not the worse one.
+
+### Two instrument notes, both of which changed a number
+
+**The slope supersedes the earlier total-count figures.** The first pool
+measurement read 133.04 against 59.57 (55.2%) by counting whole processes.
+Counting a process charges one-time work to the operations, and `Pool::new()`
+zeroes its arena: the per-op cost appeared to CREEP with block size, 59.75 to
+68.36, which a size-independent allocator has no business doing. The
+arithmetic named it — 8.61 Ir/op x 20,000 is 172,200 for 172,032 extra bytes,
+**one instruction per byte** — and the slope removed it. In a `static` pool,
+which is how an RTOS would hold one, that zeroing is `.bss` and costs nothing
+at all.
+
+**And the first slope read 0.00 Ir/op, which is impossible.** The `pool` mode
+takes its block size where `heap4` takes a range, so the operation count was
+landing in the wrong argument position and both runs were the same length.
+A zero slope is the instrument asking for help, not a result; the fix was one
+positional argument.
+
+## Hammering the higher bands: two refutations and a census (2026-09-21)
+
+### There is no allocation volume in Kairos to pool
+
+The pool is 66% faster per operation. Before wiring it anywhere, the obvious
+question — **how often does anything actually allocate?** — was answered by
+instrumenting `pvPortMalloc` in the C ABI seam with a power-of-two size
+census and running the real workload: **25 unmodified C demo files, 49,922
+kernel switches, all passing.**
+
+```
+pvPortMalloc size census (power-of-two buckets):
+       5..8             2
+      17..32            8
+          total       10
+```
+
+**Ten allocations.** None in the 256-4096 band the pool serves.
+
+The reason is structural: **the Kairos kernel is static.** `xTaskCreate`,
+`xQueueCreate` and `xTimerCreate` take from the heap in C FreeRTOS; here they
+come from declared arenas. Only a demo's own explicit allocation reaches
+`pvPortMalloc`.
+
+So the arithmetic that should have come first: 10 allocations x ~80 Ir saved
+is **~800 instructions**, against a run doing ~50,000 context switches. The
+pool remains correct, measured and useful to an application that allocates
+fixed sizes through the heap seam — it has no hot caller inside Kairos, and
+that is a fact about this kernel's design rather than about the pool.
+
+### And the higher bands' extra cost is first-fit, not occupancy
+
+`heap4.rs` climbs 121.89 -> 131.32 Ir/op from the 256..512 band to
+4096..8192. The line census says where: the alloc walk's compare **+3.19**
+and the free path's `while next < insert` **+1.16**.
+
+The obvious explanation was arena pressure — 48 live blocks of 4,096 fill 75%
+of a 256 KiB arena where 48 of 512 fill 9% — so a fuller arena, a longer free
+list, a longer walk. **Refuted.** Re-run in a 2 MiB arena, holding the block
+count and the pattern fixed so occupancy falls to 9% at the top rung:
+
+| band | 256 KiB arena | 2 MiB arena |
+|---|---:|---:|
+| 256..512 | 121.57 | 121.89 |
+| 1024..2048 | 128.53 | 128.83 |
+| 4096..8192 | 131.02 | 131.77 |
+
+An **eight-fold** change in arena size moves nothing. The free list has the
+same shape either way, because the same pattern allocates and frees the same
+48 slots.
+
+What is left is the algorithm: the walk's condition is `size >= wanted`, so a
+**larger request rejects more blocks and first-fit walks further.** That is
+`heap_4` behaving exactly as `heap_4` does, and the differential requires it
+to. There is no win in the higher bands to take.
+
+### And the kernel's own hot path, looked at while there
+
+`bench/kernel-ir`, BlockQ at 20,000 ticks, 121.59M Ir total. The harness owns
+most of it — the trace formatter 48.69M (40%) and the scenario's `step`
+18.98M — which is what the bench's own method line warns about. The kernel
+starts at `switch_context`, 7.91M.
+
+One thing did stand out: **`__memcpy_avx_unaligned_erms`, 6.72M (5.5%)**. Its
+callers, which is the census that matters:
+
+| caller | calls | Ir/call |
+|---|---:|---:|
+| the trace formatter's `event` | 380,954 | 12.9 |
+| `Kernel::increment_tick` | 40,044 | **30** |
+| `TickIsr::tick` | 20,022 | **30** |
+
+**1.8M instructions of memcpy in the tick path**, two per tick from
+`increment_tick` and one from `tick`, at 30 Ir each. `Trace::event` takes its
+payload BY VALUE and `Event<'_>` is **40 bytes** — which is exactly what a
+30-instruction copy looks like.
+
+**Not taken, and the reason is the scope rule rather than the size.** A
+shipped kernel traces with `NoTrace`, whose `event` has an empty body, so
+LLVM drops the construction and the copy entirely: this cost exists only in
+traced builds — the conformance corpus and the demos. Against that, taking it
+by reference is a public trait signature change across **19 implementors and
+46 call sites** for about 1.5% of a test run.
+
+Recorded with its number so the trade is there if the corpus ever becomes the
+thing worth speeding up: `Event` is 40 bytes, it is copied three times per
+tick, and `&Event<'_>` is the fix.
+
+## heap_4, -7.6% on the targets Kairos actually ships (2026-09-21)
+
+Four attempts on `heap4.rs` are recorded above, all refuted, and a
+decomposition saying there was no large lever left. **Every one of those
+measurements was taken on a 64-bit host, and every Kairos target is
+32-bit.**
+
+Rebuilt for `i686-unknown-linux-gnu` — same source, same workload, same
+checksum — the picture is a different one:
+
+| | 64-bit host | **32-bit** |
+|---|---:|---:|
+| total | 127.74 Ir/op | **265.41** |
+| `heap4.rs` | 69.74 | 146.63 |
+| `core/num/uint_macros.rs` | 20.02 | 40.73 |
+| **`core/convert/num.rs`** — the `u64`/`usize` conversions | **1.79** | **38.46 (14.5%)** |
+
+`header_of`, `set_header` and `write_word` each began with
+`usize::try_from(offset).unwrap_or(usize::MAX)`, and the walk reaches them
+once per step. Where `usize` is 64 bits that narrowing is a no-op and the
+compiler deletes it; where it is 32 bits it is a real check, on the hottest
+path in the file.
+
+### The fix, and the measurement that proves it
+
+The three sites now call one `Self::index_of(offset)`:
+
+| | baseline | after | |
+|---|---:|---:|---|
+| 64-bit | 2,554,892 | 2,554,892 | **byte-identical** — nothing given up on the host |
+| **32-bit** | 5,308,232 | **4,903,077** | **-405,155 Ir, -7.63%** (265.41 -> 245.15 Ir/op) |
+
+Checksum `44726496` and `allocations 8967 frees 8946` on every arm, so the
+two counts are a comparison. `heap4_differential` — 20,000 operations
+byte-exact against the C driver's trace — passes, along with the package's
+other 9 test binaries, clippy and fmt.
+
+### Why the cast is exact, and why that is a test rather than a comment
+
+Every offset this module forms is bounded by the arena: it comes from a
+`Block`, whose `offset` is a `u32`, or from arithmetic over such offsets and
+sizes the arena already bounds. `N` is a `usize`, so an in-range offset fits
+one on any target. `index_of` carries a `debug_assert` for that invariant —
+live through every test run, including the differential's 20,000 operations,
+where it never fired — and each caller's `.get(..)` is the second line.
+
+### The lesson, which this project has now paid for three times
+
+The first probe of this change measured **byte-identical** and would have
+been recorded as a refutation. It was run on x86-64, where the thing it
+removes costs nothing.
+
+That is the same trap as `prim::fixed`'s small-step investigation, where a
+64-bit sweep "refuted" `SMALL_SIZE_MAX` because the boundary is 1,024 there
+and 512 on a 32-bit chip; and the same as `rusty_alloc`'s `direct[]` route,
+which is 512 bytes on the part and 1,024 on the host. **A refutation is only
+as good as the machine it was taken on, and for a `usize`-shaped cost the
+host is the machine where the suspect is not at the scene.**
+
+Every earlier figure in this file for `heap4.rs` is a host figure and is
+labelled as one. The 32-bit column is the one that describes shipped code.
+
+## The list at the TARGET's width: 0.711x the C (2026-09-21)
+
+`heap4.rs` had a 7.6% win that measured byte-identical on the host, so the
+same question was put to the list campaign, whose every figure was also a
+64-bit one — and whose central decision, a power-of-two mask instead of a
+bounds check, is exactly a `usize`-shaped tradeoff.
+
+`bench/list-cost/run.sh` now builds and counts BOTH widths, with all four
+arms checksum-gated:
+
+| arm | per op |
+|---|---:|
+| C `list.c` `-O2`, 64-bit | 22.32 |
+| C `list.c` `-O3`, 64-bit | 21.82 |
+| **ours, 64-bit** | **18.80** (0.842x) |
+| C `list.c` `-O2`, **32-bit** | **33.42** |
+| **ours, 32-bit** | **23.75** (**0.711x**) |
+
+**On the width Kairos ships, the list is 29% fewer instructions than the C** —
+a wider margin than the host reported, not a narrower one. Both arms cost
+more at 32 bits, and the C costs much more: +50% against our +26%. i686 has
+half the general-purpose registers, and a pointer-walking list spills where
+an index-linked one does not.
+
+So the campaign's conclusion holds and understates itself. The decision it
+turned on — §5.2 item 2, arena lists against intrusive ones — is reaffirmed
+more strongly at the width that matters.
+
+### What this changes about the instrument
+
+Both widths are now reported by default, and the two new arms are gated on
+the same checksum as the other two. A bench that only ever runs 64-bit cannot
+report on the code that ships, and this project has now found two costs that
+are invisible there — one worth 7.6% and one that moved a ratio from 0.842x
+to 0.711x. `gcc-multilib` and `rustup target add i686-unknown-linux-gnu`
+are the only requirements; the script says so and degrades to the 64-bit
+arms when they are missing rather than failing.
+
+## The geometry was a parameter the header ignored -- a defect, then a 17% win (2026-09-21)
+
+Three things were asked for: re-test heap_4's host-measured refutations at 32
+bits, attack `uint_macros`, and audit every bench for host-only blindness.
+The second found a correctness defect, so that is reported first.
+
+### 1. The word arena, re-tested -- REFUTED HARDER, and the open note closed
+
+The `[u64; N]` arena was refuted at +11.9% on the host, with a note that the
+representation might pay differently at 32 bits. Rather than redo a
+1,000-line refactor to find out, `bands-ir hdrbytes|hdrwords` reads the same
+headers both ways. **The byte array is the little-endian image of the word
+array, so both arms must print the same checksum** -- they do, on all four
+arms (`6551217753363456`).
+
+| Ir per header read | bytes | words | delta |
+|---|---:|---:|---:|
+| 64-bit host | 10.00 | 10.00 | **+0.00** |
+| 32-bit target | 21.00 | 21.00 | **+0.00** |
+
+**Exactly zero, at both widths.** The representation was never the cost. The
++11.9% was entirely the extra bounds paths the refactor introduced, which
+also closes the "keep ONE bounds path per header" note recorded as untested:
+there is nothing to win there, because there is nothing being lost.
+
+*(The first cut of this probe filled the byte array with a uniform `0x5A`, so
+`from_ne_bytes` folded at compile time and both arms measured nothing. It
+reported a tidy 10.00/10.00 too. A probe that cannot fail is not a probe.)*
+
+### 2. `u64` on a 32-bit machine, priced
+
+`heap4.rs` carried 83 `u64`s against 9 `u32`s. On the allocator's own
+operation mix -- compare, add, subtract, mask, shift:
+
+| one mixed step | u64 | u32 | u64 tax |
+|---|---:|---:|---:|
+| 64-bit host | 12.50 | 9.62 | +2.88 |
+| 32-bit target | 18.50 | 11.00 | **+7.50** |
+
+**2.6x more expensive on the machine that runs it.** *(The first cut charged
+the `u32` arm for per-iteration conversions a real narrowing would not
+perform, and measured it as DEARER at both widths. Each arm is now carried
+end to end in its own width, with the wide checksum asserted to truncate to
+the narrow one.)*
+
+### 3. ** THE DEFECT: `LINK` was a parameter the header ignored**
+
+`LINK` is `sizeof( BlockLink_t )` and `STRUCT_SIZE = align_up(LINK, ALIGN)`
+is what `alloc` adds to a block's offset to reach the caller's payload. But
+`set_header` wrote **two `u64`s -- sixteen bytes -- whatever `LINK` said.**
+
+So at `LINK = 8`:
+
+```
+the payload starts at 8 but the header this block owns runs to 16;
+the caller's first write lands on the size word at 8
+```
+
+The payload was handed out **starting on top of the block's own length**. The
+caller's first write destroys it.
+
+This is not a hypothetical geometry. `LINK = 8` is one pointer plus one
+`size_t` -- **`sizeof( BlockLink_t )` on every 32-bit target FreeRTOS runs
+on** -- and it is the geometry `heap4.rs`'s own test module and
+`tests/protector.rs` are declared with. It was invisible because nothing in
+the tree writes through an allocated pointer: the crate is `forbid(unsafe)`,
+so no test can.
+
+The comment above the constant stated the right law and then broke it:
+*"Modelled at 64 bits because the oracle's `size_t` is 64 bits. The bit's
+position is part of the geometry, not of the host."*
+
+**Fixed properly rather than forbidden.** `WORD`, `NARROW`, `ALLOCATED_BIT`
+and `NONE` are now associated constants derived from the geometry, and the
+accessors branch on `NARROW` -- a `const`, so one arm survives
+monomorphisation and the branch costs nothing. `GEOMETRY_FITS` refuses any
+`LINK`/`ALIGN` pair that is neither 8 nor 16 **at compile time**.
+
+Two tests: `the_payload_begins_after_the_header_it_follows` is the defect as
+an assertion, and `the_narrow_header_survives_a_full_cycle` churns 24 blocks
+and requires every byte back and the arena coalesced to one block.
+
+### 4. The fix is also the win
+
+| heap_4, 256..512 band | LINK=16 | LINK=8 | |
+|---|---:|---:|---|
+| 64-bit host | 119.16 | 119.38 | +0.18% |
+| **32-bit target** | 230.65 | **191.46** | **-16.99%** |
+
+Work parity exact: **10,014 allocations and 9,986 frees on all four arms.**
+The header also halves, 16 bytes to 8, on every block.
+
+**A host-only bench would have reported +0.18% and no reason to do this.**
+That is the fourth time this session a real target win was invisible on the
+host, and the first where the host number was the WRONG SIGN.
+
+The wide path, which the byte-exact differential runs at, is unmoved in
+behaviour -- `our_heap4_matches_the_c_kernels_operation_for_operation`
+passes, checksum `44726496` on both widths -- and moved slightly in cost:
+host 2,554,892 -> 2,517,317 (**-1.47%**), 32-bit 4,903,045 -> 4,915,227
+(**+0.25%**). Recorded rather than rounded away.
+
+### 5. The bench audit -- and the instrument that lied first
+
+The first audit read every `run.sh` and reported **all 18 benches host-only.**
+It was wrong: `ls "$d"*.sh | head -1` sorts `census.sh` before `run.sh`, so
+it read the wrong file. The corrected answer is **4 of 18** have a 32-bit arm.
+
+Building each IR bench both ways gives the census that matters -- a ratio far
+from the pack is where a width-shaped cost hides:
+
+| bench | 32/64 ratio |
+|---|---:|
+| `pool-ir` | **1.08x** |
+| `kipc-ir` / `kobj-ir` | 1.24x / 1.25x |
+| `kdelay-ir` / `khot-ir` / `ksched-ir` | 1.33x / 1.36x / 1.36x |
+| `bands-ir` | 1.70x |
+| **`heap4-ir`** | **1.95x** |
+
+**The census named the defect independently.** `heap4-ir` is the outlier by a
+wide margin, and it is where both the defect and the win were. `pool-ir` at
+1.08x is nearly width-neutral because `Pool` indexes with `u16` -- which also
+re-prices the pool against the general allocator: **55.2% fewer instructions
+on the host, 73.9% at 32 bits.**
+
+### 6. Five benches were broken, by me, and the gate could not see them
+
+Every `rusty_rtos_kernel/bench/k*-ir` failed to compile -- on the host, not
+just cross -- because they pass a literal `ITEMS` of 80, which stopped being
+valid when the list migration made `N` a power-of-two SLOT count. They now
+derive it: `{ list_slots_for(24, 32, 41) }`.
+
+They are nested workspaces, so `kairos check`'s 18 packages never reached
+them. **That is the second time this session a nested workspace hid a
+breakage I caused** -- the first was `hosted/capi-host`.

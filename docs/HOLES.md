@@ -56,7 +56,7 @@ list exists to prevent. Closing a hole is two commits, not one.
 
 ---
 
-## H2 — 19 public APIs have no evidence from the C differential
+## H2 — 13 public APIs have no evidence from the C differential
 
 **Measured.** Of 130 public kernel APIs, these are called by no conformance
 scenario, no runner code, no other kernel code, and no unit test:
@@ -66,10 +66,7 @@ name_of                 task_at                 with_tick_hook
 notify_value            queue_remove_from_set   queue_send_to_front_from_isr
 ready_cursor            ready_items             timer_expiry_time
 timer_period            timer_pend_function_call
-stream_buffer_reset     stream_buffer_is_empty  stream_buffer_is_full
-stream_buffer_bytes_available                   stream_buffer_spaces_available
-stream_buffer_next_message_length               stream_buffer_receive_from_isr
-stream_buffer_set_trigger_level
+stream_buffer_next_message_length               stream_buffer_set_trigger_level
 ```
 
 `notify_value_clear`, `timer_change_period` and `timer_delete` came off
@@ -77,6 +74,21 @@ this list on 2026-09-19 when the `TaskNotify` scenario landed. `notify_value`
 stayed on it: the scenario reaches `xTaskNotifyAndQuery` through
 `notify_and_query`, which is one critical section, and `notify_value` is
 the two-call spelling only the capi shim uses.
+
+**Six more came off on 2026-09-20**, when the `StreamBufferDemo` scenario
+landed: `stream_buffer_reset`, `stream_buffer_is_empty`,
+`stream_buffer_is_full`, `stream_buffer_bytes_available`,
+`stream_buffer_spaces_available` and `stream_buffer_receive_from_isr`.
+All six are called from `prvSingleTaskTests`, which walks one buffer's
+head past its tail and back and checks the four counts after every move --
+so they are now compared against the C kernel on 20,736 lines.
+
+The two that are left are the two `prvSingleTaskTests` does not use.
+`stream_buffer_next_message_length` is a message-buffer call and this is a
+stream-buffer demo; `stream_buffer_set_trigger_level` is set at create time
+by every scenario in the corpus and never changed afterwards. Neither has a
+standard demo that reaches it, so closing them means writing a scenario
+rather than porting one.
 
 They are **not dead**: `rusty_rtos-capi` calls most of them, so a C program
 linking the shim reaches them. `vTimerDelete`, `xQueueRemoveFromSet`,
@@ -619,3 +631,134 @@ grows a `[patch."https://github.com/..."]` table, and the second changes
 what a fresh clone resolves. `firmware/README.md` states the git-URL rule
 that this cell alone follows, so the inconsistency is documented in two
 directions at once.
+
+### Evidence for the first option, from a different cell (2026-09-21)
+
+`tools/vertical/firmware/mps2-an385-k7` was built on the same machine, the
+same QEMU and the same `mps2-an385`, and it depends on **six** sibling
+packages -- entirely by path. It compiles, links and runs, and the six
+packages it carries all reach one shared `rusty_rtos_core`.
+
+That does not decide H8, which is still an owner's call about what a fresh
+clone of `rusty_rtos_port` should resolve. It does remove one uncertainty
+from the decision: the path option is not merely the other choice, it is a
+configuration that demonstrably works here, at six path dependencies rather
+than two.
+
+## H9 — sim contract v1 could not run an always-ready task that makes no kernel call — CLOSED 2026-09-20, by contract v2
+
+**Measured 2026-09-20**, porting `StreamBufferDemo`.
+
+Contract v1 has exactly two tick sources: the idle hook (one tick per idle
+pass) and every 16th outermost critical-section exit. Both are
+kernel-visible points. So under the contract **a task that spins in user
+code takes no time at all**, and if such a task is always ready the whole
+run freezes — permanently, not slowly.
+
+`prvNonBlockingReceiverTask` is one. It polls at `tskIDLE_PRIORITY` with
+`sbDONT_BLOCK`, and `xStreamBufferReceive`'s zero-wait path takes no
+critical section when the buffer is empty (`stream_buffer.c:1143`,
+`xBytesAvailable = prvBytesInBuffer( ... )` with no `taskENTER_CRITICAL`).
+`corpus StreamBufferDemo 200`, counters read under gdb at three times:
+
+| t | counters |
+|---|---|
+| 8 s | `ticks=1 yields=4 exits=16` |
+| 23 s | `ticks=1 yields=4 exits=16` |
+| 38 s | `ticks=1 yields=4 exits=16` |
+
+The deadlock closes on itself: the spinner cannot yield, because rotating a
+priority level needs a tick; the idle task never runs, because the spinner
+is always ready; and `prvNonBlockingSenderTask` — the one thing that would
+put bytes in the buffer and so make the receive path take a critical
+section — is at the same priority and never runs either.
+
+Upstream states the dependency: *"The non blocking tasks run continuously
+and will interleave with each other"*. That interleaving is preemptive
+time-slicing off a hardware tick, which the Posix demo gets from a SIGALRM
+thread and Kairos deliberately does not have.
+
+**The symptom is misleading and cost the first hour.** `kairos_trace.c`
+gives stderr a 1 MiB buffer flushed only on exit, so a hang reports as
+`0 lines; KAIROS_RESULT ? missing` — indistinguishable, at a glance, from a
+scenario that runs and emits nothing. A control run of a known-good
+scenario through the same command separates the two in one step.
+
+**Worked around, not closed.** `kairos oracle patch` now carries
+`patch_stream_buffer`, which drops the two polling tasks and the clause in
+`xAreStreamBufferTasksStillRunning` that they fed — the clause has to go
+with them, or the check fails for ever on a counter nothing increments.
+With the pair gone the same binary runs clean at the gate's budget:
+
+```
+ticks=2000 yields=3023 exits=21953 lines=20736   scenario pass
+20737 lines, byte-identical across two runs
+```
+
+`prvSingleTaskTests`, both echo server/client pairs and the interrupt
+trigger-level test all run and self-verify.
+
+**What the workaround costs, measured before choosing it:** the pair is the
+demo's only coverage of interleaved non-blocking send/receive, and covers
+**none** of the six APIs this scenario exists to close for H2 —
+`xStreamBufferReset`, `IsEmpty`, `IsFull`, `BytesAvailable`,
+`SpacesAvailable` and `ReceiveFromISR` are all called from
+`prvSingleTaskTests` (lines 256–572) and from nowhere in the pair.
+
+**Not fixed here, because widening the contract is an owner's call.** A
+tick source that reaches ordinary code — say a tick every Nth kernel API
+entry, which the spinner *does* reach — would re-pin all 20 scenarios and
+need the identical rule implemented in the Rust sim. That is a contract
+v2, not a porting step.
+
+### CLOSED by sim contract v2
+
+**The rule.** Time passes at kernel-visible points. v1 had two: the idle
+hook, and every 16th outermost critical-section exit. v2 adds the third
+that was missing -- **the return of a kernel call that took neither** -- and
+prices it at exactly one empty critical section.
+
+That last part is what makes it cheap and safe. It is not a second clock:
+the count, the every-16th rule, the running-task test and the switch are
+all the paths v1 already proved, reached through `vPortEnterCritical();
+vPortExitCritical();`. `exits` keeps its meaning, widened from "outermost
+critical-section exits" to "kernel-visible points".
+
+**Why it is this narrow.** Every other object closes the hole by accident:
+`uxQueueMessagesWaiting`, `eTaskGetState` and `uxTaskPriorityGet` all take a
+section. Only the stream buffer's zero-wait and query paths can return
+blind, so only `xStreamBufferSend` and `xStreamBufferReceive` carry the
+bracket -- four of FreeRTOS's own `traceENTER_`/`traceRETURN_` hooks on the C
+side, and one wrapper each in `Kernel` on the Rust side.
+
+**What it cost, measured.** Two scenarios re-pinned and no others:
+
+| scenario | under v1 | under v2 |
+|---|---|---|
+| `StreamBufferDemo` | would not run at all | `exits=28002 lines=20927` |
+| `MessageBufferAMP` | `exits=2072 lines=2430` | `exits=2090 lines=2445` |
+| the other twenty | unchanged | unchanged, byte for byte |
+
+`StreamBufferInterrupt` is in the unchanged column, which is the useful
+check: its reader always blocks, so it never makes a blind call.
+
+**What it bought.** `kairos oracle patch` no longer edits
+`StreamBufferDemo.c` -- the workaround that dropped
+`prvNonBlockingSenderTask` and `prvNonBlockingReceiverTask` is gone, both
+tasks are ported, and the demo's own check passes with all three of its
+clauses including `ulNonBlockingRxCounter`. The scenario is the upstream one
+again.
+
+| gate | result |
+|---|---|
+| `conform StreamBufferDemo` | 20,928 lines identical, first try |
+| `conform StreamBufferDemo --ticks 100000` | **1,155,782 lines identical** |
+| `conform --all` | 22 scenarios identical |
+
+**What is still out of reach, and it is no longer a hole in the corpus.**
+`xTaskGetTickCount` is also blind on this port (`portTICK_TYPE_IS_ATOMIC`
+is 1), so a task that busy-polled it alone would still stop the clock.
+Nothing in the corpus does, and the bracket is additive -- adding it there
+is two more hooks and a re-pin of whichever scenarios call it. It is named
+here so that the next demo that needs it finds the answer rather than the
+symptom.
