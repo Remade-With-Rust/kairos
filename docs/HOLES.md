@@ -380,7 +380,64 @@ mutants (4%)**.
 
 ---
 
-## H4 — The mutant survey covers one file of nine — SEVEN OF NINE NOW MEASURED, 2026-09-20
+## H4 — The mutant survey covers one file of nine — CLOSED 2026-09-21, nine of nine accounted for
+
+**The last two are `lib.rs` and `proofs.rs`.** One was measured; the other
+cannot be, and the reason is worth more than the number would have been.
+
+### `lib.rs`: 6 mutants, 1 caught, 5 unviable, 0 missed
+
+```text
+cargo mutants --in-place --file crates/rusty_rtos_kernel-core/src/lib.rs
+6 mutants tested in 23s: 1 caught, 5 unviable
+```
+
+All six are on the geometry functions — `items_for`, `lists_for`,
+`list_slots_for` — replaced with `0` or `1`. **Five do not compile**, because
+those are `const fn`s used in const-generic positions and a wrong value fails
+the geometry assertions at compile time. That is the strongest outcome a
+mutant can have: the property is enforced by the compiler rather than by a
+test, so there is no run in which it can be wrong. The sixth is caught.
+
+**100% of viable mutants killed.**
+
+### `proofs.rs`: cannot be surveyed, and a survey would report a plausible lie
+
+96 mutants, all inside `#[kani::proof]` harnesses. Nothing in that file
+compiles outside `cfg(kani)`, so `cargo test` builds and runs exactly the
+same code whether a mutant is planted or not. Measured on a shard rather
+than assumed:
+
+```text
+cargo mutants --in-place --file .../proofs.rs --shard 1/8
+12 mutants tested in 31s: 12 missed
+```
+
+Every one "missed", every one in **`0s build + 1s test`** — the tell that
+nothing was rebuilt and nothing was run. A full run would report **0%
+caught**, which is a plausible-looking number that means nothing at all.
+
+**That is the third instrument defect this hole has recorded, and the same
+shape as the other two: a number that looks like a measurement and is an
+artefact of the harness.** It is also a different reason from `system.rs`'s,
+which closed because cargo-mutants generates zero mutants there. Here it
+generates 96 and they are all meaningless.
+
+**And mutating a proof would be the wrong question anyway.** A mutant in a
+harness measures the HARNESS, not the kernel. What a proof is worth is
+whether it FAILS when the kernel is broken, which is a poison test against
+Kani rather than a mutation survey — see H7.
+
+### One tooling note, because it cost a run
+
+`cargo mutants` copies the tree to `/tmp` by default, and this package's
+`rusty_rtos_core` is a path dependency OUTSIDE the copied tree, so the
+baseline build fails with *"unable to update /tmp/rusty_rtos_core"* and no
+mutants are tested at all. `--in-place` is not an optimisation here, it is
+the only mode that works — which is why the established command in
+`docs/LEDGER.md` already carries it.
+
+## H4 — the survey as it stood, seven of nine
 
 **Seven of the nine are measured**, and the two that are not are named
 below with what blocks them. 42 tests were written against what survived.
