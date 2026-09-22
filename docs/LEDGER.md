@@ -7643,3 +7643,26 @@ Nine hypotheses, eight refuted, and the ninth found by a probe that
 settled in one minute what nine readings of behaviour could not — and the
 fix turned out to be a pattern the codebase had already invented, written
 down, and applied everywhere except here.
+
+## Both emulators confirmed at 25 of 25 — and the claim was premature when first made (2026-09-21)
+
+The entry above says "the emulator hour is 25 of 25". **When it was written,
+only RV32 had been re-run.** M3's row still rested on its pre-fix result, and
+saying "the emulator hour" made a claim about two machines from one.
+
+Corrected by measuring rather than by softening the wording:
+
+| | ticks | yields | exits | lines | bytes |
+|---|---:|---:|---:|---:|---:|
+| RV32 | 3,600,020 | 152,702 | 3,948,990 | 4,556,276 | 160,523,274 |
+| Cortex-M3 | 3,600,020 | 152,702 | 3,948,990 | 4,556,276 | 160,523,274 |
+
+**Identical field for field.** Both now pass `AbortDelay`'s hour, so both are
+**25 of 25**, and the two architectures agree on every counter at 1,800x the
+pinned length — which is the cross-architecture determinism this corpus
+exists to demonstrate, arriving for free on the scenario that used to be the
+one exception.
+
+K3's clause "an hour each on M3-qemu, RV32-qemu" is now **fully satisfied on
+the whole 25-scenario corpus, with no exceptions on either machine.** What
+remains of K3 is the C6, which is hardware.
