@@ -7569,3 +7569,77 @@ than a one-liner: a bump allocator cannot return an arbitrary block, so
 it. It also touches the thing `AbortDelay`'s known conformance gap is about —
 the C keys a queue's trace ordinal on its malloc address — so it must be
 made against the corpus, not beside it.
+
+## ★★★★ FIXED: the storage leak is closed, and the corpus is 25 of 25 (2026-09-21)
+
+Three lines in `queue_delete`, and the argument for them was already written
+in this kernel — about a different arena.
+
+```rust
+if q.kind.carries_data() {
+    let end = q.base.saturating_add(q.length);
+    if end == self.slots_used {
+        self.slots_used = q.base;
+    }
+}
+```
+
+### The precedent was already in the tree
+
+`Kernel::free_blocks` exists for the BYTE arena, and its comment says why:
+
+> *"This is the one allocator in the kernel, and it exists because the C's
+> stream buffers are heap objects: `MessageBufferDemo`'s echo server creates
+> one and deletes it again on every loop, and **a bump allocator would run
+> out in a few hundred ticks**."*
+
+The identical argument applies to the slot arena and was never made. The fix
+is the same move `give_bytes` already performs — *"a block at the very end
+goes back to the bump pointer instead of the list, which is what keeps a
+create/delete loop free"* — applied where it was missing.
+
+### What it does
+
+| | before | after |
+|---|---|---|
+| single create/delete, 10 rounds | 12 → 12 | 12 → 12 |
+| batch fill/drain oldest-first | 12 → **8** | 12 → **12** |
+| batch fill/drain newest-first | 12 → **8** | 12 → **12** |
+| `AbortDelay` at 3,600,000 ticks | **FAIL**, `error` set at 220,387 | **ok**, 14,205 cycles |
+| `AbortDelay` hour on RV32 | **FAIL** | **ok**, 3,600,020 ticks |
+| **the emulator hour** | **24 of 25** | **25 of 25** |
+
+### And conformance is untouched, which is the part that had to be proved
+
+A kernel change in a family whose whole claim is byte-exactness has to be
+argued against the corpus, not beside it:
+
+- `AbortDelay`: **2,549 lines identical** to the C kernel, and the same
+  counters as before the change — `ticks=2000 yields=86 exits=2198
+  lines=2548`.
+- `kairos conform --all`: **22 scenarios identical**, exit 0, zero
+  divergences.
+
+The change cannot move a trace, and now that is measured rather than argued:
+it only lowers a bump pointer on a path that emits no event.
+
+### What is deliberately NOT fixed
+
+**Out-of-order deletes still strand their slots.** The end-of-arena case is
+the one the corpus exercises and the one create-then-delete produces; a
+delete that is not the most recent allocation still leaks. Closing that wants
+the full `free_blocks` treatment — a second array, coalescing, and its own
+proof — and it is a larger change with more to demonstrate than three lines
+that are already verified.
+
+Recorded as a known limit rather than left to be discovered, which is the
+distinction the batch rows above make visible: they pass now because the
+drain empties the arena from the end, not because arbitrary frees work.
+
+### The shape of the whole hunt
+
+Nine hypotheses, eight refuted, and the ninth found by a probe that
+*accidentally* did the thing none of the guesses had tried. Then the source
+settled in one minute what nine readings of behaviour could not — and the
+fix turned out to be a pattern the codebase had already invented, written
+down, and applied everywhere except here.
