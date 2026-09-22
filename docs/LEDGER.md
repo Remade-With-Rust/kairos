@@ -7427,3 +7427,68 @@ measurements bounding it, eight mechanisms eliminated with evidence, and a
 unit error corrected (108 passes, not 870). **Not one measurement has had to
 be withdrawn. Only the explanations** — and every one of those was withdrawn
 by the next measurement rather than by argument.
+
+## ★★★ FOUND: reclamation depends on how many objects are outstanding (2026-09-21)
+
+Nine hypotheses. The ninth holds, and it was found by observing rather than
+guessing — the move named at the end of the eighth refutation.
+
+### How it surfaced
+
+`capacity_over_time.rs` was written to answer *when* each slot is lost, by
+stepping the scenario and sampling capacity as it ran. It accelerated the
+exhaustion **twelve-fold**: 11 slots gone in **9 passes**, where the
+unperturbed run takes **108**.
+
+The probe had changed the thing it measured — usually a ruined experiment.
+Here it was the finding, because the sampler differs from all eight earlier
+probes in exactly one way: **it holds many objects at once.** Every earlier
+probe held at most one.
+
+### The defect, isolated
+
+`batch_vs_single.rs`, ten rounds of each shape on fresh kernels:
+
+| shape | before | after | lost |
+|---|---:|---:|---:|
+| single: create 1, delete 1 (×10) | 12 | 12 | **0** |
+| batch: fill to refusal, drain oldest-first | 12 | 8 | **4** |
+| batch: fill to refusal, drain newest-first | 12 | 8 | **4** |
+
+**Creating one object and deleting it reclaims perfectly, forever. Creating
+several and then deleting them all loses slots.** Order makes no difference,
+which rules out a stack-vs-queue discipline in the free list.
+
+This is a **kernel defect**, in `0.2.0`, and it is nothing to do with which
+object or which surface — which is precisely why eight hypotheses about
+queues, semaphores, event groups, waiters, aborts and skipped deletes all
+missed it.
+
+### ★ The first version of this test was confounded, and the fix changed the number
+
+It measured its baseline with *create-until-refusal-then-delete-all* — which
+**is** the operation under test. If the baseline leaked, the comparison was
+meaningless. It reported **12 of 12 lost**.
+
+Rebuilt with two fresh kernels and a single destructive measurement each, it
+reports **4 of 12**. The effect is real and a third of the size first
+claimed. A probe whose control performs the operation under test measures
+nothing, and this one nearly shipped a number three times too large.
+
+### What is NOT established
+
+- **The exact rule.** Four lost over ten rounds is not one per batch, and
+  batches shrink as capacity falls, so the arithmetic needs doing properly.
+- **That this is the whole of `AbortDelay`'s exhaustion.** The scenario's
+  four objects *look* sequentially created and deleted; something must make
+  two of them overlap. Likely, unproven.
+- **Which arena.** Queue descriptors, item storage, or both.
+
+### The method, since nine hypotheses is a lot to have been wrong about
+
+Eight guesses cost eight cheap probes and produced nothing but eliminations.
+The ninth came from a probe built to *observe* rather than to confirm — and
+it worked because it accidentally did something none of the guesses had
+thought to do. **The eliminations are what made it legible**: when the
+sampler accelerated the failure, there was exactly one difference left
+unexplored, because the other eight had been closed off with evidence.
