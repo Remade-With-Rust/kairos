@@ -7373,3 +7373,57 @@ exhaustion, four independent measurements bounding it, and a named next step
 — already exists. **A defect that is precisely characterised and honestly
 unexplained is a better hand-off than one with a confident wrong story
 attached**, which is what the first six attempts would have produced.
+
+## Eight hypotheses, eight refutations — and the refutations are now the finding (2026-09-21)
+
+The probe named at the end of the last entry has been run. `AbortDelay`
+blocks and aborts on four surfaces; the waiter test had covered only the
+queue. Extended to all four:
+
+| shape | before | after | lost |
+|---|---:|---:|---:|
+| queue: block → delete | 11 | 11 | **0** |
+| queue: block → abort → delete | 11 | 11 | **0** |
+| queue: block → time out → delete | 11 | 11 | **0** |
+| **semaphore**: block → abort → delete | 11 | 11 | **0** |
+| **event group**: block → abort → delete | 11 | 11 | **0** |
+| **stream buffer**: block → abort → delete | 11 | 11 | **0** |
+
+**All six hold.** Every isolated shape reclaims, on every surface, with and
+without a parked waiter, with and without an abort.
+
+### The shape of the whole investigation
+
+| # | hypothesis | killed by |
+|---|---|---|
+| 1 | a liveness stall | the cycle counters climb to 14,904 |
+| 2 | the queue was not full | the send was refused, not instant |
+| 3 | an abort firing early | `blocked 0` is not "early", it is "never" |
+| 4 | a wrong handle as the root | the handle is wrong *because* create was refused |
+| 5 | a per-pair reclaim failure | all four pairs: 12 of 12 over forty rounds |
+| 6 | a queued waiter blocks reclaim | 11 of 11, queue |
+| 7 | the scenario skips a delete | 108 created, 108 deleted, exact |
+| 8 | a waiter on the other three surfaces | 11 of 11, all three |
+
+### What that leaves, stated as the result rather than as a gap
+
+**Every isolated reproduction of what the scenario does reclaims correctly,
+and the scenario still exhausts.** That is not an absence of a finding — it
+is a finding, and a sharp one: the cause is something the scenario does that
+eight hand-built reproductions do not, which points away from the
+create/delete APIs entirely and towards how the **runner** drives them.
+
+A ninth guess is the wrong next move. The right one is to stop reproducing
+and start observing: instrument the kernel's own arena — a count of live
+objects per kind, sampled across a real `AbortDelay` run — and watch which
+one climbs. That replaces guessing the mechanism with reading it, which is
+what the first eight attempts all skipped.
+
+### What this cost and what it bought
+
+Eight probes, each a few minutes. It bought: a reproducible exhaustion with
+its boundary to the tick (220,387, passing at 220,386), four independent
+measurements bounding it, eight mechanisms eliminated with evidence, and a
+unit error corrected (108 passes, not 870). **Not one measurement has had to
+be withdrawn. Only the explanations** — and every one of those was withdrawn
+by the next measurement rather than by argument.
