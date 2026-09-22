@@ -7252,3 +7252,55 @@ says plainly that the non-uniformity is unexplained.
 **A gate that cannot tell a cliff from a slope is not measuring the thing it
 names** — the same lesson as the soak harness that counted a FAIL as a pass,
 found six hours earlier in this session.
+
+## ★ "queue_delete does not reclaim" is REFUTED — none of the four leaks alone (2026-09-21)
+
+The entry above measured free queue capacity falling to zero under
+`AbortDelay` and called it a leak: *"queue capacity is not being fully
+reclaimed, and that is a kernel defect in a crate published today at
+0.2.0."* The **observation** stands. The **mechanism** does not.
+
+`tests/which_resource_leaks.rs` asks each create/delete pair on its own, on a
+fresh kernel, with nothing else running — forty rounds each, more than three
+times the capacity:
+
+| pair | before | after | lost |
+|---|---:|---:|---:|
+| `queue_create` / `queue_delete` | 12 | 12 | **0** |
+| `semaphore_create_binary` / `queue_delete` | 12 | 12 | **0** |
+| `event_group_create` / `event_group_delete` | 12 | 12 | **0** |
+| `stream_buffer_create` / `stream_buffer_delete` | 12 | 12 | **0** |
+
+**Every pair reclaims perfectly.** Forty rounds on a twelve-slot arena would
+have emptied it three times over if any single pair failed to return a slot.
+
+### So what is true, stated carefully
+
+- **Capacity does fall under `AbortDelay`** — 11 at 100,000 ticks, 0 by
+  219,000. Measured twice, on a workload that deletes what it creates.
+- **No create/delete pair leaks by itself.** Measured, in isolation.
+
+Both are facts and they do not contradict each other; together they say the
+exhaustion needs something `AbortDelay` does that a bare create/delete loop
+does not.
+
+### The next suspect, named and NOT asserted
+
+`AbortDelay` does not merely create and delete. It **blocks a task on each
+object and then aborts that block**, which is the whole subject of the
+scenario. The obvious candidate is therefore deletion — or abort — while a
+waiter is queued on the object, and the isolated probe never queues a waiter.
+
+That is a hypothesis. It has the shape of the right answer and it has not
+been measured, and on this defect the plausible answer has now been wrong
+**six times running**.
+
+### The pattern in this session that keeps paying
+
+Six mechanisms proposed, six refuted by the next measurement: a liveness
+stall, a queue that was not full, an abort firing early, a wrong handle as
+root, a per-pair reclaim failure — each one a reasonable reading of the
+layer visible at the time. What has held up is the opposite discipline:
+**record the measurement, name the unmeasured thing, and let the next probe
+kill the story.** The measurements have never had to be withdrawn. Only the
+explanations.
