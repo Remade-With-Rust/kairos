@@ -6870,3 +6870,29 @@ keys a queue's trace ordinal on its malloc address — and that is a conformance
 gap at 2,000 ticks. This is a separate liveness failure two orders of
 magnitude further out, and the two should not be assumed to share a cause
 just because they share a scenario.
+
+## Both emulator hours, on the whole 25-scenario corpus: 24 of 25, and they agree exactly (2026-09-21)
+
+M3 followed RV32 through the corrected harness, on the full corpus rather
+than the eighteen the hardcoded list used to cover.
+
+| | RV32 | Cortex-M3 |
+|---|---|---|
+| scenarios attempted | 25 | 25 |
+| passed the hour | **24** | **24** |
+| failed | `AbortDelay` | `AbortDelay` |
+| wall clock | 8 min | 13 min |
+
+**The same scenario fails on both, and only that one.** Two architectures
+agreeing to the scenario is what says this is a kernel-or-corpus property
+rather than anything about either target — the same reasoning that made
+`StreamBufferDemo`'s identical divergence on both emulators worth trusting.
+
+Heaviest row on both: `IntQueue`, 79,912,747 trace lines and 2.59 GB, in 75
+seconds on M3 against 78 on RV32.
+
+**So K3's "an hour each on M3-qemu and RV32-qemu" is now measured on the
+whole corpus, under a harness that can report a failure, and the answer is 24
+of 25 on each.** It was previously recorded as closed at 18/18 on each, which
+was a smaller corpus counted by a harness that could not tell `ok` from
+`FAIL`. The remaining clause is the C6, which is hardware.
