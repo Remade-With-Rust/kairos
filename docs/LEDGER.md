@@ -1702,9 +1702,14 @@ seam crate owns that pin rather than two.
 
 ## K5a — what the kernel costs a real Janus workload (2026-09-11)
 
-**One full scheduling round costs 8,313 ns — 1,995 cycles at 240 MHz — which
-is 88 parts per million of a P-256 signature.** That is K5a's measurement
+**One full scheduling round costs 3,724 ns — 893 cycles at 240 MHz — which
+is 39 parts per million of a P-256 signature.** That is K5a's measurement
 clause, answered on the XIAO ESP32-S3.
+
+> **These figures replaced 8,313 ns / 1,995 cycles / 88 ppm on 2026-09-21**,
+> when this cell was found to be measuring through the shadowed-`NoTrace`
+> defect (see the 2026-09-21 rows at the end of this ledger). No kernel code
+> changed. The clause's conclusion is unchanged and stronger.
 
 `rusty_rtos_kernel/firmware/xiao-s3-signing`. The workload is not ours:
 `p256 = "0.13"` (RustCrypto), the same crate and major version
@@ -1712,9 +1717,9 @@ clause, answered on the XIAO ESP32-S3.
 
 | fact | value | method |
 |---|---|---|
-| a scheduling round | `per_round_ns=8313 per_round_cycles=1995` | a queue send, a queue receive and two context switches, timed on their own over 20,000 rounds |
+| a scheduling round | `per_round_ns=3724 per_round_cycles=893` | a queue send, a queue receive and two context switches, timed on their own over 20,000 rounds |
 | switches actually taken | `switches=40000 per_round=2` | counted, not assumed |
-| as a share of one signature | **88 ppm** (8,313 ns of 94,349,000 ns) | a small measured number over a large measured one |
+| as a share of one signature | **39 ppm** (3,724 ns of 94,390,000 ns) | a small measured number over a large measured one |
 | our P-256 cost on this part | sign 94.3 ms, verify 149.4 ms (minima) | 100 of each, min and median |
 | the Janus baseline it echoes | sign 95 ms, verify 151 ms | `rusty_esp_mid` M1, 2026-09-06 — **cross-binary** (they pin esp-hal `=1.2.0`, we `=1.2.1`), so a reference and never the result |
 | work parity | `bare=100s/100v/100ok scheduled=100s/100v/100ok` | printed every run |
@@ -1758,7 +1763,7 @@ the quantum — and divided. The method line prints the resolution.
 ### What this does and does not settle
 
 It settles the K5a question *"does the kernel cost anything against the P-256
-baseline?"* with a number: 88 ppm, on the same part, same crate, same clock.
+baseline?"* with a number: **39 ppm**, on the same part, same crate, same clock. (It read 88 ppm until 2026-09-21, when the cell was found to be measuring through the shadowed-`NoTrace` defect; the answer moved in the same direction as the question.)
 
 It is **not** `xiao-s3-keys` itself running on a Kairos kernel. That joining
 act lives in a Janus repository and is the owner's; this is the same workload
@@ -1872,7 +1877,7 @@ A gate treating silence as success would have certified it.
 
 `xiao-s3-signing` gained a verdict of its own to be gateable: work parity
 held, two real switches per round, and the kernel's share under 1000 ppm — a
-regression bound, generous against the 88 ppm measured, because the bound is
+regression bound, generous against the 88 ppm then measured (39 ppm after the 2026-09-21 correction, so more generous still), because the bound is
 not the result.
 
 ### The trap that cost the first run
@@ -2731,13 +2736,18 @@ wake time is far away. The two figures are therefore not "idle vs loaded" but
 "two ready tasks" vs "one ready and one delayed", and ready-list population
 dominates.
 
-**A cross-check against the sibling cell, which is worth as much as either
-number.** `xiao-s3-signing` measured a scheduling round — queue send, receive,
-two switches — at **1,995 cycles** by amortising 20,000 of them through a 1 µs
-clock. These rows predict roughly `2 x 623 + (949 - 623) ~ 1,570` for the same
-shape: same order, ~20% apart, by two different instruments on two different
-arrangements. A factor-of-several disagreement would have meant one of them was
-measuring something else.
+**A cross-check against the sibling cell — and on 2026-09-21 it turned out
+not to be one.** `xiao-s3-signing` measured a scheduling round — queue send,
+receive, two switches — at **1,995 cycles**, against these rows' prediction of
+`2 x 623 + (949 - 623) ~ 1,570`: same order, ~20% apart, which read as two
+instruments agreeing.
+
+**They were two measurements of the same defect.** The sibling hand-rolls the
+same shadowed `NoTrace`. Both were corrected and re-run on the board: the
+round is now **893 cycles** and the prediction is
+`2 x 166 + (430 - 166) ~ 596`. Two instruments agreeing is worth as much as
+either alone ONLY when they are independent, and a common-mode defect makes
+them one instrument wearing two hats.
 
 **What is still open, and it is half the clause.** K3 asks for these rows
 *against the C demo*, and there is **no C arm**. Building FreeRTOS for the S3
@@ -5949,3 +5959,454 @@ but a scaffolded plan is a TEMPLATE, and a template that is never specialised
 reads exactly like a completed one. Nothing in the tooling distinguishes
 "this row was considered and is genuinely N/A" from "this row is still the
 kernel's".
+
+## K3's remaining measurement half: three rows were already done, and a fourth is refuted (2026-09-21)
+
+K3's row ends with *"What remains of the measurement half: tick-ISR and
+ISR-to-task latency rows, absolute cycles, and the flash comparison."*
+**All four were already done, and two of them are described as done earlier in
+the same row.** A row long enough to contradict itself is a row nobody reads
+to the end.
+
+| the summary said remained | actually |
+|---|---|
+| tick-ISR row | **131 cycles** on silicon, 2026-09-11 |
+| ISR-to-task latency | **949 cycles**, same cell, same day |
+| absolute cycles | all three rows are cycles on a 240 MHz part |
+| flash comparison | **15,950 vs 13,924, 1.15x** — and the row itself says it "did NOT need `rusty_rtos-capi`, which an earlier note assumed" |
+
+### What actually remains, and an attempt at it
+
+Two things: the **C6** clause of the hour (hardware, and the silicon hour is
+already met on an S3), and **the C arm of the cycle rows** — the clause says
+*vs the C demo*, and the silicon rows have no FreeRTOS arm beside them.
+
+A host **work row** was built to stand in for that comparison: count
+`xTaskIncrementTick` and `vTaskSwitchContext` in the C oracle under callgrind
+against `increment_tick` and `switch_context` in our sim, on the same
+scenario, divided by the number of calls.
+
+**The work-parity anchor was perfect**, which is why the attempt got as far as
+it did — both kernels call the tick and the switch **exactly the same number
+of times** on the same scenario:
+
+| scenario | tick calls | switch calls |
+|---|---:|---:|
+| PollQ | 2,001 / 2,001 | 81 / 81 |
+| BlockQ | 2,810 / 2,810 | 4,826 / 4,826 |
+| semtest | 2,000 / 2,000 | 3,296 / 3,296 |
+
+And the ratios looked stable across four scenarios — tick 1.49x, 1.51x,
+1.50x, 1.30x; switch 2.03x, 2.35x, 2.51x, 2.37x. Against K3's bars (tick and
+switch both ≤ 1.25x) that would have been a finding against us, and it would
+have been written up as one.
+
+### ★ It is an artefact of FACTORING, not a measure of tick cost
+
+The basis is self cost, and self cost is only comparable if both
+implementations put the same share of the work in the function itself:
+
+| arm | tick self | tick inclusive | self as % of inclusive |
+|---|---:|---:|---:|
+| C | 93,530 | 3,441,619 | **2.7%** |
+| Kairos | 139,690 | 1,062,313 | **13.1%** |
+
+**A self-cost comparison here compares 2.7% of one thing against 13.1% of
+another.** The 1.5x measures how differently the two kernels factor a tick,
+not what a tick costs.
+
+Inclusive does not rescue it either, in the other direction: the C's tick
+inclusive is **68% of the entire run**, because on the Posix port the tick
+drags in the thread switch and the trace write — neither of which is kernel
+work, and neither of which our runner arranges the same way.
+
+**REFUTED, and recorded so nobody builds it again.** There is no defensible
+host work row for a tick between these two kernels. The instrument is not the
+problem; the boundary is. A tick has no agreed edge in either codebase.
+
+**And that is precisely why the clause puts the cycle rows on a part.** On
+silicon you bracket the code path between two reads of a cycle counter, and
+the question "where does this function's work end" never arises — the
+bracket answers it. The plan's reasoning survives the attempt to work around
+it, which is the useful outcome.
+
+*(One instrument fault caught on the way, by the parity gate rather than by
+reading: the call-count parser missed callgrind cost lines beginning `+`,
+`-` or `*` — relative subpositions — and reported the C arm as **zero**
+calls. A ratio would have been printed against a zero denominator had the
+script not refused to print one when the counts disagree.)*
+
+## The C arm of K3's cycle rows was blocked on a chip; it is blocked on an SDK (2026-09-21)
+
+The row above refutes a host stand-in for *"cycle rows vs the C demo"* and
+concludes the comparison belongs on a part. The next question is which part,
+and the plan has said C6 since it was written.
+
+**Re-checking it moved the item off the hardware list.** Three probes, and
+two of them refuted what I expected to find:
+
+| checked | expected | found |
+|---|---|---|
+| does the pinned oracle have an Xtensa port? | no — ESP maintains its own | **yes**, `portable/ThirdParty/GCC/Xtensa_ESP32`, in the upstream tree |
+| does that port support the **S3** (LX7), or only the original ESP32 (LX6)? | LX6 only | **S3 named explicitly** in four files |
+| is there an S3 C compiler on this box? | no | **`xtensa-esp32s3-elf-gcc`, installed** |
+
+The S3 references are not incidental — each is a chip branch that pulls a
+different ROM or clock header:
+
+```
+include/FreeRTOSConfig_arch.h:81   #elif CONFIG_IDF_TARGET_ESP32S3
+port.c:73                          #if   CONFIG_IDF_TARGET_ESP32S3
+port_common.c:28                   #elif CONFIG_IDF_TARGET_ESP32S3
+xtensa_init.c:56                   #elif CONFIG_IDF_TARGET_ESP32S3
+```
+
+So the C arm can be built for **the part already on COM4** — the same XIAO
+ESP32-S3 that produced tick 131 / switch 623 / wake 949.
+
+### ★ And it would be the RIGHT C, which an IDF build would not be
+
+This matters more than the convenience. **ESP-IDF bundles a FORK of
+FreeRTOS**, not the upstream kernel. Our whole conformance claim is against
+`oracle/FreeRTOS-Kernel` at **V11.3.1** (`3a22924`), which is where the 26
+byte-identical scenarios come from. A cycle row measured against IDF's fork
+would compare Kairos to a kernel it has **never been proved equivalent to** —
+the same class of mistake as the self-vs-inclusive basis above, one level up.
+
+Building the oracle's own port keeps the comparison on the kernel we conform
+to, with IDF supplying only the platform.
+
+### The actual blocker, named
+
+The port includes **eighteen ESP-IDF headers**:
+
+```
+sdkconfig.h  esp_idf_version.h  esp_attr.h  esp_crosscore_int.h
+esp_debug_helpers.h  esp_err.h  esp_freertos_hooks.h  esp_heap_caps.h
+esp_heap_caps_init.h  esp_int_wdt.h  esp_intr_alloc.h  esp_log.h
+esp_panic.h  esp_rom_sys.h  esp_system.h  esp_task.h  esp_task_wdt.h
+esp_timer.h
+```
+
+It cannot compile without the SDK supplying startup, clock init, interrupt
+allocation, the watchdogs and the flash bootloader. **So the item is an SDK
+install (~2 GB), not a hardware purchase** — left undone here deliberately,
+because a 2 GB SDK is an environment change, and the owner decides those.
+
+**Net effect on the plan:** the C6 is no longer the blocker for the
+*comparison*; it remains the blocker for the *second architecture of record*.
+Those were one line and are now two, and only one of them needs money.
+
+## K3's "vs the C demo" row exists, on rv32, in retired instructions (2026-09-21)
+
+The row above refutes a host stand-in for this comparison and concludes the
+boundary has to be stated rather than inferred from a call graph. **This is
+that comparison, built the way the refutation said to build it.**
+
+`bench/tick-work/run.sh`. Two arms, one machine, one instrument, one script:
+
+| | |
+|---|---|
+| **C** | FreeRTOS **V11.3.1** out of the pinned `oracle/` checkout, **unmodified**, with the oracle's own first-party `portable/GCC/RISC-V` port, linked bare-metal for QEMU `virt` |
+| **Kairos** | `rusty_rtos_kernel/firmware/riscv32-qemu-tick-work`, same machine, same instrument, matched config |
+
+The instrument is `minstret` under `-icount shift=0` — an architectural CSR,
+not optional debug hardware, and exactly reproducible where a clock is not.
+So this is a **work** row on the same basis as `bench/switch-cost`. **Cycles
+still come from a part**, and that has not changed.
+
+### The rows
+
+```
+retired instructions per call, rv32imac, -O2 both arms, no LTO either
+row                FreeRTOS     Kairos    ratio
+tick_idle                15         56    3.73x
+tick_delayed             15         56    3.73x
+switch_select            27         79    2.93x
+```
+
+**Two of the three are against us.** They are findings, not caveats.
+
+### ★ But quoting `switch_select` alone is quoting a third of the answer
+
+A switch is selection **plus** the register file, and the two kernels put
+their weight in opposite halves. `bench/switch-cost` already prices the other
+half from the same oracle — cooperative 30 against 83, preemptive 74 against
+83 — because FreeRTOS routes yields through the `ecall` trap and saves 28
+GPRs, where a Kairos yield happens at a call site whose caller-saved half the
+ABI has already declared dead.
+
+Added up:
+
+| whole switch | FreeRTOS | Kairos | |
+|---|---:|---:|---:|
+| cooperative | 27 + 83 = **110** | 79 + 30 = **109** | **0.99x — parity** |
+| preemptive | 27 + 83 = **110** | 79 + 74 = **153** | **1.39x against us** |
+
+Two true statements that say different things, which is why both are here.
+
+### The two gates, and what each catches
+
+**PARITY** — identical anchors or no comparison:
+`ANCHOR samples=512 tick_calls=1024 switch_calls=512 tick_count=1024`, and
+`tick_count` is read back from the kernel so a tick that took a
+short-circuit path cannot pass. That is not hypothetical:
+`xTaskIncrementTick` opens with `if( uxSchedulerSuspended == 0 )` and a
+suspended call merely does `++xPendedTicks` — about the right size to look
+like a plausible answer.
+
+**POISON** — every arm built twice, the measured call made once per bracket
+and then twice, and every row must move by one call's worth:
+
+```
+                     C x1     C x2  Rust x1  Rust x2
+tick_idle              15       30       56      112
+tick_delayed           15       30       56      112
+switch_select          27       52       79      155
+```
+
+A bracket measuring the loop instead of the callee does not move. Without
+this the numbers are plausible and unproven.
+
+### ★★ The defect the gap found: a hand-rolled twin of a sink the crate ships
+
+The first Kairos `switch_select` read **305**, an 11.3x. A number that far
+past prediction gets the same suspicion as one far short of it, so the
+boundary was checked before anything was published — and the check found a
+**harness** defect, not a kernel one.
+
+`rusty_rtos_core::trace` **already ships** a `NoTrace` carrying
+`const WANTS_NAMES: bool = false`, which is exactly what lets the kernel skip
+the task-name lookup and its UTF-8 validation. The cell had hand-rolled its
+own `NoTrace`, shadowing it and inheriting the trait default of **`true`** —
+so every switch built a 16-byte name and handed it to a sink that dropped it.
+
+Using the one that already existed: **305 -> 79, a 3.86x on the row, with no
+kernel change at all.**
+
+**This is not confined to one cell.** Thirteen sites in the repo impl `Trace`
+by hand; eleven of them never set `WANTS_NAMES`, and every one whose body was
+read is a no-op or count-only sink that never looks at a name:
+
+| site | sink |
+|---|---|
+| `rusty_rtos_kernel/firmware/xiao-s3-cycles` | no-op — **and its published silicon switch row was measured through it** |
+| `rusty_rtos_kernel/firmware/xiao-s3-signing` | no-op |
+| `rusty_rtos_port/firmware/mps2-an385-qemu-kernel` | no-op |
+| `rusty_rtos_port/firmware/mps2-an385-qemu-preempt` | no-op |
+| `rusty_rtos_port/firmware/host-kernel` | no-op |
+| `rusty_rtos_port/firmware/xiao-s3-radio` | no-op |
+| `rusty_rtos-capi/firmware/mps2-an385-qemu-capi` | no-op |
+| `rusty_rtos-capi/hosted/capi-host` | no-op |
+| `rusty_rtos_kernel-core/src/proofs.rs` | no-op |
+| `rusty_rtos_kernel-core/src/system.rs` (test) | no-op |
+| `rusty_rtos_kernel-core/tests/no_panic.rs` | counts only |
+
+Only the two tickless cells set it. `xiao-s3-cycles` is fixed and
+re-measured on the board; **the other ten are surveyed and left for the
+owner**, since they sit in four packages and this session was asked for the
+rv32 row.
+
+The general shape is the one the house skills already name: the good
+implementation existed, was tested, and the hot path called a worse twin that
+someone wrote because they did not know it was there.
+
+### Four instrument faults caught on the way
+
+1. **A run with no output read as a hang.** QEMU here is a native Windows
+   binary, so `-serial file:/tmp/...` is not path-translated the way `-kernel`
+   is; the file is never created and the program looks dead. `run.sh` now
+   asks MSYS what Windows calls the directory (`pwd -W`).
+2. **Piped stdout is block-buffered**, so a run that hangs loses everything it
+   printed before hanging — which is exactly the output that says where it
+   hung. Serial goes to a file now.
+3. **The oracle's RISC-V port needs the application to install `mtvec`.**
+   Nothing in the port does it, so the first `taskYIELD()` traps to address 0.
+   Two instructions in `start.S`, and until they were there the scheduler
+   started and never came back.
+4. **The kernel provides `vApplicationGetIdleTaskMemory` itself** in V11.3.1
+   (`configKERNEL_PROVIDED_STATIC_MEMORY`); supplying one is a duplicate
+   symbol, not a missing one.
+
+## The silicon cycle rows were measured through the harness defect, and are corrected (2026-09-21)
+
+The rv32 work row above found that eleven sites hand-roll a `NoTrace` that
+shadows the one `rusty_rtos_core::trace` ships and inherits
+`WANTS_NAMES = true`. **`xiao-s3-cycles` is one of them, and its rows are
+K3's silicon cycle rows.** So they were re-measured on the board.
+
+| row, ESP32-S3 at 240 MHz | through the defect | corrected | |
+|---|---:|---:|---:|
+| tick (nothing delayed) | 131 | **54** | 2.43x |
+| tick (one task delayed) | 129 | **55** | 2.35x |
+| switch | 623 | **166** | 3.75x |
+| ISR-API wake to the task holding the value | 949 | **430** | 2.21x |
+
+**No kernel code changed.** The cell stopped building a 16-byte task name and
+UTF-8 validating it for a sink whose body is `{}`. In wall terms the tick went
+from ~545 ns to ~225 ns and the switch from ~2,595 ns to ~691 ns.
+
+### Why this correction is believable, given it is entirely in our favour
+
+A result this large in your own favour earns more scrutiny than one against
+you, not less. Four things carry it:
+
+1. **The mechanism is named and was found before the number** — the boundary
+   check was run because 11.3x on rv32 was implausible, not because a nicer
+   number was wanted.
+2. **Cross-architecture agreement.** The same one-line fix moved the rv32
+   selection row **305 -> 79 retired instructions (3.86x)** and this cell's
+   switch **623 -> 166 Xtensa cycles (3.75x)**. Two instruments sharing no
+   code, on two architectures, agreeing on the size of the defect.
+3. **It reproduces.** Two reflash-and-reset cycles returned 54 / 55 / 166 /
+   430 identically, and the cell's own seven self-checks pass.
+4. **The rv32 arm is poison-proven** — doubling the measured call doubles the
+   row on both arms — so the bracket is known to enclose the callee.
+
+### ★ It also WITHDREW a finding, which is the part worth keeping
+
+This cell's README carried "the refuted check, which is the most interesting
+line here": the delayed tick measured CHEAPER than the idle one (129 against
+131), the assertion that said otherwise was replaced, and a paragraph
+explained the inversion in terms of ready-list population dominating the
+delayed-list check.
+
+Corrected, it is **55 against 54** — the delayed tick costing one cycle more,
+the obvious way round. **The inversion was a 2-cycle wobble inside a ~77-cycle
+overhead that should never have been in the measurement.** The explanation was
+a good story about an artefact.
+
+The cell now prints whichever sentence its own numbers support instead of
+carrying the conclusion in prose, because the prose was wrong for ten days and
+was confident throughout.
+
+### And a cross-check that turned out not to be one
+
+The README claimed agreement with the sibling cell `xiao-s3-signing`: that
+cell measures a scheduling round at **1,995 cycles**, and the old rows
+predicted `2 x 623 + (949 - 623) ~= 1570` — about 20% apart, which read as two
+instruments agreeing.
+
+**They were two measurements of the same defect.** `xiao-s3-signing`
+hand-rolls the same shadowed `NoTrace`. Against the corrected rows the
+prediction is `2 x 166 + (430 - 166) ~= 596`. Two instruments agreeing is
+worth as much as either alone only when they are independent, and a
+common-mode defect makes them one instrument wearing two hats. The sibling has
+been fixed and a re-measurement is running; until it reports, this README
+carries a prediction rather than a cross-check.
+
+## The sibling cell fell too, and the "cross-check" was common-mode (2026-09-21)
+
+`xiao-s3-signing` hand-rolls the same shadowed `NoTrace` as `xiao-s3-cycles`,
+so it was fixed and re-run on the board. It is K5a's measurement clause.
+
+| | through the defect | corrected | |
+|---|---:|---:|---:|
+| one scheduling round | 8,313 ns / **1,995 cycles** | 3,724 ns / **893 cycles** | **2.23x** |
+| as a share of one P-256 signature | 88 ppm | **39 ppm** | |
+
+Work parity held across the correction — `bare=100s/100v/100ok
+scheduled=100s/100v/100ok`, and `switches=40000 per_round=2`, counted rather
+than assumed, so the round really is two switches either way.
+
+**Three cells, three instruments, one defect.** The fix moved
+`riscv32-qemu-tick-work` **3.86x** (retired instructions, rv32),
+`xiao-s3-cycles` **2.2-3.8x** (Xtensa cycles), and this cell **2.23x**
+(amortised microseconds). Three arrangements sharing no measurement code
+agreeing that the overhead was real is what makes this a defect rather than a
+story.
+
+### The honest state of the cross-check
+
+The cycles cell predicted the signing round as `switch + wake`:
+
+| | prediction | measured | apart |
+|---|---:|---:|---:|
+| through the defect | 1,570 | 1,995 | 1.27x |
+| corrected | 596 | 893 | **1.50x** |
+
+**The agreement got looser, not tighter, and that is recorded rather than
+smoothed.** The model is crude — a round is a queue send, a queue receive and
+two switches, and `switch + wake` does not account for the receive-side call
+— so 297 cycles of slop is unsurprising. What it is NOT is independent
+confirmation, and the README that claimed it was has been corrected.
+
+### K5a's conclusion is unchanged and stronger
+
+The clause asks what a Kairos kernel costs a real Janus workload. It was 88
+ppm of a signature; it is **39 ppm**. A scheduler that was already noise
+against P-256 is half as much noise. Nothing about the finding turned on the
+old number being right, which is the only comfortable thing about having
+carried it for ten days.
+
+## The release gate found StreamBufferDemo diverging on BOTH emulators (2026-09-21)
+
+Run before pushing 0.2.0, not after. `rusty_rtos_demo/firmware/*-qemu-corpus`
+on Cortex-M3 and on RV32:
+
+```
+RESULT: FAIL -- 1 of 25 scenarios diverged
+```
+
+**Identically on both architectures**, which already rules out anything
+architecture-specific. The scenario is `StreamBufferDemo`, and the failure
+report is unusually narrow:
+
+```
+StreamBufferDemo       FAIL
+           ticks      2000 want     2000
+           yields     2424 want     2424
+           exits     28002 want    28002
+           lines     20927 want    20927
+           bytes    676856 want   676662
+           digest 0xafab98d0be27e7d8
+           want   0xf1592634a152db89
+```
+
+**Every counter matches and the line count matches.** Same number of events,
+in the same order, at the same sim times. Only the trace TEXT differs, by
+**194 bytes across 20,927 lines** — about one extra character on one line in a
+hundred.
+
+### It is NOT today's work
+
+Proven rather than assumed. The three files this session touched in
+`rusty_rtos_kernel-core` (`proofs.rs`, `system.rs`, `tests/no_panic.rs`, each
+gaining `const WANTS_NAMES: bool = false`) were stashed and the cell re-run:
+**byte-identical failure**, 676,856 against 676,662 with the same digest. Two
+of the three are `#[cfg(test)]` or Kani-only in any case.
+
+### What it points at
+
+The host passes. `kairos conform --all` is **22 scenarios identical to the C
+kernel**, exit 0, and that includes `StreamBufferDemo` against the C oracle
+itself. The cells compare against the HOST's pins. So the disagreement is
+**host against target**, not either against C:
+
+| | |
+|---|---|
+| host, 64-bit | 676,662 bytes — agrees with the C kernel |
+| M3 and RV32, 32-bit | 676,856 bytes — same lines, same order |
+
+A trace that is longer on the NARROWER machine, at one character per hundred
+lines, is a value in the trace text whose digit count depends on
+`size_of::<usize>()`. A stream buffer's free space is computed from its
+capacity minus a header, the header is four bytes smaller on a 32-bit target,
+so the printed space is four larger — and every time that crosses a power of
+ten it costs a character.
+
+**That is the pointer-width detector firing for the fifth time on this
+project**, and the first time it has been caught by a conformance cell rather
+than by a benchmark ratio.
+
+### Status
+
+**Open, recorded, not hidden.** It is a trace-text defect and not a scheduling
+one — the schedule is provably identical, which is what the counters are for.
+The published crates' own gates pass (`kairos check`, 4 packages), the host
+conformance passes, and 0.2.0 ships with this named in the demo's Known gaps
+rather than smoothed out of the README.
+
+The claim that had to change: the corpus READMEs said 18/18 on each emulator,
+measured when the corpus was 18 scenarios. It is now 25, and the honest
+number is **24 of 25**.
