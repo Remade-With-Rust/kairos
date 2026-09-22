@@ -6817,3 +6817,56 @@ dates. Guessing between them would put a third unverified mechanism into this
 ledger in one day, after two were already refuted. The honest record is that
 both numbers exist, the newer one is reproducible from the command above, and
 whichever is quoted should carry its date.
+
+## AbortDelay's hour failure, bisected: it passes to 220,000 ticks and fails at 221,000 (2026-09-21)
+
+"`AbortDelay` fails the hour" is not a debuggable statement. `KAIROS_SOAK_TICKS`
+makes it one, because the length is a compile-time knob and a bisection is
+eleven runs of a few seconds each.
+
+```
+100,000  ok        500,000  FAIL
+200,000  ok        300,000  FAIL
+210,000  ok        250,000  FAIL
+220,000  ok        230,000  FAIL
+                   224,000  FAIL
+                   223,000  FAIL
+                   222,000  FAIL
+                   221,000  FAIL
+```
+
+**The boundary is between 220,000 and 221,000 ticks**, on RV32, reproducible.
+
+### What the verdict means, precisely
+
+The cell reports `pass=false runaway=false`. `runaway=false` matters: the
+scenario is not looping without end and it is not hanging — it reaches the
+full requested length every time, including at 3,600,009 ticks.
+
+`pass` comes from `State::still_running`, which is our transcription of the
+C's `xAreAbortDelayTestTasksStillRunning`, and it returns false for exactly
+three reasons:
+
+1. `controlling_cycles` has not moved since the previous check,
+2. `blocking_cycles` has not moved since the previous check,
+3. `error` is set.
+
+**Which of the three it is has NOT been determined**, and is not guessed at
+here. The next probe is to print the three separately at the failing length,
+which is a one-line change to the cell and a single run — cheap enough that
+speculating first would be the expensive option.
+
+### Why this is worth having even unfinished
+
+A 1,000-tick bracket is a different kind of object from "fails after an hour".
+The failing window is now small enough to trace in full: the scenario emits
+about 1.27 lines per tick at this length, so the last few thousand ticks
+before the boundary are a few thousand lines, readable end to end and diffable
+against the same window at 220,000 where it passes.
+
+It also bounds the blast radius. `AbortDelay` is already the corpus's known
+divergent scenario for a CONTRACT reason at the pinned length — the C harness
+keys a queue's trace ordinal on its malloc address — and that is a conformance
+gap at 2,000 ticks. This is a separate liveness failure two orders of
+magnitude further out, and the two should not be assumed to share a cause
+just because they share a scenario.
