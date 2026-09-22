@@ -7666,3 +7666,56 @@ one exception.
 K3's clause "an hour each on M3-qemu, RV32-qemu" is now **fully satisfied on
 the whole 25-scenario corpus, with no exceptions on either machine.** What
 remains of K3 is the C6, which is hardware.
+
+## The slot allocator is complete: out-of-order deletes reclaim too (2026-09-21)
+
+The three-line fix above returned an extent only when it was the **last**
+allocation, and that limit was recorded rather than left to be found. It is
+now closed, by mirroring the byte arena's allocator exactly instead of
+inventing a second one.
+
+- `free_slots: [(usize, usize); QUEUES]` — bounded, because at most `QUEUES`
+  queues are alive and so at most `QUEUES` holes can sit between them.
+- `take_slots` — first fit from returned extents, then the bump pointer.
+  First fit for the reason `take_bytes` gives: the pattern that needs an
+  allocator is create-then-delete of the same size, which first fit serves
+  without fragmenting.
+- `give_slots` — coalesces with touching neighbours; an extent at the very
+  end goes back to the bump pointer rather than onto the list.
+- **`new_queue` now returns the slots if the descriptor arena refuses after
+  they were taken.** The old code took storage first and could fail second,
+  which would have stranded exactly what it had just claimed — a leak
+  introduced by the fix for a leak, had it not been caught.
+
+### The test that separates a partial fix from a complete one
+
+Create three, **delete the middle first**. The end-of-arena fix cannot
+reclaim that, because the freed extent is not the last allocation.
+
+| shape | before any fix | end-of-arena only | complete |
+|---|---:|---:|---:|
+| single create/delete | 12 → 12 | 12 → 12 | 12 → 12 |
+| batch, drain oldest-first | 12 → **8** | 12 → 12 | 12 → 12 |
+| batch, drain newest-first | 12 → **8** | 12 → 12 | 12 → 12 |
+| **fragmenting, middle first** | — | would strand | **12 → 12** |
+
+### Proved, not assumed
+
+An allocator change in a family whose whole claim is byte-exactness is argued
+against the corpus:
+
+- `kairos conform --all`: **22 scenarios identical to the C kernel**, exit 0,
+  **zero divergences**.
+- `AbortDelay` counters unchanged: `ticks=2000 yields=86 exits=2198
+  lines=2548`.
+- The kernel's own suites: **85 + 2 + 5 + 8 pass**, zero failures — the Kani
+  proofs among them.
+- The hour, on both emulators: `AbortDelay` **ok at 3,600,020 ticks**,
+  identical field for field on RV32 and Cortex-M3.
+
+### What this closes
+
+`queue_delete` now frees what `queue_create` took, in any order. The defect
+that `AbortDelay` had been reporting — unheard — since before this session is
+gone, and the scenario that was the corpus's one permanent exception is
+simply a passing row.
