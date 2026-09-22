@@ -6410,3 +6410,61 @@ rather than smoothed out of the README.
 The claim that had to change: the corpus READMEs said 18/18 on each emulator,
 measured when the corpus was 18 scenarios. It is now 25, and the honest
 number is **24 of 25**.
+
+## H7: the whole Kani table at a 240 s bound — 12 of 34, and two dead hypotheses (2026-09-21)
+
+The cheapest-first sweep finished: every harness in
+`rusty_rtos_kernel-core/src/proofs.rs` run with `BOUND=240`.
+
+**12 SUCCESSFUL, 22 TIMEOUT, 34 total.**
+
+| converges | seconds | | times out at 240 s |
+|---|---:|---|---|
+| `lists_take_any_argument` | 4 | | every `task_*` harness — all eleven |
+| `insert_end_keeps_the_item_value` | 2 | | `queue_generic_create`, `_reset`, `_send`, `_peek`, `_receive` |
+| `an_arena_only_resolves_its_own_handles` | 3 | | `queue_messages_waiting_and_spaces_available` |
+| `a_fresh_kernel_is_not_running` | 3 | | `queue_create_counting_semaphore` |
+| `a_name_is_truncated_not_overrun` | **80** | | `queue_create_mutex_and_get_holder` |
+| `typed_send_never_loses_the_value` | 2 | | `queue_take_and_give_mutex_recursive` |
+| `typed_receive_gives_back_what_was_sent` | 2 | | `queue_generic_send_stale_handle` |
+| `typed_a_refused_send_does_not_disturb_a_queued_value` | 2 | | `a_queue_starts_empty`, `a_created_task_is_counted`, `three_tasks_are_three` |
+| `queue_receive_from_isr` | 7 | | |
+| `queue_generic_send_from_isr` | 13 | | |
+| `queue_semaphore_take_and_give_from_isr` | 12 | | |
+| `queue_unlock_leaves_the_queue_usable` | 11 | | |
+
+### ★ Two explanations were offered and both are REFUTED by the table
+
+**"Harnesses that touch kernel task state do not converge."** Stated out loud
+mid-sweep, from the first thirteen rows. **Wrong.** Four queue harnesses build
+a kernel with `ready()`, create a queue, and finish in 7-13 seconds.
+
+**"The boundary is BLOCKING — the FromISR paths never block, so they have
+nothing to reason about."** It survives the FromISR trio and dies on the
+fifth row: `queue_unlock_leaves_the_queue_usable` calls the blocking send and
+converges in 11 seconds, while `queue_generic_create` calls nothing that
+blocks and times out.
+
+A cleaner-looking pair kills it outright. `queue_receive_from_isr` (7 s) and
+`queue_peek` (timeout) have the SAME setup — `ready()`, `queue_create(2)`, an
+assertion on `queue_messages_waiting`. Only the operation differs, and the
+difference is not blocking.
+
+### What this does establish
+
+- A **reproducible convergence table** at a stated bound, which is what H7
+  asked for and did not have.
+- The cost is **not** uniform in "kernel-ness": the spread inside the queue
+  family alone is 7 seconds to past 240.
+- `a_name_is_truncated_not_overrun` at **80 s** is the one row that converges
+  slowly rather than either quickly or not at all, so it is where a bound
+  sweep would actually show a curve.
+
+### What comes next, and what NOT to do
+
+Do not guess the mechanism from harness bodies — that has now failed twice in
+one sitting, and a wrong refutation is permanent where a wrong keep is not.
+The next probe is **Kani's own per-property statistics** (VCC counts and
+solver time per harness), which this sweep discarded by keeping only the
+verdict and the wall clock. That is one flag and one re-run, and it replaces
+speculation with the solver's own account of where it went.
