@@ -7304,3 +7304,72 @@ layer visible at the time. What has held up is the opposite discipline:
 **record the measurement, name the unmeasured thing, and let the next probe
 kill the story.** The measurements have never had to be withdrawn. Only the
 explanations.
+
+## AbortDelay's exhaustion: seven hypotheses, seven refutations, and where it is parked (2026-09-21)
+
+Two more mechanisms tested and killed, and the investigation is paused here
+deliberately rather than continued into an eighth guess.
+
+### Hypothesis 6 — a queued waiter stops the slot being returned. REFUTED.
+
+`tests/delete_with_waiter.rs`, three shapes, forty rounds each, with a task
+genuinely parked on the queue:
+
+| shape | before | after | lost |
+|---|---:|---:|---:|
+| block → delete | 11 | 11 | **0** |
+| block → **abort** → delete | 11 | 11 | **0** |
+| block → time out → delete (control) | 11 | 11 | **0** |
+
+A waiter does not prevent reclamation, and neither does aborting it — which
+was the most plausible mechanism yet, because aborting a block is the whole
+subject of the scenario.
+
+### Hypothesis 7 — the scenario skips a delete on some path. REFUTED.
+
+This one was worth testing because it fits the shape the others do not: a
+delete missed *occasionally* would produce the **non-uniform** rate the
+capacity probe measured, where a systematic leak would be linear.
+
+Counters on the scenario itself, `tests/creates_vs_deletes.rs`:
+
+| ticks | created | deleted | unclosed |
+|---:|---:|---:|---:|
+| 100,000 | 49 | 49 | **0** |
+| 200,000 | 98 | 98 | **0** |
+| 210,000 | 103 | 103 | **0** |
+| 219,000 | 108 | 108 | **0** |
+
+Exact. And all four objects the scenario builds — semaphore, event group,
+queue, stream buffer — do have a matching delete (lines 531, 590, 669, 730).
+An earlier grep of mine missed two of them and nearly became an eighth wrong
+answer on the strength of a bad pattern.
+
+**A number worth keeping from this table:** the queue is created **108**
+times by 219,000 ticks, not 870. `controlling_cycles` counts *sub-tests*, and
+there are eight per pass — so the arena empties over roughly 108 rounds, not
+870. Every earlier "~870 cycles" in this ledger is counting the wrong unit.
+
+### Where it is parked
+
+**Measured and standing:** capacity falls from 11 to 0 under `AbortDelay`
+over ~108 passes; no create/delete pair leaks in isolation; a queued or
+aborted waiter on a **queue** does not stop reclamation; the scenario
+balances every create with a delete.
+
+**Unknown:** the mechanism.
+
+**The next probe, named:** the waiter test covered a queue only. The
+scenario also blocks and aborts on a **semaphore**, an **event group** and a
+**stream buffer**, and those three were tested for plain create/delete but
+never with a waiter parked on them. Same test, three more surfaces.
+
+### Why stop here
+
+Seven hypotheses, seven refutations, and each refutation cost one cheap
+probe. That is the method working, not failing. But the marginal one is now
+an eighth guess at a mechanism, and the useful output — a reproducible
+exhaustion, four independent measurements bounding it, and a named next step
+— already exists. **A defect that is precisely characterised and honestly
+unexplained is a better hand-off than one with a confident wrong story
+attached**, which is what the first six attempts would have produced.
