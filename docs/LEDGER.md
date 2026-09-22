@@ -7132,3 +7132,65 @@ quite different defects:
 Four probes have now each corrected the last. The discipline that is
 paying: state what was measured, name what was not, and do not let a
 plausible mechanism through without a number behind it.
+
+## ★★ AbortDelay's hour failure, to the root: `queue_create` is refused (2026-09-21)
+
+Six probes, each correcting the last. The chain, and every step of it masks
+the step before:
+
+| # | what happens | what hides it |
+|---|---|---|
+| 1 | **`queue_create(1)` is REFUSED** after ~870 create/delete cycles | nothing — this is the root |
+| 2 | `unwrap_or_default()` turns the refusal into a **default handle** | the scenario carries on as if it had a queue |
+| 3 | `queue_send` on that handle returns **`Err(InvalidHandle)`** | — |
+| 4 | `pc 72`'s arm is `_`, which catches `Err(..)` as well as a completed send | a refusal is indistinguishable from a send that timed out |
+| 5 | `checked()` sees **0 ticks elapsed against 100 expected** | reads as "the block was too short" |
+| 6 | `still_running()` returns false; the hour fails at **tick 220,387** | reported only as "AbortDelay FAIL" |
+
+Six layers between the cause and the symptom, which is why the first five
+readings of this were wrong — including three of mine, recorded above and
+left there.
+
+### The root
+
+`AbortDelay` creates and deletes its queue **every cycle**:
+
+```rust
+588:  s.queue = k.queue_create(QUEUE_LENGTH).unwrap_or_default();
+650:  let _ = k.queue_delete(s.queue);
+```
+
+After roughly 870 of those, `queue_create` starts refusing. The scenario
+deletes what it creates, so a kernel that reclaims a deleted queue's slot
+should be able to run this forever. **It stops at ~870, which is what a slot
+that is not being reclaimed looks like.**
+
+Measured: fails at **220,387** ticks, passes at **220,386** — one tick, 870
+controlling cycles, reproducible on the host and consistent with the
+220,000–221,000 bracket from both emulators.
+
+### NOT yet established
+
+That it is a leak, rather than an arena deliberately sized for fewer
+queues. The next probe is a count of live queues across cycles: flat means
+reclaimed and the limit is elsewhere, climbing means a leak. **One number
+decides it and it has not been taken.**
+
+### Two defects that are not the root and are still defects
+
+**`unwrap_or_default()` on a fallible create.** A refused creation becomes an
+invalid handle and the failure surfaces 100 ticks later, in a different
+function, as a timing violation. The scenario now records
+`queue_create_refused` instead of swallowing it.
+
+**`_` as a match arm over a `Result`.** At `pc 72` it catches `Err(..)`
+alongside `Ok(Wait::Ready(..))`, so a refused call and a completed one are
+the same observation. A corpus scenario that cannot tell those apart can
+mask a kernel defect indefinitely — which is exactly what happened here for
+as long as the hour has been run.
+
+### Cost
+
+Three small fields on the scenario's state and no kernel call, so the trace
+is unchanged: `ticks=2000 yields=86 exits=2198 lines=2548`, the same
+counters as before, verified after each edit.
