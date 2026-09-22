@@ -6951,3 +6951,64 @@ ledger with a date. The C arm of the cycle rows still needs ESP-IDF as a
 platform layer — and on a C6 that arrangement is better than on the S3,
 because the oracle's own `portable/GCC/RISC-V` port is **first-party** where
 its Xtensa port is ThirdParty.
+
+## ★ AbortDelay is NOT a liveness failure — it catches a fault, and I had it wrong (2026-09-21)
+
+The hour's single failure was recorded here twice as a liveness problem: "its
+check task declines to pass", filed beside `runaway=false` as though the
+question were whether the scenario kept running. **That reading is wrong**,
+and one probe settles it.
+
+`State::still_running` returns false for three reasons — controlling cycles
+stalled, blocking cycles stalled, or `error` set — and the cell only ever
+reported the answer, never which. `tests/abortdelay_hour.rs` asks:
+
+```
+     ticks    pass   controlling      blocking   error
+    220000    true           868           868   false
+    221000   false           872           872    true
+   3600000   false         14904         14904    true
+```
+
+**Both cycle counters climb the whole way** — 868 at the passing length, 872
+just past the boundary, **14,904** at the full hour. Neither task ever stops
+being scheduled. What fails is the third condition: **`error` is set**, which
+is `prvCheckExpectedTimeIsWithinAnAcceptableMargin` — the scenario itself
+catching a block that came back outside its allowable margin.
+
+### Why the distinction matters
+
+A stalled counter is a scheduling problem: something stopped running. An
+`error` is a **timing-correctness** problem: everything ran, and a blocked-for
+time was wrong. They have different causes, different fixes, and only one of
+them is about liveness. The hour's claim — "every check task still reports
+running" — is in fact SATISFIED by this scenario; it is the scenario's own
+assertion that fails.
+
+So `AbortDelay` fails the corpus at the pinned length for a **contract**
+reason (the C harness keys a queue's trace ordinal on its malloc address) and
+fails the hour for a **timing** reason, and the two still should not be
+assumed to share a cause — but neither of them is the liveness failure this
+ledger called it.
+
+### What is now known, and what is not
+
+**Known.** The fault first appears between 220,000 and 221,000 ticks, at
+roughly the 869th to 872nd cycle of the test — so it is not present from the
+start and is not a wrap of anything at a round power of two. It reproduces on
+the host, on RV32 and on Cortex-M3.
+
+**Not known, and not guessed.** `outside_margin` fails in two directions —
+`blocked < expected` or `blocked > expected + ALLOWABLE_MARGIN` — and the
+comment in the source says which one is interesting: *"A blocked-for time
+that is too short is the interesting direction: it is what an abort firing
+early would look like."* Which direction this is has NOT been measured. That
+is the next probe, and it is one more field on the same test.
+
+### The lesson worth keeping
+
+The bisection was good work and produced a wrong description, because a
+bracket tells you WHEN and says nothing about WHAT. Three runs answered a
+question eleven runs of bisection could not, and the difference is that these
+asked the program what it thought rather than narrowing where it changed its
+mind.
