@@ -7072,3 +7072,63 @@ It is the single failure in both emulator hours — 24 of 25 on RV32 and on
 Cortex-M3, the same one. Naming it converts K3's remaining emulator gap from
 "a scenario fails" into a defect with a call site, a direction, a magnitude
 and a cycle count.
+
+## AbortDelay: the queue handle is not live, and the scenario cannot see it (2026-09-21)
+
+Fourth probe, and it moved the answer again. The three before it gave *when*
+(a 1,000-tick bracket), *which condition* (`error`, not a stall) and *which
+direction* (`expected 100, blocked 0` — the send did not block). This one
+asked what the queue held.
+
+### It could not be asked, and the refusal is the finding
+
+```
+    220000  (passes)   queue_messages_waiting refused: Gone
+    221000  (fails)    queue_messages_waiting refused: InvalidHandle
+   3600000  (fails)    queue_messages_waiting refused: InvalidHandle
+```
+
+**The handle in `State::queue` does not name a live queue** at the end of any
+of these runs — and it is already refused at the length where the scenario
+still PASSES, with a different reason (`Gone` against `InvalidHandle`).
+
+### ★ And the scenario is built so that it cannot notice
+
+```rust
+72 => match k.queue_send(s.queue, 0, MAX_BLOCK_TIME) {
+    Ok(Wait::Blocked) => return Step::Continue,
+    _ => self.checked(k, s, MAX_BLOCK_TIME, 73),
+},
+```
+
+The `_` arm catches `Ok(Wait::Ready(..))` **and `Err(..)`**. A send that the
+kernel *refused* therefore arrives at the margin check exactly as a send that
+*completed* does — and presents as `blocked 0`, because no time passed.
+
+So "the queue was not full" was the wrong reading of `blocked 0`, and it was
+mine. **A refused send and an instant send are the same observation to this
+code.** Which of the two is happening at tick 220,387 has NOT been
+established: the handle is dead by end-of-run, but whether it was already
+dead at the failing call is a different question that this probe cannot
+answer, because it reads the handle afterwards.
+
+### The exact boundary, now to the tick
+
+**Fails at 220,387 ticks; passes at 220,386.** One tick, at 870 controlling
+cycles, reproducible on the host and matching the firmware's 220,000-221,000
+bracket from both emulators.
+
+### What the next probe is
+
+Distinguish the two arms at `pc 72` — split `_` into `Ok(Wait::Ready(..))`
+and `Err(e)` and record which, with the error. That is a few lines, it needs
+no kernel call (so it cannot move the trace), and it decides between two
+quite different defects:
+
+- an **instant send**, which means the queue's fill is wrong;
+- a **refused send**, which means the handle is wrong, and the interesting
+  question becomes what invalidates it around cycle 870.
+
+Four probes have now each corrected the last. The discipline that is
+paying: state what was measured, name what was not, and do not let a
+plausible mechanism through without a number behind it.
