@@ -6468,3 +6468,56 @@ The next probe is **Kani's own per-property statistics** (VCC counts and
 solver time per harness), which this sweep discarded by keeping only the
 verdict and the wall clock. That is one flag and one re-run, and it replaces
 speculation with the solver's own account of where it went.
+
+## K3's one-hour clause was closed against 18 scenarios; the corpus is 25 (2026-09-21)
+
+`bench/soak-each/run.sh` carries the scenario list **as a hardcoded string**.
+It holds eighteen names. The corpus the cells actually run holds
+twenty-five.
+
+```
+in the corpus, never soaked on either emulator:
+  AbortDelay  ApiSweep  IntQueue  MessageBufferDemo
+  QueueSet    StreamBufferDemo    TaskNotify
+```
+
+So "the emulator hour is CLOSED on both" — recorded here on 2026-09-11 with
+RV32 18/18 in 58 minutes and M3 18/18 in 75 — was true of the corpus as it
+then stood and has been quietly false since the seventh scenario joined.
+**Nothing failed. The clause simply stopped covering what it claimed to
+cover**, which is the more dangerous of the two, because a failure is loud and
+a shrinking denominator is not.
+
+### The defect is the hand-maintained list, not the seven scenarios
+
+A list that must be edited whenever the corpus grows will eventually not be,
+and no gate was comparing the two. The script now **derives the corpus from
+the cell** — the ordinary 2,000-tick run prints one line per scenario — and
+fails if its own list and that set disagree, in either direction:
+
+```
+FAIL: this script's scenario list has drifted from the corpus.
+  in the corpus, never soaked: ...
+  soaked, no longer in the corpus: ...
+```
+
+Both directions matter. A name that leaves the corpus and stays in the list
+is a run that proves nothing about code that exists; a name that joins the
+corpus and never reaches the list is the case that actually happened.
+
+### How this was found
+
+Not by reading the script. The 0.2.0 release gate re-ran both corpus cells,
+which reported **25** scenarios where the READMEs claimed 18, and the arithmetic
+did not work. The same re-run also found `StreamBufferDemo` diverging on both
+emulators.
+
+**Two findings out of one command that nobody had run in a while**, which is
+the argument for running the gate before a release rather than trusting the
+last recorded number.
+
+### Status
+
+The seven are being soaked on RV32 now, at 3,600,000 ticks each, one scenario
+per run. Until they pass, K3's hour is **18 of 25 on each emulator**, and the
+plan says so rather than carrying the older, rounder claim.

@@ -34,13 +34,58 @@ DIR="$ROOT/rusty_rtos_demo/firmware/$CELL"
 # The pin table's order, which is the order the cell would run them in.
 SCENARIOS="dynamic PollQ BlockQ semtest countsem recmutex blocktim QPeek
 GenQTest QueueOverwrite QueueSetPolling IntSemTest StreamBufferInterrupt
-TimerDemo EventGroupsDemo MessageBufferAMP PollQ-typed death"
+TimerDemo EventGroupsDemo MessageBufferAMP PollQ-typed death
+AbortDelay ApiSweep IntQueue MessageBufferDemo QueueSet StreamBufferDemo
+TaskNotify"
+
+# The seven on the last line joined the corpus AFTER this list was written and
+# nothing noticed, because the list is maintained by hand. The hour was
+# reported closed on both emulators while covering 18 of 25 scenarios.
+#
+# So the list is now CHECKED against the cell rather than trusted. The cell
+# prints one line per scenario on its ordinary 2,000-tick run; if that set and
+# this one disagree, the run fails here instead of quietly proving less than it
+# claims. A hardcoded list is fine. A hardcoded list nobody diffs is how a
+# closed clause reopens without anyone seeing it.
+check_list_matches_corpus() {
+    actual=$(cargo run --release 2>/dev/null \
+             | grep -E "^[A-Za-z][A-Za-z0-9_-]* +(ok|FAIL)" \
+             | awk '{print $1}' | sort -u)
+    [ -n "$actual" ] || { echo "WARN: could not enumerate the corpus; list unchecked"; return 0; }
+
+    expected=$(printf '%s\n' $SCENARIOS | sort -u)
+    missing=$(comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual"))
+    extra=$(comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual"))
+
+    if [ -n "$missing" ] || [ -n "$extra" ]; then
+        echo "FAIL: this script's scenario list has drifted from the corpus."
+        [ -n "$missing" ] && echo "  in the corpus, never soaked: $(echo $missing)"
+        [ -n "$extra" ]   && echo "  soaked, no longer in the corpus: $(echo $extra)"
+        exit 1
+    fi
+    echo "list ok -- $(printf '%s\n' "$expected" | wc -l) scenarios, matching the corpus"
+}
 
 cd "$DIR"
 echo "=== the corpus for one hour of simulated time, one scenario per run ==="
 echo "cell    $CELL"
 echo "length  3,600,000 ticks (an hour at the oracle's own TICK_RATE_HZ of 1000)"
 echo "claim   liveness -- every check task still reports running"
+echo
+# A subset can be named after the cell, for the case this was written for:
+# seven scenarios joined the corpus without joining the list, and re-running
+# the eighteen that already passed to reach them costs hours of `semtest`.
+# With a subset the drift check is skipped, because the list deliberately is
+# not the corpus for that run -- and the run says so rather than implying a
+# coverage it does not have.
+if [ "$#" -gt 1 ]; then
+    shift
+    SCENARIOS="$*"
+    echo "SUBSET -- $(printf '%s\n' $SCENARIOS | wc -l) scenario(s) named on the command line."
+    echo "This proves the hour for THOSE, and says nothing about the rest."
+else
+    check_list_matches_corpus
+fi
 echo
 
 pass=0
