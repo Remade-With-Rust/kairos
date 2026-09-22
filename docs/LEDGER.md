@@ -7194,3 +7194,61 @@ as long as the hour has been run.
 Three small fields on the scenario's state and no kernel call, so the trace
 is unchanged: `ticks=2000 yields=86 exits=2198 lines=2548`, the same
 counters as before, verified after each edit.
+
+## ★★★ Queue capacity is not fully reclaimed — a kernel defect, shipped in 0.2.0 (2026-09-21)
+
+The question left open by the root-cause chain was the only one that
+mattered: is `queue_create`'s refusal a **leak**, or an arena sized for fewer
+queues? One measurement separates them — free capacity, sampled at several
+run lengths, on a workload that deletes everything it creates.
+
+`tests/queue_slot_leak.rs`:
+
+| ticks | ~cycles | free queues |
+|---:|---:|---:|
+| 1,000 | ~4 | 11 |
+| 100,000 | ~395 | 11 |
+| 200,000 | ~790 | 10 |
+| 210,000 | ~830 | 5 |
+| 215,000 | ~850 | 2 |
+| 219,000 | ~866 | **0** |
+| 220,386 | ~870 | 0 — **still passing** |
+| 220,387 | ~870 | 0 — fails |
+
+**`AbortDelay` deletes every queue it creates**, so free capacity should not
+move at all. It goes to zero. **Queue capacity is not being fully
+reclaimed**, and that is a kernel defect in a crate published today at 0.2.0.
+
+### Two things the shape says that the endpoints do not
+
+**Exhaustion PRECEDES the failure.** Capacity is already zero at 219,000 and
+still zero at 220,386, where the scenario passes. The refusal only bites at
+220,387, when the scenario next needs to CREATE. So the failure's timing is
+set by the scenario's rhythm, not by the moment the resource ran out — which
+is why bisecting the failure to a single tick found the symptom's edge and
+not the defect's.
+
+**The rate is NOT uniform, and that is unexplained.** Flat for roughly 400
+cycles, then away. A steady per-cycle leak would empty eleven slots in
+eleven cycles. Something makes the early cycles free and the late ones
+costly, and nothing here explains it.
+
+### And the resource may not be the one named `queue`
+
+`AbortDelay` creates and deletes a **binary semaphore**, an **event group**,
+a **queue** and a **stream buffer** every cycle. In this family — as in
+FreeRTOS — a semaphore IS a queue. The probe measures what `queue_create`
+will still hand out, which all of them draw on. **Which of the four is not
+returning its slot has not been established.**
+
+### A methodological catch, from this probe's own first version
+
+It compared the first reading against the last and printed "FALLING ->
+LEAK". That verdict is right here by luck: the data is flat for 400 cycles
+and then collapses, and a two-point test would have called a cliff a steady
+leak. The verdict now reports the shape, names where capacity hits zero, and
+says plainly that the non-uniformity is unexplained.
+
+**A gate that cannot tell a cliff from a slope is not measuring the thing it
+names** — the same lesson as the soak harness that counted a FAIL as a pass,
+found six hours earlier in this session.
