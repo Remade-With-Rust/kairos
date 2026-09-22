@@ -6896,3 +6896,58 @@ whole corpus, under a harness that can report a failure, and the answer is 24
 of 25 on each.** It was previously recorded as closed at 18/18 on each, which
 was a smaller corpus counted by a harness that could not tell `ok` from
 `FAIL`. The remaining clause is the C6, which is hardware.
+
+## Both C6 cells exist and build, so the clause waits on hardware alone (2026-09-21)
+
+K3's last two clauses need an ESP32-C6: the third hour, and the cycle rows
+"from the C6, not from QEMU". Neither can be measured here — no C6 has ever
+been on this bench.
+
+**But "needs hardware" was hiding a second cost.** There was **no C6 cell of
+any kind** in the family — 20 firmware cells, none for a C6. So the day a
+board arrived, the work would not have been "plug it in": it would have been
+write two cells, discover the toolchain differences, and only then measure.
+
+Both cells now exist and compile:
+
+| cell | target | builds |
+|---|---|---|
+| `rusty_rtos_kernel/firmware/esp32c6-cycles` | `riscv32imac-unknown-none-elf` | ✅ 0 errors |
+| `rusty_rtos_demo/firmware/esp32c6-corpus` | same | ✅ 0 errors, **and with `--features soak`**, which is the hour itself |
+
+**Neither has ever been flashed and neither carries a number.** Both say so
+in their own banner, because a cell that builds is not a cell that has run
+and the distance between those is where claims go wrong.
+
+### What the build actually proves
+
+Not much on its own — so it was checked rather than assumed:
+
+- the cycles binary is a **209 KB rv32 ELF** carrying **20 `mcycle` reads**
+  in its disassembly, so the instrument survives to the artifact and is not
+  optimised out;
+- the corpus binary is **450 KB** and places `.flash.appdesc` at 0x42000020,
+  which is the segment espflash refuses an image for lacking;
+- the corpus builds **with and without `soak`**, so the hour is one flag away
+  rather than an unexplored path.
+
+### Two things learned writing them, both cheap now and expensive later
+
+**`-nostartfiles` is Xtensa-only.** Every Xtensa cell passes it; `rust-lld`
+rejects it outright on RISC-V, where `riscv-rt` supplies the startup.
+Copying an Xtensa cell's `.cargo/config.toml` verbatim fails at link with
+`unknown argument '-nostartfiles'`. `-Tlinkall.x` is still required on both.
+
+**The C6 builds on STABLE.** No esp toolchain, no `build-std`, because RV32
+is an upstream rustc target where Xtensa is not. Every Xtensa cell in this
+family needs `cargo +esp`. So a C6 cell is the only silicon cell CI could
+ever *build*, even though CI can never *run* it — which is an argument for
+the C6 beyond the plan's own.
+
+### What remains, precisely
+
+A board. Then `cargo run --release` in each, and the numbers go in this
+ledger with a date. The C arm of the cycle rows still needs ESP-IDF as a
+platform layer — and on a C6 that arrangement is better than on the S3,
+because the oracle's own `portable/GCC/RISC-V` port is **first-party** where
+its Xtensa port is ThirdParty.
