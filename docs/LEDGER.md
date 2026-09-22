@@ -6583,3 +6583,59 @@ it is now visible instead of counted as a pass.
 
 `ApiSweep` and `QueueSet` pass the hour on RV32: 8,749,100 and 11,447,794
 trace lines at 3,600,000 ticks.
+
+## The seven unsoaked scenarios, measured on RV32: six pass, AbortDelay does not (2026-09-21)
+
+The hour, at 3,600,000 ticks, one scenario per run, with the corrected
+harness:
+
+| scenario | verdict | ticks | trace lines |
+|---|---|---:|---:|
+| `ApiSweep` | ok | 3,600,011 | 8,749,100 |
+| `QueueSet` | ok | 3,600,049 | 11,447,794 |
+| `TaskNotify` | ok | 3,600,094 | 6,019,524 |
+| `MessageBufferDemo` | ok | 3,600,000 | 36,672,178 |
+| `StreamBufferDemo` | ok | 3,600,000 | 41,689,251 |
+| `IntQueue` | ok | 3,600,068 | 79,912,747 |
+| `AbortDelay` | **FAIL** | 3,600,009 | `pass=false runaway=false` |
+
+`IntQueue` alone writes **2.59 GB** of trace in 78 seconds.
+
+### ★ StreamBufferDemo passes the hour while failing conformance, and that is EVIDENCE
+
+Earlier today the same scenario was found diverging on both emulators at
+2,000 ticks: every counter and the line count matching, 194 bytes of trace
+text differing. The reading offered was that this is a value whose digit
+count depends on `size_of::<usize>()`, reaching the trace text — a 32-bit
+target defect, not a scheduling one.
+
+**The hour tests that reading and it survives.** The hour is a LIVENESS
+claim: it asks whether each scenario's own check task still reports running
+after an hour of simulated time. A wrong schedule would be expected to show
+up there. `StreamBufferDemo` runs the full 3,600,000 ticks and passes, across
+41.7 million trace lines.
+
+Two claims about the same scenario, failing one and passing the other, is
+what a text defect looks like and is not what a scheduling defect looks like.
+
+### AbortDelay fails the hour, separately from its known conformance gap
+
+`pass=false runaway=false ticks 3600009 of 3600000`. It reaches the full
+length — it does not hang, and it does not run away — and its own check task
+declines to report passing. `AbortDelay` is already the corpus's known
+divergent scenario for a CONTRACT reason (the C harness keys a queue's trace
+ordinal on its malloc address), but that is a conformance gap. This is a
+second, independent failure of the same scenario on the liveness claim, and
+it was previously invisible because the harness counted it as a pass.
+
+### What the hour's denominator honestly is now
+
+**RV32: 6 of the 7 previously-unsoaked scenarios pass, and AbortDelay fails.**
+
+The other eighteen are NOT re-stated here. They were measured with the
+harness that could not tell `ok` from `FAIL`, so "18/18 in 58 minutes" proves
+eighteen lines were printed. They may all have said ok. Nothing here suggests
+otherwise, and nothing here establishes it either — so they are being re-run
+with the corrected harness rather than carried forward on the old evidence.
+
+M3 has had none of the seven.
