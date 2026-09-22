@@ -7492,3 +7492,80 @@ it worked because it accidentally did something none of the guesses had
 thought to do. **The eliminations are what made it legible**: when the
 sampler accelerated the failure, there was exactly one difference left
 unexplored, because the other eight had been closed off with evidence.
+
+## ★★★★ THE ROOT: queue item storage is a bump allocator that is never freed (2026-09-21)
+
+The entry above named the mechanism as "reclamation depends on how many
+objects are outstanding". **That was wrong too** — it was the last in a line
+of readings taken from behaviour instead of from source. Reading the source
+takes one minute and settles it.
+
+`Kernel::new_queue`, in `queue.rs`:
+
+```rust
+let base = self.slots_used;
+let end = base.checked_add(slots).ok_or(Error::Full)?;
+if end > SLOTS { return Err(Error::Full); }
+...
+self.slots_used = end;          // only ever grows
+```
+
+`Kernel::queue_delete`:
+
+```rust
+self.queues.resolve(queue)?;
+let _ = self.queues.remove(queue);   // the DESCRIPTOR comes back
+self.account_for_allocation();
+Ok(())                                // slots_used is untouched
+```
+
+And `slots_used` appears in exactly four places in the whole crate: declared,
+initialised to zero, read in `new_queue`, written in `new_queue`. **It is
+never decremented.**
+
+So a queue's *descriptor* is reclaimed and its *item storage* never is.
+`queue_delete` half-frees.
+
+### The arithmetic, which is what makes this certain
+
+`SLOTS = 128` in the demo, and only `Kind::Queue` and `Kind::Set` consume
+storage — semaphores and mutexes take none. Every measurement in the last
+three entries falls out of that:
+
+| shape | creates | slots used | predicted capacity | measured |
+|---|---:|---:|---|---:|
+| single: 10 rounds × 10 | 100 | 100 | 28 free, but descriptors cap at 12 → **12** | **12** ✓ |
+| batch: 10 rounds × 12 | 120 | 120 | 128 − 120 = **8** | **8** ✓ |
+| `AbortDelay` | ~1.18 slots/pass | ~128 by pass 108 | exhausted at **~108 passes** | **108** ✓ |
+
+Three independent measurements, taken before this mechanism was known,
+predicted to the unit by one line of arithmetic. That is the difference
+between a story that fits and a cause.
+
+### What it means
+
+**`queue_delete` does not free item storage.** Any application that creates
+and deletes data-carrying queues will exhaust `SLOTS` and then get
+`Error::Full` from `queue_create` forever, with no way to recover short of
+restarting. Semaphores, mutexes and event groups are unaffected — they carry
+no data.
+
+Shipped in **0.2.0**, published today. It is not exotic: a queue per
+connection, per job or per request is ordinary, and this is the second time
+in this session the corpus's most-ignored scenario turned out to be
+reporting a real defect.
+
+### Why nine attempts missed it
+
+Every one reasoned from behaviour. The eight refutations were *correct* —
+each pair really does reclaim its descriptor, waiters really do not block
+reclamation, the scenario really does delete what it creates. All of them
+were looking at the descriptor arena, which works, while the storage arena
+sat one field away.
+
+**The fix is a free list for storage**, and it is a real kernel change rather
+than a one-liner: a bump allocator cannot return an arbitrary block, so
+`Queue` needs its extent tracked and `queue_delete` needs somewhere to put
+it. It also touches the thing `AbortDelay`'s known conformance gap is about —
+the C keys a queue's trace ordinal on its malloc address — so it must be
+made against the corpus, not beside it.
