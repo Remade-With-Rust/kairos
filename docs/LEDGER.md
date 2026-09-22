@@ -7012,3 +7012,63 @@ bracket tells you WHEN and says nothing about WHAT. Three runs answered a
 question eleven runs of bisection could not, and the difference is that these
 asked the program what it thought rather than narrowing where it changed its
 mind.
+
+## The hour's only failure, named: `queue_send` stops blocking (2026-09-21)
+
+Three steps in one sitting, each answering a question the last one could not:
+
+| probe | what it gave | what it could not give |
+|---|---|---|
+| bisection, 11 runs | it fails between 220,000 and 221,000 ticks | WHICH of three conditions |
+| the three conditions, 3 runs | `error` — a caught fault, not a stall | which DIRECTION, and where |
+| the first failure, 1 run | **expected 100, blocked 0, at `pc 72`** | why the queue is not full |
+
+### What it is
+
+`pc 72` is `prvTestAbortingQueueSend`'s **first** step:
+
+```rust
+72 => match k.queue_send(s.queue, 0, MAX_BLOCK_TIME) {
+    Ok(Wait::Blocked) => return Step::Continue,
+    _ => self.checked(k, s, MAX_BLOCK_TIME, 73),
+},
+```
+
+The queue is one deep and the test has already filled it, so this send must
+**block for 100 ticks and time out** — that is step 1 of the scenario's
+three-part shape, the one that proves the call blocks at all before anything
+is aborted.
+
+It returns **immediately**: `blocked 0` against `expected 100`. The send
+succeeded, which means **the queue was not full when the test required it to
+be**.
+
+`blocked 0` is worth dwelling on. It is not a near miss against the 7-tick
+allowable margin — the call did not block, so this is not a timing tolerance
+question at all. And it is the direction the source singles out: *"A
+blocked-for time that is too short is the interesting direction: it is what
+an abort firing early would look like."*
+
+### And it takes ~868 cycles to appear
+
+Both tasks cycle 868 times cleanly and fail on roughly the 869th. So the
+queue's fill state is correct for 868 consecutive passes through eight
+blocking surfaces and then is not. That shape — right for a long time, then
+wrong, with nothing external changing — is what a slow drift looks like
+rather than a missing case.
+
+### What is NOT known
+
+Why the queue is not full. The obvious candidate is that the abort path in
+step 2 leaves the queue holding a different number of items than the C's
+does, and the difference accumulates. **That is a hypothesis and it has not
+been measured.** Two mechanisms have already been refuted by their own data
+today, and the next probe is one field: print `queue_messages_waiting` at
+`pc 72` when the margin check fails.
+
+### Why this matters beyond one scenario
+
+It is the single failure in both emulator hours — 24 of 25 on RV32 and on
+Cortex-M3, the same one. Naming it converts K3's remaining emulator gap from
+"a scenario fails" into a defect with a call site, a direction, a magnitude
+and a cycle count.
