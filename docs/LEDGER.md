@@ -6521,3 +6521,65 @@ last recorded number.
 The seven are being soaked on RV32 now, at 3,600,000 ticks each, one scenario
 per run. Until they pass, K3's hour is **18 of 25 on each emulator**, and the
 plan says so rather than carrying the older, rounder claim.
+
+## ★ The soak harness counted a FAIL as a pass (2026-09-21)
+
+Found immediately after the scenario-list drift above, by soaking three of the
+seven scenarios that had never had the hour. The run printed:
+
+```
+AbortDelay             FAIL  [10s]
+ApiSweep               ok    ticks=3600011 ...
+QueueSet               ok    ticks=3600049 ...
+
+RESULT: FAIL -- 3 passed, 0 without a verdict (of 18)
+```
+
+**Three passed, with a FAIL on screen.** The verdict test was:
+
+```sh
+out=$(... | grep -E "^$s " || true)
+if [ -n "$out" ]; then pass=$((pass + 1)); else ... fi
+```
+
+It asked whether the cell printed **a line beginning with the scenario's
+name**. `AbortDelay  FAIL` is such a line. So the harness could not tell `ok`
+from `FAIL`, and every failure in its history would have been tallied as a
+pass.
+
+**A harness that cannot tell ok from FAIL is not a weaker gate; it is not a
+gate.** The plan already warns that "a gate treating silence as success would
+have certified it" — this is the sharper version, treating an explicit failure
+as success.
+
+### What it costs the record
+
+The recorded "RV32 18/18 in 58 minutes, M3 18/18 in 75" proves that each of
+eighteen scenarios **emitted a line**. It does not prove that each said `ok`.
+Those runs may well have been genuinely 18/18 — nothing here shows otherwise —
+but the evidence is weaker than the number implied, and the number is the only
+thing anyone reads.
+
+### Fixed, and shown to work
+
+The verdict is now the word, and the denominator is counted rather than
+written down (it was hardcoded at 18 in three places while the list had grown
+to 25). Same three scenarios, before and after:
+
+| | before | after |
+|---|---|---|
+| summary | `3 passed, 0 without a verdict (of 18)` | `2 of 3 passed, 1 did not` |
+| exit code | **0** | **1** |
+
+### And a real result underneath it
+
+`AbortDelay` genuinely fails the hour, and not by hanging: it reports
+`pass=false runaway=false ticks 3600009 of 3600000`. It reaches the full
+3,600,000 ticks and its own check task declines to say it is passing. That is
+consistent with `AbortDelay` being the corpus's known-divergent scenario — the
+C harness keys a queue's trace ordinal on its malloc address — but the hour is
+a LIVENESS claim, so this is a second, separate failure of that scenario and
+it is now visible instead of counted as a pass.
+
+`ApiSweep` and `QueueSet` pass the hour on RV32: 8,749,100 and 11,447,794
+trace lines at 3,600,000 ticks.

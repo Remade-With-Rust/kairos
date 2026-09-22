@@ -97,20 +97,38 @@ for s in $SCENARIOS; do
     out=$(KAIROS_SOAK_ONLY="$s" cargo run --release --features soak 2>/dev/null \
           | grep -E "^$s " || true)
     took=$(( $(date +%s) - began ))
-    if [ -n "$out" ]; then
-        printf '  %-22s %s  [%ds]\n' "" "$out" "$took"
-        pass=$((pass + 1))
-    else
-        printf '  %-22s NO VERDICT  [%ds]\n' "$s" "$took"
-        fail=$((fail + 1))
-    fi
+
+    # The verdict is the WORD, not the existence of a line.
+    #
+    # This used to count any line beginning with the scenario's name as a
+    # pass, so a cell printing "AbortDelay  FAIL" was tallied among the
+    # passes and the run still reported 18/18. Found 2026-09-21, when
+    # AbortDelay failed the hour and the summary said three passed.
+    #
+    # A harness that cannot tell ok from FAIL is not a weaker gate, it is
+    # not a gate.
+    case "$out" in
+        "")
+            printf '  %-22s NO VERDICT  [%ds]\n' "$s" "$took"
+            fail=$((fail + 1)) ;;
+        *" ok "*|*" ok")
+            printf '  %-22s %s  [%ds]\n' "" "$out" "$took"
+            pass=$((pass + 1)) ;;
+        *)
+            printf '  %-22s %s  [%ds]  <- NOT ok\n' "" "$out" "$took"
+            fail=$((fail + 1)) ;;
+    esac
 done
 
 echo
 echo "ran in $(( ($(date +%s) - began_all) / 60 )) minutes"
-if [ "$fail" -eq 0 ] && [ "$pass" -eq 18 ]; then
-    echo "RESULT: PASS -- all 18 scenarios still running after an hour on $CELL"
+# The denominator is COUNTED, not written down. It was hardcoded at 18 in
+# three places while the list itself had grown, so a full run could report
+# "all 18" having attempted more than that.
+total=$(printf '%s\n' $SCENARIOS | wc -l)
+if [ "$fail" -eq 0 ] && [ "$pass" -eq "$total" ]; then
+    echo "RESULT: PASS -- all $total scenario(s) still running after an hour on $CELL"
 else
-    echo "RESULT: FAIL -- $pass passed, $fail without a verdict (of 18)"
+    echo "RESULT: FAIL -- $pass of $total passed, $fail did not (on $CELL)"
     exit 1
 fi
