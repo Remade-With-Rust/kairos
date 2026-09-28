@@ -14887,3 +14887,74 @@ Reverted. The A1 signature is still there and still unexplained — 418 instruct
 pushes, a 72-byte frame and a slot re-read nine times is real register pressure — so the
 finding stands even though the first fix for it did not. What it needs is an arm that is cold
 in EVERY scenario, and the census above is how to find one.
+
+## ★★★ 2026-09-28 — `queue_take_blocking` is REGISTER-BOUND, not work-bound: three refutations say so
+
+Goal: ten deterministic instruction-reducing wins in `queue_take_blocking`, the most expensive
+function per call in the program (225.3 Ir/call in BlockQ, 186.4 in GenQTest, never reached in
+TimerDemo). Three candidates were built and measured. **All three lost, and the third is the
+one that characterises the function.**
+
+### The instrument first, because last time's failure demanded it
+
+A per-instruction census taken on ONE scenario had said four blocks were cold; outlining them
+measured +200,668 because the mutex arm is dead in BlockQ and runs 5,812 times in GenQTest. So
+`cold3.py` now reports per-address Ir for a symbol **across all three scenarios side by side**,
+and "cold" means cold in every column. On `queue_take_blocking`: **390 instructions, 61 dead in
+all three**, in contiguous runs of 19, 7, 6, 5, 5.
+
+Fixing that script also found a compression bug worth knowing: callgrind's fn-name ids come
+from ONE namespace, so a name whose first appearance is on a `cfn=` line defines an id a later
+`fn=(id)` refers back to. Skipping `cfn=` lines left the map incomplete and the symbol was
+never found in any scenario — a silent empty result, not an error.
+
+### The three refutations
+
+| candidate | measured |
+|---|---:|
+| outline the mutex-inheritance arm and the timed-out branch as an A2 SET | **+200,668** |
+| outline only the 19-instruction run that IS dead in all three (`set_queue_resume` under `current != caller`) | **+11,619** |
+| delete a genuine double resolve — `lock_queue` already resolves the descriptor, so have it return `kind` instead of the caller resolving the same handle again | **+254,429** |
+
+The second says something simple and easy to forget: **dead instructions are free at run time.**
+They cost flash and i-cache, not retired instructions. Outlining them only pays if it relieves
+register pressure, and it did not — the call site's argument marshalling executes where the
+dead block never did.
+
+### ★ The third is the finding
+
+That was not a layout gamble. It removed real work: one arena resolve — a bounds test and a
+generation compare — per blocking receive, on a path taken 19,228 times over the corpus. It
+should have been worth about 7 instructions a call. It measured **+248,617 in the function
+itself**, and the symbol went **418 → 461 static instructions**.
+
+Because extracting the resolve meant `lock_queue` returning `Option<Kind>`, which meant a test
+at the call site, which meant a new cold arm — resume the scheduler, re-resolve to hand back
+the arena's own error, return. Forty-three instructions of plumbing to delete seven.
+
+> **`queue_take_blocking` sits at a register cliff.** Six callee-saved pushes, a 72-byte frame
+> and `caller`'s index spilled and re-read five times, with eight values live across five calls
+> (`caller`, `queue`, `peek`, `kind`, `left`, `was_empty`, `self`, the sret pointer). Any change
+> that adds a live value or a branch costs more than the work it removes — which is why all
+> three candidates lost, including the one that removed work.
+>
+> **So the lever for this function is not "find work to delete". It is "reduce the number of
+> things live at once".** Splitting the body so fewer values cross a call boundary is the only
+> shape that can pay, and it is a restructure rather than an optimisation.
+
+And the session's recurring lesson, for the fourth time today: **price what a change ADDS, not
+only what it removes.** The peel that duplicated an inlined body, the guard whose compare paid
+for itself, the index compare whose word another consumer held alive, the trap entry whose frame
+pointer was free — and now a resolve whose extraction cost six times what the resolve did.
+
+### What of the 225 is not available
+
+* **Four load-modify-stores of the SimPort's `exits` counter** (`0x98(%r14)`), one per outermost
+  critical-section exit. That counter is the sim's CLOCK — the trace's exits column is
+  compared by `conform` — so it is functional, not instrumentation. It is also sim-only: a
+  silicon port's critical section does not count.
+* The five calls' argument setup, and the spills above.
+
+No single redundancy above about seven instructions remains, and the one that existed cost more
+to remove than to keep. **Ten wins are not in this function**, and the reason is now measured
+rather than asserted.
