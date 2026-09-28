@@ -15535,3 +15535,85 @@ times.
 No A2 conclusion is drawn from either function, and the next session's first job on this path is
 to teach `cold3.py` to follow nested `fn=` records — which would make the whole A2 vein
 measurable for the first time.
+
+## ★★★ 2026-09-28 — round six: the census was joining two different binaries
+
+The tenth win was not found, and chasing it produced something more durable: the reason the A2
+vein had looked rich for three rounds, and a guard that makes this class of error impossible to
+repeat.
+
+### The defect
+
+`cold3.py` joins a callgrind profile to an objdump listing **and nothing verified they came from
+the same binary.** They did not. The profile was recorded at 16:26 and the binary rebuilt at
+16:40 — every `price.sh` run rebuilds — so every address had shifted by tens of bytes.
+
+The failure mode is not noise, it is a plausible lie:
+
+- cost lands at addresses *outside* the symbol, where the listing never shows it;
+- in-bounds addresses read **zero**, which is indistinguishable from cold code.
+
+| function | reported dead | actually dead |
+|---|---:|---:|
+| `check_for_timeout` | **91 of 102** | **24 of 102** |
+| `unlock_queue` | **173 of 188** | **78 of 176** |
+| `queue_take_blocking` | 81 of 400 | 81 of 400 (this one was valid) |
+
+**The function TOTAL is immune** — it is a sum over samples and agrees with
+`callgrind_annotate` either way. Only the distribution is destroyed, which is the part the tool
+exists to produce.
+
+> **A tool that JOINS two artefacts must verify they describe the same thing.** The totals
+> agreeing gave a false sense of validity for three rounds: I checked the sum, the sum was
+> right, and the sum was never the thing at risk.
+
+Two wrong diagnoses along the way, both recorded because they cost real runs:
+
+* **The symbol-boundary bug** (round two) was real and fixed, but it was not this.
+* **The callgrind `fi=`/`fe=` base-reset policy** — I was confident this was the cause and wrote
+  out the mechanism. Measured both ways: **byte-identical, on all three functions.** The format
+  subtlety makes no difference at all here. *An explanation that predicts nothing is not a
+  diagnosis, however well it reads.*
+
+### The guard, and why it lives in the tool
+
+`cold3.py` now computes the symbol's real bounds from objdump's own headers and **refuses to
+print** when any sampled address falls outside them, naming the stray count and their Ir. It
+fired on its first run after being added, because `price.sh` had rebuilt the binary since the
+recording. The tool is now in the repo at `bench/kernel-ir/cold3.py` rather than a scratchpad.
+
+> **Put the limits of an instrument INTO the instrument.** The round-two caveat — *a zero from
+> this is not yet evidence of dead code* — was written at the top of the tool, and it is what
+> stopped an A2 outlining being built on 67 instructions of phantom cold code in
+> `check_for_timeout`. A caveat in a ledger is read once. A caveat in the tool is read every
+> time the tool is, and a GUARD in the tool cannot be read past at all.
+
+### Refuted, now with a valid instrument — A2 on `unlock_queue`: +160,085
+
+With the join fixed, `unlock_queue`'s cold set is real: **78 of 176 instructions**, in runs of
+22, 24 and 25, and reading them showed **three copies of the same wake loop** — the tx half, its
+queue-set arm, and the rx half. Dead in all three scenarios because a queue is rarely modified
+while locked.
+
+Folding all three into one shared `#[cold] #[inline(never)]` helper, hoisting the queue-set test
+out of the loop (exactly equivalent — `container` is a local read *before* it, so the original
+tested the same stale value every pass):
+
+| form | program |
+|---|---:|
+| helper called unconditionally | **+2,181,520** |
+| guard kept in line, only the walk out of line | **+160,085** |
+
+The first was my own error, and the codebase had already written it down: `drain_pending_ready`
+carries the note *"the GUARD is inlined and only the WALK is out of line — outlining the whole
+thing meant every call paid a call and a frame to discover there was nothing to do."* I read
+that comment earlier the same day and then made the mistake it warns about.
+
+The second is the real refutation: **+160,085 over 32,017 calls is exactly 5.0 instructions per
+call**, the cost of the hoisted tests that the loop conditions used to carry for free.
+
+> **Dead instructions are FREE at runtime, and a valid census does not change that.** The whole
+> A2 case here was that 78 dead instructions must be claiming registers. They were not — they
+> cost flash and i-cache only, and restructuring to remove them added five instructions to every
+> call. The vein is now closed with a sound measurement instead of a phantom one, which is worth
+> more than closing it with a wrong number would have been.
