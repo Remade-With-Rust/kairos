@@ -15317,9 +15317,25 @@ while a field does not survive one.
 ### Refuted — `add_task_to_ready_list`'s priority guard: a host win the target refuses
 
 Same shape, applied to `priority` (a memory read) feeding `ready_list(priority)`, which IS the
-list id. Host **−50,424 on the program total with the kernel rows byte-identical**, so the
-folded check lives in `rusty_rtos_core`'s list module, outside `run.sh`'s row filter. A null arm
-confirmed HEAD's totals to the instruction first.
+list id. Host **−50,424, and it lands in `add_task_to_ready_list`'s own row.**
+
+**★ CORRECTION, and the instrument caused it.** This was first published as "−50,424 on the
+program total with the kernel rows byte-identical, so the folded check lives in
+`rusty_rtos_core`, outside the row filter." That was wrong. The candidate patch and
+`run.sh baseline` were issued in ONE shell command, python first, so the baseline was recorded
+from the PATCHED tree — the run compared the candidate against itself, which is why the rows
+read +0. Three later measurements inherited that baseline.
+
+> **A re-pin and a patch in the same command is a re-pin of the patch.** The tell was there and
+> I walked past it: the number **50,424** appeared three times in a row, once as a win, once as
+> a regression in `add_task_to_ready_list`, and once inside a larger total. A figure that
+> recurs with alternating signs is the instrument describing its own contamination, and
+> `codec-measurement` §7 says to chase it on the first sighting, not the third.
+
+What survived re-checking against a correctly pinned baseline: the −50,424 is real and is in
+`add_task_to_ready_list`, and the `is_empty_of` refutation is **+1,140,048** rather than
++1,190,472 once the contaminated 50,424 is removed — the same verdict with a corrected
+magnitude.
 
 And rv32 refused it: `block_cycle` **968 → 971**, `group_roundtrip` 71 → 73 against
 `notify_roundtrip` −1 and `queue_roundtrip` −1, plus **+14 B**. The guard itself — a compare and
@@ -15360,3 +15376,87 @@ rather than an attribute.
 > **Two symbols can share a short name, and a per-function diff keyed on the short name will
 > attribute one's regression to the other.** `SimPort::exit_critical` and
 > `Kernel::exit_critical` both print as `exit_critical`.
+
+## ★★★ 2026-09-28 — round four: the bound-proof law reaches its final form, and it is predictive
+
+Win 8, two refutations, and the law that started as "B1 pays across a boundary LLVM cannot see
+through" now has three clauses and correctly predicts every one of the eight measurements taken
+against it.
+
+### Win 8 — prove the owes index at the CALLER: −159,890 Ir, and free
+
+`resume_pending` and `resume_pending_cold` both read `self.current` **raw** — no
+bound-checking accessor between the field and the use — and hand the index to
+`resume_pending_owed`, which is `#[inline(never)]`. One `index >= TASKS` test in each caller:
+
+| instrument | result |
+|---|---|
+| `bench/kernel-ir` | **−159,890** in `resume_pending_owed`'s row, nothing positive |
+| `bench/kernel-flash` | **19,736, UNCHANGED** — no re-pin needed |
+| `bench/tick-work` | every rv32 row identical |
+
+**It repairs an earlier refutation, and the repair is the finding.** Proving the same bound
+*inside* `resume_pending_owed` measured ±0 despite NINE bounded accesses, and the reason
+recorded was that `[T; TASKS]` has a compile-time length so LLVM had already CSE'd them. True,
+and the wrong conclusion:
+
+> **A callee can CSE nine checks into one; only the CALLER can delete the one.** The caller's
+> guard becomes range metadata on the argument, and that crosses an `#[inline(never)]` boundary
+> the callee's own guard cannot do anything about.
+
+### ★★★ The law, final form
+
+> **1. A bound proof pays only where the value is RE-READ FROM MEMORY after the boundary.** A
+> parameter carries its own proof across any number of `&mut self` calls; a field does not
+> survive one.
+>
+> **2. ...and only where it reaches its use WITHOUT passing through a validating accessor.**
+> `handle_at` and `resolve` bound-check on your behalf and the fact is then local, so a proof
+> after one of them is dead weight.
+>
+> **3. Prove at the CALLER when the callee is out of line AND HOT.** The guard becomes range
+> metadata on the argument. For a `#[cold]` callee this inverts: the guard runs every time and
+> the code it improves almost never.
+
+Eight measurements, and the law calls all eight:
+
+| site | clause | measured |
+|---|---|---:|
+| `switch_context`'s `top_ready_priority` | field, raw | **−969,669** |
+| `add_current_task_to_delayed_list`'s `self.current` | field, raw | **−262,232** |
+| `resume_pending` pair → `resume_pending_owed` | field, raw, hot callee | **−159,890** |
+| `place_on_event_list`'s `self.current` | field, raw | **−96,574** |
+| `check_for_timeout`'s task index | one of two behind a boundary | −3,167 |
+| `queue_take_blocking`'s queue index | **parameter** (clause 1) | **+0** |
+| `remove_from_event_list`'s task | **through `handle_at`** (clause 2) | **+0** |
+| `resume_pending_owed`, proved inside itself | wrong side (clause 3) | **±0** |
+
+### Refuted — the same proof at three `#[cold]` priority routines: +123,281
+
+`holder` is read raw out of the queue descriptor and goes straight into `priority_inherit`,
+`priority_disinherit` and `priority_disinherit_after_timeout`, all `#[cold]`. Clauses 1 and 2
+both say go; clause 3 says stop, and clause 3 is right.
+
+The three cold rows won **−83,310** together — `priority_disinherit` −38,758, `priority_inherit`
+−29,060, `priority_disinherit_after_timeout` −15,492 — and the callers lost more:
+`step` +124,741, `send_generic_outlined` +63,366, `queue_take_timed_out` +11,597,
+`queue_take_blocking` +5,812. Net **+123,281**.
+
+> A mutex is contended on a minority of takes, so `priority_inherit` runs on a minority of
+> calls, while a guard at its call site runs on all of them. **Weight a caller-side proof by the
+> callee's CALL RATE, not by its row.** A 640,190 row reached rarely is not the same prize as a
+> 4,367,545 row reached always.
+
+### ★ And the instrument error that cost a published finding
+
+In one shell command I ran the patch and `run.sh baseline` together, python first — so the
+baseline was recorded from the PATCHED tree and the run compared the candidate against itself.
+Three later measurements inherited it.
+
+> **A re-pin and a patch in the same command is a re-pin of the patch.** The tell was there and
+> I walked past it: **50,424** appeared three times running, once as a win, once as a regression
+> in `add_task_to_ready_list`, and once folded into a larger total. A figure that recurs with
+> alternating signs is the instrument describing its own contamination, and
+> `codec-measurement` §7 says chase it on the first sighting. It also cost a second one, which
+> is why win 8's commit quotes the right figure only because the contaminated baseline happened
+> to make it *more* conservative.
