@@ -14836,3 +14836,54 @@ gate), for **−4 on a row that would still read 117 against the C's 110.**
 Declined on the arithmetic, with the instruction list above so the owner can take it if the
 row's exact number ever matters. **Two frame `addi`s, one `add`, one `ret`. That is the whole
 of it.**
+
+## 2026-09-28 — the queue surface, opened: `queue_take_blocking` is 225 Ir/call, and my first candidate there was refuted by a population census
+
+Asked what had not been explored at all. The answer was the queue surface: every win today had
+been in `kernel.rs` or `name.rs`, while `queue.rs` carries a comparable mass —
+`queue_take_blocking` 2.15M, `queue_send_blocking` 2.32M, `remove_from_event_list` 2.16M,
+`unlock_queue` 1.87M — and had never been censused.
+
+### What the census found
+
+`queue_take_blocking` is **225.3 Ir per call, the most expensive function per call in the whole
+program** — more than `switch_context` ever was. Its symbol is **418 static instructions**
+because `queue_take_locked` inlines into it, of which the measured path runs 225. And it looks
+exactly like `rusty-compiler-leverage` A1's signature:
+
+* **six callee-saved pushes** and a **72-byte frame**;
+* **sixteen stack accesses to three spilled slots**, one of them re-read **nine times**;
+* **four cold blocks totalling 100 instructions** that never execute on the measured path.
+
+That is the A2 setup with the biggest precedent in the skill (−12.9% on one function
+elsewhere), so the candidate was to outline the cold arms AS A SET: the mutex
+priority-inheritance block in `queue_take_locked`, and the timed-out branch's setup in
+`queue_take_blocking` — whose callee was already `#[cold]`, which had moved the BODY and left
+the unlock, the resume and the `current != caller` test inline.
+
+### ★ Refuted, +200,668, because "cold" was measured on ONE scenario
+
+Both outlined arms turned up as new symbols with real cost — `take_inherit` **360,344 Ir** and
+`queue_take_expired` **158,793**. A per-scenario call census says why:
+
+| arm | BlockQ | GenQTest | TimerDemo |
+|---|---:|---:|---:|
+| `take_inherit` | 0 | **5,812** | 0 |
+| `queue_take_expired` | ~1,487 of 9,543 calls (**16%**) | — | — |
+
+**Neither arm is cold.** The mutex block is dead in BlockQ and hot in GenQTest, which uses
+mutexes throughout; the timed-out branch runs on about a sixth of calls. I took the
+per-instruction census on BlockQ alone and generalised it to a bench that runs three
+scenarios.
+
+> This is the skill's own warning, verbatim: *"a population census before you touch a cold
+> arm — 610 of 252,001 calls (0.24%) is what justified outlining one arm, and a cheap arm
+> taken 30% of the time gets SLOWER by that change, and nothing in the instruction count of
+> the caller tells you which case you are in."* The instruction census names where the
+> instructions are; only a CALL census across the whole corpus says whether an arm is cold.
+> **Take the population per scenario, not per workload.**
+
+Reverted. The A1 signature is still there and still unexplained — 418 instructions, six
+pushes, a 72-byte frame and a slot re-read nine times is real register pressure — so the
+finding stands even though the first fix for it did not. What it needs is an arm that is cold
+in EVERY scenario, and the census above is how to find one.
