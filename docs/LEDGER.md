@@ -14989,3 +14989,56 @@ So four distinct approaches, four losses:
 No single redundancy above about seven instructions remains, and the one that existed cost more
 to remove than to keep. **Ten wins are not in this function**, and the reason is now measured
 rather than asserted.
+
+## 2026-09-28 — the queue path, round two: one clean win, one priced trade, and what separates them
+
+Six approaches measured on `queue_take_blocking` and the path it takes. One landed on every
+axis, one is a trade whose price is wrong, and four lost — and the difference between the win
+and the losses is a single distinction worth keeping.
+
+### ★ WIN: `check_for_timeout` returns `Option<NonZeroU64>` — −270,175 Ir, −26 B flash
+
+`Option<u64>` has **no niche**: sixteen bytes, two registers, held live across the branch that
+tests it. `Some(0)` is unreachable on every arm — the indefinite arm answers `MAX_DELAY`
+(non-zero at either tick width) and the still-waiting arm answers `held - elapsed` under
+`elapsed < held`, so at least one — which makes the niche free.
+
+    bench/kernel-ir, host        -270,175 Ir  (check_for_timeout itself -272,819)
+    bench/tick-work block_cycle     989 -> 985
+    rv32 flash                   19,778 -> 19,752   (-26 B)
+
+Three axes down, every other rv32 row unmoved, conform 26/26. Two `debug_assert_ne!`s keep the
+niche honest and do not fire. `yield_or_owe` also stopped being a symbol — the smaller return
+let it inline.
+
+This is `rusty-compiler-leverage` B5: **change the REPRESENTATION, do not out-compute LLVM.**
+It is the only one of the six that reduced the live set without adding a call boundary, and
+that is exactly why it is the only one that won.
+
+### PRICED AND DECLINED: outlining `unlock_queue`'s wake loops — −192,102 Ir, **+204 B flash**
+
+The census here was much stronger than `queue_take_blocking`'s: **82 of `unlock_queue`'s 186
+instructions dead in all three scenarios** (44%, in runs of 22, 5, 24, 5, 25), and the function
+paid **seven** callee-saved pushes for a hot path of 87 instructions — fourteen of those 87
+being frame — while touching the stack only twice. So unlike `queue_take_blocking`, the dead
+arms were the only plausible claimant of those registers.
+
+And it worked, on the axis it was aimed at: pushes **7 → 5**, symbol **186 → 140**,
+**−192,102 Ir**, `block_cycle` 985 → 981.
+
+It also cost **+232 bytes of rv32 flash**. Rewritten as ONE parameterised helper instead of a
+`drain_tx_lock`/`drain_rx_lock` pair — with `USE_QUEUE_SETS` false the tx half's queue-set
+branch folds away and the two loops differ only in which list they walk — that came down to
+**+204 B**, so the cost is inherent to outlining rather than to writing it twice.
+
+**Declined.** +204 B lands on the one row this kernel already fails (flash, 1.42x against a
+≤ 1.30x target, and it would read 1.433x) to buy 0.086% of host Ir and four rv32 instructions
+out of 985. The numbers are here so the owner can take it if Ir is ever worth more than bytes;
+the change is two `if lock > LOCKED_UNMODIFIED` call sites and one `#[cold] #[inline(never)]`
+helper.
+
+> **The distinction that separates the win from the five that were not:** a change that makes
+> an EXISTING value smaller costs nothing anywhere. A change that moves code across a call
+> boundary always costs flash and marshalling, and only repays it when the registers it frees
+> were genuinely held by the code that moved. `unlock_queue` passed that test on Ir and failed
+> it on bytes; `queue_take_blocking` failed it on both, four times.
