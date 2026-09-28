@@ -48,7 +48,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 1 | **static RAM**, a blinker's geometry | 1,704 B | **1,640 B** | **0.96×** | ≤ 1.20× (K4) | ✅ **PASS** — §1 |
 | 1b | the same, at the hand-picked 8/8/16 | 1,704 B | 5,984 B | 3.51× | — | see §1 on geometry |
 | 2 | **flash** `.text`, kernel + RISC-V port | 13,924 B | **19,788 B** | **1.42×** | ≤ 1.30× (K3) | ❌ **FAIL** — §12, §13, §16; relaxation was off on our arm only, §14; **and the ratio depends on `codegen-units = 1`, worth 4,154 B — §17** |
-| 3 | **tick ISR**, retired instructions | 15 | **14** | **0.93×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
+| 3 | **tick ISR**, retired instructions | 15 | **9** | **0.60×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
 | 4 | **whole preemptive switch**, Ir | 110 | **122** | **1.11×** | ≤ 1.25× (K3) | ✅ **PASS** |
 | 5 | **per timer**, RAM | 40 B | **40 B** | **1.00×** | — | ✅ **PARITY** — and the BENCH now says 40 too, §11 |
 | 5b | **per queue**, RAM | 72 B | **56 B** | **0.78×** | — | ✅ **WIN** — new row, §11 |
@@ -91,7 +91,7 @@ of them disagreed with what this file said. Five moved in OUR favour and one aga
 | 7 per-task RAM | 184 B | **176 B** | better |
 | 17 scheduler selection | 49 / 1.81x | **48 / 1.78x** | better |
 | the prose below | flash 1.78x | **1.42x** | better |
-| 3 tick ISR | 13 / 0.87x | **14 / 0.93x** | **WORSE by one instruction** |
+| 3 tick ISR | 13 / 0.87x | **14 / 0.93x** | **WORSE by one** -- then **9 / 0.60x** once the cause was found, see below |
 
 Both work benches passed their own gates while producing these: PARITY (both arms report
 identical anchors, so they did the same work) and POISON (doubling the measured call moved

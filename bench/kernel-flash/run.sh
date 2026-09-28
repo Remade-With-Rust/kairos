@@ -279,7 +279,16 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # on flash AND -969,669 Ir on `bench/kernel-ir`, which is not the usual
 # direction for this pair. `andi` +2 is the new compare; `mv` -1 is one less
 # argument shuffled.
-check "Kairos kernel + port"   "$rs_kernel" 19788
+#
+# 19,786 (2026-09-28, -2 B): `reset_next_task_unblock_time` asks the emptiness
+# question directly, matching the C's `portMAX_DELAY` for an empty delayed list
+# where `head_value` had been returning the end marker's `u64::MAX`. That makes
+# `next_unblock_time <= MAX_DELAY` an invariant, so `increment_tick`'s comparison
+# against it collapses from a 64-bit compare to a 32-bit one -- `bench/tick-work`
+# tick_idle and tick_delayed 14 -> 9 against the C's 15. The function is `#[cold]
+# #[inline(never)]` because `switch_delayed_lists` is `#[inline(always)]` and in
+# line the bigger body cost the tick row 14 -> 34.
+check "Kairos kernel + port"   "$rs_kernel" 19786
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -347,11 +356,11 @@ ops() {
 }
 echo
 echo "opcode counts -- the four the 1.6x investigation named:"
-check "mv   (call-argument setup)" "$(ops mv)"   773
+check "mv   (call-argument setup)" "$(ops mv)"   779
 check "mul  (non-p2 indexing)"     "$(ops mul)"    0
 check "srli (u16 extraction)"      "$(ops srli)"  76
-check "slli (u16 extraction)"      "$(ops slli)" 262
-check "andi (incl. zext.b)"        "$(ops andi)" 169
+check "slli (u16 extraction)"      "$(ops slli)" 257
+check "andi (incl. zext.b)"        "$(ops andi)" 165
 
 echo
 if [ "$fail" -eq 0 ]; then

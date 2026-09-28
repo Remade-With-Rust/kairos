@@ -14401,3 +14401,122 @@ And the row above it is worth more than any of these: **`tick_idle` reads 14 aga
 recorded 13**, a regression that predates this session and most likely arrived with the
 truncation rebuild. One instruction, on the row where we already beat C, on the same
 instrument.
+
+## ★★★ 2026-09-28 — the tick was doing 64-bit arithmetic at a 32-bit tick width: 14 → 9
+
+`bench/tick-work`, rv32imac, both arms from the pinned oracle, PARITY and POISON green:
+
+| row | FreeRTOS | before | after | ratio |
+|---|---:|---:|---:|---|
+| `tick_idle` | 15 | 14 | **9** | 0.93x -> **0.60x** |
+| `tick_delayed` | 15 | 14 | **9** | 0.93x -> **0.60x** |
+| rv32 flash, kernel + port | 13,924 | 19,788 | **19,786** | −2 B |
+
+Five instructions per tick on a row this kernel already won, and it beats the best figure
+ever recorded for it (13) by four.
+
+### What was wrong
+
+`increment_tick` asks `if next >= self.next_unblock_time`. Both are tick values, and at a
+32-bit tick width every writer of either masks with `MAX_DELAY` — so the high half of both
+is invariantly zero and the comparison should be one `bltu`. It was emitted as a full
+64-bit compare: a second `lw` for the high word, then `sltu`/`snez`/`or`. LLVM proves the
+high half is zero for `next`, which it has just computed, and cannot for a field it loaded.
+
+Telling it — `next >= self.next_unblock_time & Self::MAX_DELAY` — collapsed the compare and
+measured the −5 immediately. **And it was unsound**, which is the part worth recording.
+
+### ★ The debug_assert caught it, on the first run
+
+The mask is only valid while the field never holds a value wider than the tick. I audited
+the six writers, concluded all were masked, and added a `debug_assert_eq!` to police it —
+the same shape `current_priority`'s cache already uses. It fired on three tests
+immediately:
+
+    left:  18446744073709551615     (u64::MAX)
+    right: 4294967295               (MAX_DELAY at this width)
+
+The writer I had missed was `reset_next_task_unblock_time`:
+
+```rust
+self.next_unblock_time = self.lists.head_value(delayed).unwrap_or(Self::MAX_DELAY);
+```
+
+**`head_value` cannot answer "empty".** On an empty list the head IS the end marker, whose
+value is `u64::MAX` so that a sorted insert always finds something larger to stop at — so
+`unwrap_or` never fired, and a reset over an empty delayed list stored `u64::MAX`. The C
+stores `portMAX_DELAY`:
+
+```c
+if( listLIST_IS_EMPTY( pxDelayedTaskList ) != pdFALSE ) {
+    xNextTaskUnblockTime = portMAX_DELAY;
+```
+
+So this was a FIDELITY GAP as well as a blocker, and the mask would have turned "nothing is
+due" into "due at `MAX_DELAY`" — a behaviour change at exactly the wrap boundary two of the
+three failing tests exercise. Had the assert not been there, the −5 would have shipped with
+it.
+
+> **An invariant you are about to exploit is worth asserting BEFORE you exploit it, not
+> after.** The assert cost one line and one run; it turned a silent unsoundness into three
+> named test failures with the offending value printed.
+
+### The fix, and the test that had pinned the bug
+
+Asking the emptiness question directly (`is_empty_of`, which exists for this) matches the C
+and makes `next_unblock_time <= MAX_DELAY` a true invariant of the field.
+
+Two tests then failed because they PINNED the divergence — and one of them,
+`switching_the_delayed_lists_recomputes_the_next_unblock_time`, said in its own prose:
+
+> *"That list is empty immediately after a wrap, so the answer must be `MAX_DELAY`"*
+
+…and then asserted `u64::MAX`. **The doc comment was right and the assertion was wrong**,
+which is how a divergence survives: it was unobservable (it shows only at a tick equal to
+`MAX_DELAY`, and the wrap resets anyway), so no gate caught it and a test was written around
+it instead. Both tests now assert the fidelity, and the sentinel test additionally asserts
+the width invariant so the next person cannot break the tick win by accident.
+
+### ★ And then A2 bit, harder than it ever has here
+
+With the fix in and the mask sound, the tick row measured **34**. Twenty instructions worse
+than where it started.
+
+`switch_delayed_lists` is `#[inline(always)]` (win 26) and it calls
+`reset_next_task_unblock_time`, so that body lands inside `increment_tick` — on the arm taken
+when the tick WRAPS, once in `MAX_DELAY` ticks. Making the body bigger put its register
+pressure on every tick to serve an arm that had not executed once in the measurement.
+`#[cold] #[inline(never)]` on it took the row back to 9.
+
+That is `rusty-compiler-leverage` A2 — cold arms claim the hot function's registers — and at
++20 instructions it is the largest instance this kernel has produced. Worth noting which
+way round it was found: the correctness fix looked free and was not, and only the bench said
+so.
+
+### The one cost, stated
+
+The outlining is not free on the HOST. Measured on `bench/kernel-ir` against the same fixed
+baseline, win 3 alone read −531,130 and win 3 plus this reads −507,426, so this change costs
+the sim **+23,704 Ir (+0.011%)** — `reset_next_task_unblock_time` becomes a real call and
+`suspend`, which makes ~7,752 of them over the corpus, pays for it where it used to inline.
+
+Kept, and the arithmetic is one-sided: **+0.011% on the simulator against −36% on a
+published rv32 scorecard row and −2 B of flash.** The target is what ships. A `cfg_attr`
+could give the host its inlining back — x86-64 has the registers that rv32 does not, which
+is why A2 bit on one and not the other — and it was not written because 0.011% does not
+justify a second spelling of the attribute. Recorded so the option is priced rather than
+forgotten.
+
+### The vein this opens
+
+The same shape exists wherever the kernel compares two tick values that are both bounded by
+`MAX_DELAY` but only one of which LLVM can see is bounded:
+
+* `wake_due_tasks`: `if now < wake_at`, where `wake_at` comes from `lists.value(item)`;
+* `check_for_timeout`: `elapsed < held`, `held == MAX_DELAY`, `now >= entering` — three of
+  them, all on `Split64` values, in a function called 31,174 times over the Ir corpus;
+* `delay_until`'s boundary comparisons.
+
+Each is a 64-bit compare on a value that cannot exceed 32 bits at this width. The lever is
+the same and so is the discipline: **assert the invariant first**, because the one place it
+did not hold is the place that would have shipped a wrong answer.
