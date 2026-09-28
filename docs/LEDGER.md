@@ -14227,3 +14227,75 @@ A census of `imul`/`mul` inside `rusty_rtos_*` symbols in the host binary, after
 639 in total, and every one of the top twelve offenders is `demo_core` — the trace sink (71,
 integer formatting) and the scenario bodies. **No kernel function appears at all.** So the
 kernel is multiply-free on both widths, and this is the last instruction that vein had.
+
+## 2026-09-28 — SIMD and hand-asm, retired with a measurement: there is no loop to vectorise
+
+`codec-vectorize-kernel` and `codec-asm-kernel` were loaded and assessed against this
+kernel. Both were refused, and the interesting part is that only one of the three reasons
+is an argument — the other two are measurements.
+
+**1. Policy. `unsafe_code = "deny"` in both `rusty_rtos_kernel` and `rusty_rtos_core`.**
+`#[target_feature]` and `asm!` each require `unsafe`, so both skills' entire primary route
+is unavailable by a constraint that is the product's safety story. There is no
+`core::arch`, `asm!` or `target_feature` anywhere in either crate, which is consistent.
+
+**2. Architecture.** `rv32imac` has no vector extension. Cortex-M4F has DSP
+single-instruction-multiple-data-within-a-register (`SMLAD`, `SSUB16`), but Rust exposes
+none of it on stable without `asm!`, so (1) forecloses it anyway.
+
+**3. ★ And the measurement that actually settles it: NOTHING IN THE KERNEL LOOPS.**
+
+`bench/kernel-ir/instr.py --sweep` reports, for every symbol with ≥500 calls, the worst
+per-call execution count of any instruction in it. An instruction executing many times per
+call is a loop that walks:
+
+    worst/call      self Ir     calls  Ir/call  function
+          1.58    8,103,699    48,246    168.0  switch_context
+          1.00   48,685,006   269,188    180.9  event
+          1.00    2,844,735    21,690    131.2  add_current_task_to_delayed_list
+          1.00    2,149,586     9,543    225.3  queue_take_blocking
+          ... every other function, 1.00
+
+**`switch_context`'s ready-list walk was the only loop in the profiled program that
+iterated, at 1.58 levels per call, and this session folded it (−969,669 Ir).** Everything
+else is straight-line. Vector work needs iterations; there are none. `queue_take_blocking`
+at 225.3 Ir/call is not a loop — it is 225 instructions of sequential work, and the only
+way to make it cheaper is to delete some.
+
+So the SIMD question here is not "would intrinsics beat the compiler" but "over what?" —
+and that is a cheaper question to answer, which is the whole point of the skills' own
+Step 0 / pre-flight discipline.
+
+**Caveat, stated because the sweep is now in the tree and will be re-run:** it measures
+SELF cost, so a function whose loop lives in a CALLEE reads 1.00. That is why the trace
+sink reads 1.00 at 180.9 Ir/call — its looping is inside `core::fmt`. The reading is still
+the right one for a vectorisation question, because a vector kernel replaces a function's
+OWN inner loop, but do not read it as "nothing anywhere loops".
+
+### What the two skills DID pay, which was not the SIMD
+
+- **Step −1 REACHABILITY, generalised past kernels: "the optimisation exists and the
+  shipping path does not reach it."** That is *exactly* this session's largest win — the
+  aligned-UTF-8-window fast path, written, tested, documented and unreached, worth 10% of
+  the program. The method is therefore validated on this codebase, not borrowed on faith.
+  Applied again to the delayed list's `insert_sorted` append shortcut: the census shows no
+  instruction in `add_current_task_to_delayed_list` executing more than once per call, so
+  **the shortcut is taken on every call** — reached, working, no win, retired for the cost
+  of one census and no rebuild. (`insert_sorted` has no symbol of its own: it is INLINED,
+  not dead, which is the trap the skill names.)
+- **"Find the remaining wins by MACHINE, not by eye."** The sweep above is that law with
+  the patterns changed from SIMD ones (HALF-STORE, INVARIANT) to the one this kernel can
+  have. It retired a whole class in one run.
+- **`#[cold]`/`#[inline(never)]` is a property of a PATH and pricing it one function at a
+  time gets the SIGN wrong.** This explains the `hand_over` refutation recorded above
+  (+108, caller unmoved): not only was that arm not claiming registers, the vein is already
+  systematically mined — `kernel.rs` carries **10 `inline(never)` and 11 `#[cold]`**
+  attributes, each with its measurement beside it.
+- **An instrument fix, which is the durable part.** The per-instruction census was
+  mis-anchoring across callgrind's `fl=`/`fi=`/`fe=` subranges, which are how inlined code
+  is recorded. Function TOTALS stayed correct — a total is a sum — so only the
+  DISTRIBUTION was wrong, and only in functions containing inlined code. The symptom was
+  `int3` padding reporting 21,690 executions. `switch_context` cross-validated against
+  `callgrind_annotate` throughout and hid it. Fixed, and re-checked against the one number
+  that had been derived from the broken version: `switch_context` still reads exactly
+  168.0 Ir/call, so nothing already recorded moves.
