@@ -14299,3 +14299,105 @@ OWN inner loop, but do not read it as "nothing anywhere loops".
   `callgrind_annotate` throughout and hid it. Fixed, and re-checked against the one number
   that had been derived from the broken version: `switch_context` still reads exactly
   168.0 Ir/call, so nothing already recorded moves.
+
+## 2026-09-28 — cracking open `switch_select`: 48 against 27, accounted for instruction by instruction
+
+Row 17 is the second of the two rows this kernel loses to C on, and it is small enough to
+enumerate completely: 48 retired instructions against FreeRTOS's 27, measured by
+`bench/tick-work` with two `minstret` reads around the call under `-icount shift=0`, with
+PARITY and POISON both green.
+
+Both arms disassembled (`llvm-objdump`, rv32imac, -O2, no LTO either side) and the executed
+path traced by hand. FreeRTOS's `vTaskSwitchContext` runs 24 instructions on the
+non-walking route; ours runs ~44 on the steady-state route the bench measures (the loop
+calls `switch_context` 512 times with a stable ready set, so `started[next]` is true and
+`unwinding` is non-null after the first call, which skips the unwind-set block).
+
+### Where the 21-instruction gap goes
+
+| block | Kairos | C | delta |
+|---|---:|---:|---:|
+| **handle validation** — bounds test, index→slot address, generation load, FREE-bit test | 7 | **0** | **+7** |
+| **stackless bookkeeping** — `unwinding` test, `started[next]` read and test | 5 | **0** | **+5** |
+| **u16 item ids reconstructed into addresses** — mask, scale, add, load, where C dereferences a pointer | 9 | 5 | **+4** |
+| two-word `Handle` loaded and stored, against one pointer | 5 | 2 | +3 |
+| the item/marker discrimination (`li t0` + `bltu`) | 2 | 0 | +2 |
+| suspended-depth test and `yield_pending` clear | 4 | 5 | −1 |
+
+**Sixteen of the twenty-one are the product.** `pvOwner` hands C a `TCB_t *` and it is
+believed; we hold a generational handle and check it, which is the whole safety story. C's
+tasks own stacks and resume where they were, so it needs no unwind marker and no
+started flag; we are stackless, which is what buys 0.30x RAM per task on row 7. Reading
+those sixteen instructions as a defect would be reading the price tag as the product.
+
+The remaining five are ordinary slack, and worth having: five instructions is 10% of the
+row and would take the ratio to 1.59x.
+
+### ★ Two measured refutations, and the second one corrected my model
+
+Both were predicted from the instruction trace, and both came out the wrong way round.
+Recording them because the pattern matters more than either number.
+
+| candidate | predicted | measured |
+|---|---|---|
+| **peel the top priority level** out of the search loop, so the hot path carries no induction variable (the walk steps the end node's address down, so LLVM computes it before the first test — three instructions the common case never reads) | −3 | **+4 (48 → 52)** |
+| **remove the `MAX_PRIORITIES` guard on rv32** (`cfg` it to the 64-bit host), where I had counted it as two instructions of pure cost | −2 | **+2 (48 → 50)** |
+
+The peel lost because it duplicates `next_round_robin`'s inlined body into the hot path and
+LLVM kept the induction variable regardless: paid for the copy, got nothing.
+
+The guard result is the useful one. **It is a win on BOTH axes, not a host win paid for on
+the target.** Proving `top < MAX_PRIORITIES` lets `next_round_robin`'s own
+`list_meta(list)?` bounds check fold away on rv32 exactly as it does on the host, so the
+`li`/`bltu` pair buys more than it costs — and my instruction-by-instruction attribution,
+which had it down as +2 of the 48, was simply wrong. `rusty-compiler-leverage` B1 again:
+giving LLVM a bound relation is worth more than the compare it costs, and you cannot see
+that by counting the compare.
+
+> **The transferable law: a per-instruction attribution of a 48-instruction budget names
+> where the instructions ARE, and does not predict what removing one costs.** Folding
+> dominates at this size. The BLOCK decomposition above is solid — it is arithmetic over the
+> disassembly — and every per-candidate estimate derived from it is a hypothesis that has to
+> be measured. Two for two wrong in sign is the evidence.
+
+This is the same wall `rusty_rtos_core/src/list.rs` documents from five passes of its own:
+*"the file has no transferable structure left: every remaining edit is a coin flip that
+costs a four-arm sweep to resolve."* `switch_context` has now joined it, and the honest
+consequence is that the remaining five instructions cost roughly three measured probes each
+to find, not one reading of the assembly.
+
+### The candidate list, ranked, for whoever picks this up
+
+Structural, and owner decisions rather than optimisations — each trades a row this kernel
+WINS for the row it loses:
+
+1. **Fold `started` into the slot's generation word.** `a5` already holds
+   `slot.generation` for the FREE test, and bits 17–31 are spare (FREE is bit 16). Testing
+   another bit in a register already loaded replaces `add`/`lbu`/`bnez` — **~−2, plus one
+   byte per task of RAM and a whole array deleted.** Needs an arena API for a user bit.
+2. **Pack `Handle` to one `u32`** (index:16 | generation:16): `current` becomes one `lw`
+   and one `sw` instead of two of each, **~−3 here and smaller handles kernel-wide.**
+   Collides with the deliberate choice to put FREE at bit 16 and with the generation space
+   that bought (65,535 rather than 32,767) — price it against `Arena`'s own note.
+3. **Item ids as offsets rather than indices**, removing the mask-and-scale that
+   reconstructs a node address from a `u16`. ~−3, and it is most of the +4 row above.
+
+Micro, each a coin flip needing its own measurement:
+
+4. Sink `current`'s generation load into the unwind arm — it is a **dead load** on the
+   measured path, used only by `self.unwinding = outgoing`. ~−1.
+5. Hoist `li t0, 0x10` into the arm that compares against it. ~−1.
+6. Store the list cursor pre-masked so the read does not need `andi a4, a4, 0x1f`. ~−1.
+7. Co-locate `meta[]` with the marker nodes so one base serves both address computations
+   instead of two. ~−2.
+8. Fold the `unwinding.is_null()` test into the flags byte `hand_over` already reads. ~−1.
+9. Make the item/marker discrimination a bit in the id rather than a magnitude compare
+   against a loaded constant. ~−1.
+10. **Refuted on arithmetic before building:** making the `top_ready_priority` store
+    conditional. It is written unconditionally and is usually unchanged, but a compare to
+    skip a store is one instruction for one instruction. C writes it unconditionally too.
+
+And the row above it is worth more than any of these: **`tick_idle` reads 14 against a
+recorded 13**, a regression that predates this session and most likely arrived with the
+truncation rebuild. One instruction, on the row where we already beat C, on the same
+instrument.
