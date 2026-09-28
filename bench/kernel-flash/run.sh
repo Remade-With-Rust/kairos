@@ -302,7 +302,19 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # Worth -270,175 Ir on the host, -4 on rv32 `block_cycle`, and these 26 bytes.
 # `rusty-compiler-leverage` B5: change the REPRESENTATION, do not out-compute
 # LLVM.
-check "Kairos kernel + port"   "$rs_kernel" 19752
+# 19,740 (2026-09-28, -12 B): `queue_take_timed_out` stopped taking `caller`.
+# It is `self.current` at both call sites -- one reads it two lines above, the
+# other is guarded by `if self.current != caller` -- so reading it in the callee
+# is the same value for one fewer argument pair. Worth -27,967 Ir, these 12
+# bytes, and 10 of the `mv` count below, with every rv32 row IDENTICAL.
+#
+# Doing the SAME to `queue_take_blocking` as well measured -136,107 Ir and -22 B
+# and was REFUSED: it cost +1 on `recv_empty`, `send_full` and `peek_ok` and +4
+# on `queue_roundtrip` against -2 on `block_cycle`. rv32 has EIGHT argument
+# registers, so `peek` was never in the seventh slot there and dropping `caller`
+# only adds two loads -- the win is x86-64's six-register convention, and those
+# four rows are firmware paths, not SimPort bookkeeping.
+check "Kairos kernel + port"   "$rs_kernel" 19740
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -370,7 +382,10 @@ ops() {
 }
 echo
 echo "opcode counts -- the four the 1.6x investigation named:"
-check "mv   (call-argument setup)" "$(ops mv)"   785
+# 775 (2026-09-28, -10): the `caller` argument removed from
+# `queue_take_timed_out`, above. This is the count the 1.6x investigation named
+# as the tell for argument marshalling, so a signature change should move it.
+check "mv   (call-argument setup)" "$(ops mv)"   775
 check "mul  (non-p2 indexing)"     "$(ops mul)"    0
 check "srli (u16 extraction)"      "$(ops srli)"  76
 check "slli (u16 extraction)"      "$(ops slli)" 257
