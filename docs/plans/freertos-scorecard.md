@@ -51,7 +51,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 3 | **tick ISR**, retired instructions | 15 | **9** | **0.60×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
 | 4 | **whole preemptive switch**, Ir | 110 | **122** | **1.11×** | ≤ 1.25× (K3) | ✅ **PASS** |
 | 5 | **per timer**, RAM | 40 B | **40 B** | **1.00×** | — | ✅ **PARITY** — and the BENCH now says 40 too, §11 |
-| 5b | **per queue**, RAM | 72 B | **56 B** | **0.78×** | — | ✅ **WIN** — new row, §11 |
+| 5b | **per queue**, RAM | 72 B | **64 B** | **0.89×** | — | ✅ **WIN** — 56 B / 0.78× was an AVERAGED slope: the old bench divided the 8→16-queue delta by 8, crossing a list-arena granularity band. The 2026-09-28 marginal fix reports the true one-unit cost — 48 B slot + 8 B free-list entry + 8 B of list metadata for the send/receive waiter lists. **Not a regression**, §11 |
 | 18 | **queue round-trip** (send+receive), Ir | *no C arm* | **123** | — | — | ⬜ −17.6% (§6), then −27 (§10) |
 | 19 | **event-group round-trip**, Ir | *no C arm* | **71** | — | — | ⬜ −1 (§6) |
 | 20 | **queue send refused** (full, 0 ticks), Ir | *no C arm* | **37** | — | — | ⬜ −67.8% (§6); +2 layout, §10 |
@@ -65,7 +65,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 26 | **notify take refused** (0 pending, 0 ticks), Ir | *no C arm* | **29** | — | — | ⬜ −43.5% (§6) |
 | 27 | **notify wait refused** (0 ticks), Ir | *no C arm* | **27** | — | — | ⬜ new instrument |
 | 28 | **one lookup + critical section** (`task_priority_get`), Ir | *no C arm* | **17** | — | — | ⬜ the FLOOR every row sits on |
-| 6 | **whole cooperative switch**, Ir | 110 | **78** | **0.71×** | ≤ 1.25× (K3) | ✅ **PASS — 29 % faster** |
+| 6 | **whole cooperative switch**, Ir | 110 | **78** | **0.71×** | ≤ 1.25× (K3) | ✅ **PASS — 30 % faster** |
 | 7 | **per task**, RAM | 596 B | **176 B** | **0.30×** | — | ✅ **WIN** — 136 was stale; the bench pins 184 (§11). C is 84 B TCB + 512 B stack + a heap header; **the gap is the stack** |
 | 8 | **per event group**, RAM | 28 B | **8 B** | **0.29×** | — | ✅ **WIN** — 16 was step-inflated, §11 |
 | 9 | **register half**, cooperative yield | 83 | 30 | 0.36× | — | ✅ **WIN** |
