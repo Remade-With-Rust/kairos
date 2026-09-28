@@ -24,7 +24,7 @@ or a vendored copy is not done.
 |---|---|---|---|---|---|
 | `rusty_zstd` | `=0.2.5` (was `=0.2.3`) | on-chip OTA payloads and trace capture (K6+); the fleet tool already uses it on the host | **PASS at 0.2.5** (2026-09-09) | was: eight `core::sync::atomic::AtomicU64` **census counters** (`bit.rs` `RELOAD_CALLS`, `RELOAD_REFILLS`; `compressed.rs` `DEC_LIT32`, `DEC_MATCH32`, `DEC_LIT16`, `DEC_LIT64`, `DEC_MATCH16`, `DEC_BAND[..]`). Fixed upstream | none left |
 | `rusty_time-core` | `=0.2.0` (was `=0.1.10`) | `rusty_rtos_sntp` (K7): the NTP packet codec and offset arithmetic as the house leaf instead of a coreSNTP remake | **PASS at 0.2.0** (2026-09-09) | was: no `#![no_std]`; `ntp.rs` needed only `std::error::Error` (one impl, line 159) and `f64` division — no `libm`. Fixed upstream, and the impl became `core::error::Error` rather than being gated away | none left |
-| `rusty_alloc` (`rusty_rtos_alloc` `small-metal`) | `=2.1.0` (was `=2.0.4`) | the firmware's Rust global allocator behind `heap_3` (K4) | **OK to compile** on all four targets under `--cfg ra_single_threaded --cfg ra_small_profile`; **no board has run it on a Kairos part** — an ESP32-S3 has (section 4, 9/9), which is not one | nothing: 2.1.0 added `REGION_ALIGN` and the public `PrimError` the seam was missing, and the seam re-exports them | a board day (K4) — **B3 closed 2026-09-10** |
+| `rusty_alloc` (`rusty_rtos_alloc` `small-metal`) | `=2.2.1` (was `=2.1.0`) | the firmware's Rust global allocator behind `heap_3` (K4) | **OK to compile** on all four targets under `--cfg ra_single_threaded --cfg ra_small_profile`; **no board has run it on a Kairos part** — an ESP32-S3 has (section 4, 9/9), which is not one | nothing: 2.1.0 added `REGION_ALIGN` and the public `PrimError` the seam was missing, and the seam re-exports them. **2.2.1 (pinned 2026-09-28) adds no API at all** â€” it is a performance and fix release, so the re-export list is unchanged: `GlobalAlloc`'s methods are now `#[inline]` as the `mimalloc` crate's are (whole-program **âˆ’21.1%** and **âˆ’5.8%** on two deterministic Rust workloads), `realloc` keeps a block in place at any alignment when it fits (**âˆ’27.3%**), two-word-aligned layouts come from the natural size classes, growing a huge block no longer copies its whole reservation, and process start-up makes 12 allocations where it made 251. Re-verified at the pin: `gate-alloc` OK on `thumbv7em-none-eabihf` and `riscv32imac-unknown-none-elf`, and the seam's `small-metal` half compiles on both under the two cfgs | a board day (K4) — **B3 closed 2026-09-10** |
 | `rusty_erasure-core` | `=0.4.1` (was `=0.4.0`) | nothing in v1 (the mesh is above the RTOS); recorded because its `no-std` label was wrong on 32-bit parts | **PASS at 0.4.1** (2026-09-10) | was: `kernel.rs:10` imported `AtomicU64` for `SCALAR_CENSUS_BYTES` and a `census: &'static AtomicU64` field — the census counter again. Fixed upstream | none left |
 | `rusty_xml` | `=0.8.1` | nothing: no XML in the FreeRTOS portfolio | **FAIL** (`std`-only `-sax`, `-tree`) | not a Kairos want; listed so nobody reads the `no-std` category as a fact | not ours to schedule |
 
@@ -357,7 +357,7 @@ in as many words, "**no board has run it**". Now one has:
 
 ```text
 === rusty_rtos_alloc small-metal seam on ESP32-S3 (xtensa, no_std + alloc) ===
-rusty_alloc      2.1.0
+rusty_alloc      2.2.1
 REGION_ALIGN     16 bytes
 MIN_REGION       65536 bytes
 budget asked     225280 bytes

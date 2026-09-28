@@ -10,7 +10,7 @@ the crate, so a failure names its crate and nothing else:
 
 | member | crate | pin |
 |---|---|---|
-| `gate-alloc` | `rusty_alloc-api` | `=2.0.4`, `default-features = false` (needs the two cfgs below) |
+| `gate-alloc` | `rusty_alloc-api` | `=2.2.1`, `default-features = false` (needs the two cfgs below) |
 | `gate-symbols` | `rusty_symbols` | `=0.1.0`, `default-features = false` |
 | `gate-thoth` | `thoth` | git tag `v0.3.0`, `default-features = false` |
 | `gate-json` | `rusty_json_turbo` (lib `serde_json`) | git, `0.1.0`, `no_std + alloc` |
