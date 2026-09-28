@@ -14630,3 +14630,83 @@ direction.
 > refutation log is sharper — **a candidate that measures 0 has not been refuted until you
 > know what else holds its cost up.** Had the index compare been written off on its first
 > reading, this win would have been closed as "already optimal".
+
+## ★★★ 2026-09-28 — `switch_select` has a FLOOR of 30, and C is 27: the row cannot be won
+
+Asked whether `switch_select` could go from 47 to under the C's 27, and whether functions or
+primitives were hiding. Three curiosity checks came back refuted, and then an ablation pair
+answered the question with a number instead of a model.
+
+### The ablations — the ceiling probe for this row
+
+Each removes a block outright, is WRONG, and was reverted. The cell prints its rows
+regardless, so each costs one build and one QEMU run.
+
+| what is present | rv32 `switch_select` | the block's cost |
+|---|---:|---:|
+| everything (shipping) | **47** | — |
+| minus `hand_over` — the stackless unwind marker and the `started` flag | **40** | **7** |
+| minus that AND handle validation — `handle_at`'s slot read and liveness test | **30** | **10** |
+| FreeRTOS `vTaskSwitchContext` | **27** | — |
+
+**The floor is 30. C is 27.** Deleting BOTH the checked-handle validation and the stackless
+bookkeeping — which is to say, deleting the product — leaves this row still three
+instructions behind the C. So:
+
+> **`switch_select` cannot be brought under 27 by removing safety checks.** The 17
+> instructions the product costs are real and now measured, and removing all of them is not
+> enough. What remains at 30 is the REPRESENTATION: `u16` item ids reconstructed into node
+> addresses where C dereferences a pointer, a two-word `Handle` where C stores one
+> `TCB_t *`, and separate `meta[]`/node arrays where C's `List_t` bundles the count and the
+> end marker so ONE address computation serves both. Going below 27 means adopting C's data
+> representation, which is the same thing as not being this kernel.
+
+### ★ My hand decomposition was wrong, and wrong in the direction that mattered
+
+The earlier block decomposition, derived by tracing the disassembly, put handle validation at
+7 and the stackless bookkeeping at 5 — **12 of the 20-instruction gap**. Measured, they are
+**10 and 7, so 17**. The arithmetic that "did not quite close" (I summed deltas to +24 against
+a measured +20 and called it order-of-magnitude right) was not rounding: it was
+**undercounting the product by five while overcounting the slack**.
+
+That inverts the conclusion. I had reported ~5 instructions of ordinary slack worth chasing;
+against a floor of 30 there is none — the row is 47 with a 30 floor and 17 of product, and
+the three "structural" candidates recorded earlier (a `started` bit in the generation's spare
+bits, a packed one-word `Handle`, item ids as offsets) are not slack either. **They are
+attempts to move the FLOOR**, which is a different and much larger piece of work, and their
+own estimates (−2, −3, −3) sum to 8 against a 3-instruction deficit — so two of the three
+would have to land before the row even reaches parity.
+
+> **Trigger 1 was live and I discounted it.** "The arithmetic doesn't close" is in the skill
+> as a mandatory descent, and I noted the four-instruction discrepancy, called it acceptable,
+> and published a slack figure derived from the model that produced it. An ablation costs one
+> build. **Price a block by removing it, never by reading it** — the disassembly tells you
+> where instructions ARE, and this session has now been wrong about what removing one costs
+> four times out of five.
+
+### The three refutations that license the ceiling claim
+
+They matter because a floor is only a floor if the instrument and the work parity are sound:
+
+* **The bracket.** The bench's own header warns that anchors prove the arms did the same
+  WORK, not that the boundary encloses the same THING. Read: both arms bracket
+  `switch_context()` / `vTaskSwitchContext()` with two `minstret` reads and the same repeat
+  loop. Identical in shape.
+* **The ready-list geometry.** C says "exactly two ready tasks at this priority". Ours
+  creates `mate` and `meas` at 3 and then delays `current` — which is **Tmr Svc**, because
+  `TIMER_TASK_PRIORITY` is 4 and `create_task` makes the highest-priority task current. So
+  `mate` and `meas` are both still ready and the two arms match. The 46–59 spread was
+  `hand_over`'s arms, not a variable-depth walk: with `hand_over` ablated it collapses to
+  39–40.
+* **`trace_task`'s ungated `trace.note_exits(port.exits())`.** Seventeen other sites route
+  through a `T::EMITS`-gated helper and this one does not, so it looked like a leak worth
+  4–6 instructions per switch under `NoTrace`. It DCEs: there is no 64-bit `exits` read
+  anywhere in the rv32 disassembly of `switch_context`. A `Cell::get` with no side effects
+  behind an empty trait method folds away.
+
+### What this closes
+
+Row 17 is **not a defect to fix**. It is the price of rows 1, 5b, 7, 8, 9 and 6, and it has a
+measured floor three instructions above the C's figure. The scorecard's framing — read row 2
+as the cost column of the other nine — now applies to row 17 as well, and with a number
+behind it rather than an argument.

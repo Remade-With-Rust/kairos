@@ -76,7 +76,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 14 | **ISR-to-task latency** | *no C arm* | 430 cyc (S3) | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 15 | **queue send/receive**, 16 B item | *never built* | — | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 16 | **API coverage** | 341 rows mapped | **0 marked done** | — | 100 %, CI-checked | ⬜ **UNMEASURED** |
-| 17 | **scheduler selection**, Ir | 27 | **47** | 1.74× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
+| 17 | **scheduler selection**, Ir | 27 | **47** | 1.74× — ⚠ **FLOOR 30, measured by ablation**: removing BOTH handle validation (10) and the stackless bookkeeping (7) leaves 30, still 3 above the C. This row cannot be won without adopting C's data representation; see docs/LEDGER.md. Earlier "~5 instructions of slack" was wrong — the hand decomposition undercounted the product by five | ~~1.74× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
 
 ### Re-measured 2026-09-28 â€” six figures in this table had gone stale
 
