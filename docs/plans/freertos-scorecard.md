@@ -49,7 +49,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 1b | the same, at the hand-picked 8/8/16 | 1,704 B | 5,984 B | 3.51× | — | see §1 on geometry |
 | 2 | **flash** `.text`, kernel + RISC-V port | 13,924 B | **19,788 B** | **1.42×** | ≤ 1.30× (K3) | ❌ **FAIL** — §12, §13, §16; relaxation was off on our arm only, §14; **and the ratio depends on `codegen-units = 1`, worth 4,154 B — §17** |
 | 3 | **tick ISR**, retired instructions | 15 | **9** | **0.60×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
-| 4 | **whole preemptive switch**, Ir | 110 | **122** | **1.11×** | ≤ 1.25× (K3) | ✅ **PASS** |
+| 4 | **whole preemptive switch**, Ir | 110 | **121** | **1.10×** | ≤ 1.25× (K3) | ✅ **PASS** — ⚠ **FLOOR 117**, by enumeration: the register half is 74 of which **64 move a word that must move** (30 GPRs + 2 CSRs each way, no branches in it), so the only slack is 4 of the 6 control/frame instructions. Even deleting the product entirely gives exactly 100, never under. See docs/LEDGER.md |
 | 5 | **per timer**, RAM | 40 B | **40 B** | **1.00×** | — | ✅ **PARITY** — and the BENCH now says 40 too, §11 |
 | 5b | **per queue**, RAM | 72 B | **64 B** | **0.89×** | — | ✅ **WIN** — 56 B / 0.78× was an AVERAGED slope: the old bench divided the 8→16-queue delta by 8, crossing a list-arena granularity band. The 2026-09-28 marginal fix reports the true one-unit cost — 48 B slot + 8 B free-list entry + 8 B of list metadata for the send/receive waiter lists. **Not a regression**, §11 |
 | 18 | **queue round-trip** (send+receive), Ir | *no C arm* | **123** | — | — | ⬜ −17.6% (§6), then −27 (§10) |
@@ -65,7 +65,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 26 | **notify take refused** (0 pending, 0 ticks), Ir | *no C arm* | **29** | — | — | ⬜ −43.5% (§6) |
 | 27 | **notify wait refused** (0 ticks), Ir | *no C arm* | **27** | — | — | ⬜ new instrument |
 | 28 | **one lookup + critical section** (`task_priority_get`), Ir | *no C arm* | **17** | — | — | ⬜ the FLOOR every row sits on |
-| 6 | **whole cooperative switch**, Ir | 110 | **78** | **0.71×** | ≤ 1.25× (K3) | ✅ **PASS — 30 % faster** |
+| 6 | **whole cooperative switch**, Ir | 110 | **77** | **0.70×** | ≤ 1.25× (K3) | ★ **C HAS NO CHEAPER PATH**: `portYIELD()` on its RISC-V port is `ecall`, a trap, so a cooperative yield costs it the same full 83-instruction save as a preemption. C pays 110 for EVERY switch; we pay 77 for a yield and 121 for a preemption, and the mix of a real application is dominated by yields. ✅ **PASS — 30 % faster** |
 | 7 | **per task**, RAM | 596 B | **176 B** | **0.30×** | — | ✅ **WIN** — 136 was stale; the bench pins 184 (§11). C is 84 B TCB + 512 B stack + a heap header; **the gap is the stack** |
 | 8 | **per event group**, RAM | 28 B | **8 B** | **0.29×** | — | ✅ **WIN** — 16 was step-inflated, §11 |
 | 9 | **register half**, cooperative yield | 83 | 30 | 0.36× | — | ✅ **WIN** |

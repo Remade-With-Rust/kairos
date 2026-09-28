@@ -14710,3 +14710,95 @@ Row 17 is **not a defect to fix**. It is the price of rows 1, 5b, 7, 8, 9 and 6,
 measured floor three instructions above the C's figure. The scorecard's framing — read row 2
 as the cost column of the other nine — now applies to row 17 as well, and with a number
 behind it rather than an argument.
+
+## ★★★ 2026-09-28 — the preemptive switch cannot reach 100: every instruction enumerated
+
+Asked to take the whole preemptive switch under 100 (ours 121, the C's 110) and to find ten
+wins to do it. The answer is that it is arithmetically impossible, and unlike the
+`switch_select` floor — which needed an ablation — this one can be proved by listing the
+instructions, because the register half is pure data movement with no branches in it (the
+bench asserts that: "Kairos RISC-V preemptive switch has no conditional branch").
+
+### The register half is 74, and 64 of them move a word that must move
+
+Two routines, both disassembled:
+
+| routine | what it does | count |
+|---|---|---:|
+| `riscv-rt`'s `default_start_trap` | saves and restores the 16 CALLER-saved registers (`ra`, `t0`–`t6`, `a0`–`a7`) on the interrupted task's stack | 37 |
+| `kairos_riscv_switch_trap` | saves and restores the 14 CALLEE-saved (`ra`, `sp`, `s0`–`s11`) into the TCB, plus `mepc` and `mstatus` | 37 |
+
+Decomposed:
+
+    data movement   16+16 caller, 14+14 callee, 2+2 CSR values      64
+    CSR access      2 csrr + 2 csrw                                  4
+    control/frame   2 addi, 1 add, 1 jal, 1 mret, 1 ret              6
+                                                                    --
+                                                                    74
+
+**Thirty GPRs and two CSRs cross in each direction. That is 64 instructions and not one of
+them is removable**, because a trap can fire anywhere in a task and the port is a STACKED one
+(`COMMITS_SWITCH`), so every register is potentially live. `gp` and `tp` are already skipped —
+we are leaner than a naive port there. `mepc` and `mstatus` are not optional: the LEDGER
+records that removing them was the exact defect `riscv32-qemu-preempt` was built to witness.
+
+The CSR access is 4 for two CSRs, which is minimal. **So the only slack in the entire register
+half is in the six control/frame instructions, and at most four of them can go** — the two
+frame `addi`s and the `add a0, sp, zero` disappear if a unified trap entry saves straight into
+the TCB instead of building a stack frame, and the separate `ret` disappears with the separate
+call. The `jal` to the decision and the `mret` that leaves the trap are irreducible.
+
+**Register-half floor: 70. Current: 74.**
+
+### So the whole row
+
+| | selection | register | whole |
+|---|---:|---:|---:|
+| today | 47 | 74 | **121** |
+| floor, product intact | 47 | 70 | **117** |
+| floor, product DELETED (handle validation and stackless bookkeeping both removed) | 30 | 70 | **100** |
+| FreeRTOS | 27 | 83 | 110 |
+
+**Exactly 100, and only by deleting memory safety and the stackless design. Under 100 is not
+reachable at all.** The 30 comes from the ablation recorded above; the 70 from the enumeration
+here.
+
+### ★ And the reframing that matters more than the row
+
+`FreeRTOS/portable/GCC/RISC-V/portmacro.h`:
+
+```c
+#define portYIELD()    __asm volatile ( "ecall" );
+```
+
+**A cooperative yield in FreeRTOS is a TRAP.** It takes the same full 83-instruction
+save/restore its preemption does, so **C's cooperative switch is also 110** — it has no cheap
+path and cannot have one, because its context is always the whole register file on the task
+stack.
+
+Ours splits: a cooperative yield is a function call, so the caller-saved half is the
+compiler's problem and already spilled if live, and the switch moves only the 14 callee-saved
+registers. **77 against 110, 0.70x.**
+
+So the two rows say one thing together, and it is not "we lose the preemptive row":
+
+> **C pays 110 for every switch. We pay 77 for a yield and 121 for a preemption.** Which side
+> wins depends entirely on the mix, and the mix of a well-written RTOS application is
+> dominated by yields — `taskYIELD`, a queue that blocks, a semaphore take, a mutex
+> contention. The preemptive row is where C's always-save-everything architecture finally
+> pays off, and it pays off by 11 instructions out of 121.
+
+That is the honest shape of the comparison and it is better than the row reads alone.
+
+### Priced and DECLINED: the unified trap entry, −4
+
+The one available win is precisely identified and not taken. It requires replacing
+`riscv-rt`'s trap entry with a Kairos-owned one that saves the caller-saved set straight into
+the TCB, which needs the current context pointer reachable from assembly at trap time — today
+the pointers arrive from Rust because the handler decides the switch. That is a real design
+change to the single hardest path in the port to test (`riscv32-qemu-preempt` is its only
+gate), for **−4 on a row that would still read 117 against the C's 110.**
+
+Declined on the arithmetic, with the instruction list above so the owner can take it if the
+row's exact number ever matters. **Two frame `addi`s, one `add`, one `ret`. That is the whole
+of it.**
