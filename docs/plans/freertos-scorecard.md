@@ -47,7 +47,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 |---|---|---:|---:|---:|---|---|
 | 1 | **static RAM**, a blinker's geometry | 1,704 B | **1,640 B** | **0.96×** | ≤ 1.20× (K4) | ✅ **PASS** — §1 |
 | 1b | the same, at the hand-picked 8/8/16 | 1,704 B | 5,984 B | 3.51× | — | see §1 on geometry |
-| 2 | **flash** `.text`, kernel + RISC-V port | 13,924 B | **19,244 B** | **1.38×** | ≤ 1.30× (K3) | ❌ **FAIL** — §12, §13, §16; relaxation was off on our arm only, §14; **and the ratio depends on `codegen-units = 1`, worth 4,154 B — §17** |
+| 2 | **flash** `.text`, kernel + RISC-V port | 13,924 B | **19,788 B** | **1.42×** | ≤ 1.30× (K3) | ❌ **FAIL** — §12, §13, §16; relaxation was off on our arm only, §14; **and the ratio depends on `codegen-units = 1`, worth 4,154 B — §17** |
 | 3 | **tick ISR**, retired instructions | 15 | **13** | **0.87×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
 | 4 | **whole preemptive switch**, Ir | 110 | **129** | **1.17×** | ≤ 1.25× (K3) | ✅ **PASS** |
 | 5 | **per timer**, RAM | 40 B | **40 B** | **1.00×** | — | ✅ **PARITY** — and the BENCH now says 40 too, §11 |

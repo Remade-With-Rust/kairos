@@ -14177,3 +14177,53 @@ A `git checkout -- Cargo.lock` in a sibling repo mid-`conform` made cargo re-loc
 5 packages") under the running build, which failed with rustc exit 101 — and the harness
 reported exit 0, so it read as a passing gate until the output was read. The lock trap now
 has a second rule beside "never commit it": restore it only when nothing is building.
+
+## 2026-09-28 — win 3: the alignment fix took the HOST's power-of-two slot stride with it, −531,130 Ir
+
+`Tcb::_stride_pad` exists to make `Slot<Tcb>` a power of two so `index * stride` is a shift
+and not a multiply. It was sized as `[u32; 9]`, which gives **128 bytes on rv32** — the
+number `bench/kernel-ram` pins and `bench/kernel-flash`'s `mul = 0` depends on.
+
+It was never sized for the host, and nothing had ever looked: the host's fields are wider
+(`usize`, and the `Name` alignment win 1 introduced), so the host slot was **144 bytes**.
+Every TCB index therefore cost `lea (%r12,%r12,8)` + `shl $0x4` — ×9×16 — where a
+power-of-two stride costs one `shl`.
+
+Win 1 is what made this worth finding, and it is worth being precise about the causality:
+the host stride was already not 128 before win 1, but win 1 grew `Name` from 17 to 24 bytes
+on the host and so moved the number again. Reading the asm for win 2's census is what put
+the `lea`+`shl` pair in front of me.
+
+Splitting the pad by pointer width — `[u32; 4]` on a 64-bit host, `[u32; 9]` on a target —
+makes both 128:
+
+| | before | after | delta |
+|---|---:|---:|---:|
+| program total | 261,395,905 | 260,860,539 | **−535,366** |
+| kernel rows | 223,180,693 | 222,649,563 | **−531,130 (−0.24%)** |
+
+**Twenty-one rows moved and every single one is negative**, which is the cross-check that
+matters more than the total: the win appears in exactly the functions that resolve a TCB
+and nowhere else.
+
+    switch_context                    -184,508
+    remove_from_event_list             -71,643
+    add_task_to_ready_list             -50,424
+    step (the demo's own resolves)     -48,972
+    add_current_task_to_delayed_list   -27,669
+    check_for_timeout                  -27,301
+    task_priority_get                  -22,256
+    ... 14 more, all negative
+
+rv32 is untouched by construction and measured to be: `bench/kernel-flash` PASS on all
+seven pins including `mul = 0`, and `bench/kernel-ram` PASS with the TCB slot stride still
+128 and per-task RAM still 176 B. The host pays 16 bytes per task of extra padding, which
+is the sim's RAM and free.
+
+### And the multiply vein is now closed, on both widths
+
+`mul = 0` has been pinned on rv32 for a long time and **nobody had ever checked the host.**
+A census of `imul`/`mul` inside `rusty_rtos_*` symbols in the host binary, after this win:
+639 in total, and every one of the top twelve offenders is `demo_core` — the trace sink (71,
+integer formatting) and the scenario bodies. **No kernel function appears at all.** So the
+kernel is multiply-free on both widths, and this is the last instruction that vein had.
