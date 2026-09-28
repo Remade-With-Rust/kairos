@@ -15069,3 +15069,68 @@ The third looked like the best target of the three — nine checks on one index 
 
 Reverted, and recorded because the naive reading of B1 — more checks means more to win — is
 exactly backwards on fixed-size arrays, which is most of this kernel's per-task state.
+
+## ★★★ 2026-09-28 — `exit_critical`'s nesting decrement cost THREE compares: −2,412,746 Ir
+
+The largest single win of the day after the `Name` alignment, and it was found by finally
+doing to `queue_take_blocking` what had been done to `switch_context` hours earlier: reading
+its EXECUTED instructions instead of reaching for structural levers.
+
+Four attempts at that function had already failed by moving code around (+200,668, +11,619,
++254,429, +624,386). The listing showed why none of them could work and where the cost
+actually was:
+
+```
+60b2f  cmp $0x1,%eax
+60b32  mov %eax,%esi
+60b34  adc $0xffffffff,%esi     <- saturating decrement of the nesting count
+60b37  mov %esi,0xb0(%r14)
+60b3e  cmp $0x1,%eax            <- the SAME comparison, again
+60b41  ja  ...
+```
+
+`self.nesting.get().saturating_sub(1)` then `if nesting != 0`. The `mov`/`adc` between the two
+compares clobbers the flags the first one set, so x86-64 emits it twice. **`exit_critical` is
+inlined FOUR TIMES into `queue_take_blocking`** -- one per critical section it takes, about 50
+of that function's 225 instructions -- and runs well over a hundred thousand times per
+scenario.
+
+Guarding instead of saturating is identical arm for arm (`n = 0` and `n = 1` both fall through
+to the outermost path, `n > 1` returns early, and the guard proves the subtraction cannot
+underflow). Measured: **−2,412,746 Ir, 1.08% of the whole program**, across every function
+that takes a critical section and not one positive:
+
+    step                   -682,657      suspend                -227,369
+    switch_context         -553,524      queue_take_blocking    -202,745
+    check_for_timeout      -390,997      exit_critical          -134,710
+    unlock_queue           -293,502      resume_all             -126,966
+    resume_pending_owed    -236,676      task_priority_get      -111,280
+
+`queue_take_blocking`'s own self cost went 3,960,935 → 3,758,190, **−5.1%** -- which is the
+win in the function that four structural attempts could not find.
+
+### ★★ The new law: the same source can want OPPOSITE code on two architectures
+
+On rv32 the identical change is WORSE by about two instructions a call --
+`bench/tick-work` read `block_cycle` **977 → 984** and `recv_empty` **39 → 46** -- because
+rv32 has no conditional move, so the guard becomes a real branch with a duplicated
+continuation, where `saturating_sub` lowered to three straight-line ALU ops. Rewriting it as
+one store with one reused compare changed nothing at all: LLVM canonicalises both forms to the
+same IR.
+
+> **A redundancy visible in one target's assembly may be that target's CODEGEN rather than the
+> program's structure.** The doubled `cmp` was real on x86-64 and did not exist on rv32. So a
+> source change aimed at it helps one and hurts the other, and the only honest resolution is to
+> measure BOTH before believing either. This is the fourth `cfg(target_pointer_width)` split in
+> the kernel today, and the first for a reason that is about instruction selection rather than
+> operand width.
+
+Firmware is unaffected either way: this is `SimPort`, and a silicon port's critical section is
+`csrci`/`csrsi`. **The rv32 rows that moved were measuring the simulator's software clock** --
+a nesting counter and the exits tally -- not anything that ships. Which is itself worth
+recording: `block_cycle`, `recv_empty` and the other Kairos-only rv32 rows include the sim
+port's bookkeeping, so they overstate what a silicon port costs. The three C-compared rows are
+unaffected, because neither `increment_tick` nor `switch_context` takes a critical section.
+
+Gated on conform 26/26 with the death scenario's `exits=3890` unchanged, which is the check
+that matters when the thing being changed is the clock itself.
