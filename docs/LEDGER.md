@@ -14520,3 +14520,72 @@ The same shape exists wherever the kernel compares two tick values that are both
 Each is a 64-bit compare on a value that cannot exceed 32 bits at this width. The lever is
 the same and so is the discipline: **assert the invariant first**, because the one place it
 did not hold is the place that would have shipped a wrong answer.
+
+## 2026-09-28 — the wait frame, truncated at the boundary as the C's type already is: block_cycle 994 → 993
+
+The second application of the tick-width lever, and the one that establishes its limit.
+
+`begin_wait` stored the caller's `ticks` unmasked, so a `WaitFrame`'s fields could hold a
+value wider than the tick — which forced every comparison against them in
+`check_for_timeout` to be a full 64-bit one on rv32. Masking on READ would have been
+unsound for exactly that reason, so the mask went at the WRITE, where it is also the more
+faithful thing:
+
+> C's `xTicksToWait` is a `TickType_t`. At a 32-bit configuration a caller **cannot**
+> express a wait longer than `portMAX_DELAY` — the value is truncated by the assignment, so
+> `2^32` ticks becomes 0 and `u64::MAX` becomes forever. This API takes a `u64` so the
+> kernel is width-independent, which means it has to do that truncation itself rather than
+> let a value the C could not represent reach a wait frame.
+
+The mask is before the zero test on purpose: C truncates at the assignment, so a caller
+asking for exactly `2^32` ticks gets C's answer — do not block — rather than a very long
+wait. `tests/no_panic.rs` already feeds `u64::MAX` and `u64::MAX - 1` as tick values, and
+the two `debug_assert_eq!`s added beside the reads confirm the invariant holds under it.
+
+| instrument | before | after |
+|---|---:|---:|
+| `bench/tick-work`, rv32 `block_cycle` | 994 | **993** |
+| every other rv32 row | — | unchanged |
+| rv32 flash | 19,786 | unchanged |
+| `bench/kernel-ir`, host | — | **exactly 0** |
+
+### ★★ The host cannot see this class of win at all, and that is structural
+
+The host reading is not "small". It is **zero, to the instruction** — the same
+−507,426 the previous two wins had already banked, unchanged.
+
+**On a 64-bit host a `u64` comparison is ONE instruction.** There is no high half to load,
+no `snez`, no `or`. Every instruction this lever removes exists only where `usize` is four
+bytes — which is every target this kernel ships to, and not the machine the simulator runs
+on.
+
+Consequences worth carrying:
+
+- **`bench/kernel-ir` is blind to 32-bit-target arithmetic, by construction.** It is the
+  right instrument for algorithmic and structural work, which is width-neutral, and the
+  wrong one for anything about operand width. A change measured at 0 there has not been
+  measured.
+- **`bench/tick-work` is the instrument for this class**, and it is the one with a C arm, so
+  a win here moves a published scorecard row rather than a simulator number.
+- It also explains why the same lever paid −5 on `tick_idle` and −1 here: `increment_tick`
+  is nine instructions, so one 64-bit compare was a large fraction of it, while
+  `block_cycle` is 993 and the compares are a rounding error. **Price a width win against
+  the SIZE of the row it sits in**, not against the number of comparisons it fixes.
+
+### The vein, now priced out
+
+Four candidates were measured on `switch_select` and the blocking rows across this session;
+the two that paid are above, and these did not:
+
+| candidate | measured |
+|---|---|
+| peel the top priority level out of the ready-list search | **+4** (48 → 52) — duplicates the inlined `next_round_robin` body into the hot path and LLVM keeps the induction variable anyway |
+| remove the `MAX_PRIORITIES` guard on rv32, which I had counted as +2 of pure cost | **+2** (48 → 50) — it is a win on BOTH axes; proving the bound folds `list_meta`'s own check away on rv32 exactly as on the host |
+| compare `next.index() != current.index()` instead of the whole handle, to kill a compare and a live generation word | **0** — `hand_over` takes the whole handle, so LLVM keeps the generation live regardless |
+| store the list cursor pre-masked to drop `andi a4, a4, 0x1f` | **refuted on reading** — that mask IS the bounds-elision optimisation; removing it adds a compare and a branch |
+
+`switch_select` therefore stands at **48 against the C's 27**, and its remaining slack is
+the three structural trades recorded with the decomposition above — a `started` bit in the
+generation word's spare bits, a packed one-word `Handle`, and item ids as offsets. Each
+trades a row this kernel wins for the row it loses, so each is an owner decision rather
+than an optimisation.

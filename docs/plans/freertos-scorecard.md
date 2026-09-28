@@ -52,18 +52,18 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 4 | **whole preemptive switch**, Ir | 110 | **122** | **1.11×** | ≤ 1.25× (K3) | ✅ **PASS** |
 | 5 | **per timer**, RAM | 40 B | **40 B** | **1.00×** | — | ✅ **PARITY** — and the BENCH now says 40 too, §11 |
 | 5b | **per queue**, RAM | 72 B | **56 B** | **0.78×** | — | ✅ **WIN** — new row, §11 |
-| 18 | **queue round-trip** (send+receive), Ir | *no C arm* | **131** | — | — | ⬜ −17.6% (§6), then −27 (§10) |
-| 19 | **event-group round-trip**, Ir | *no C arm* | **72** | — | — | ⬜ −1 (§6) |
-| 20 | **queue send refused** (full, 0 ticks), Ir | *no C arm* | **40** | — | — | ⬜ −67.8% (§6); +2 layout, §10 |
-| 21 | **queue receive refused** (empty, 0 ticks), Ir | *no C arm* | **41** | — | — | ⬜ −59.6% (§6), then −21 (§10) |
-| 22 | **event-group wait refused** (0 ticks), Ir | *no C arm* | **40** | — | — | ⬜ −31.7% (§6) |
+| 18 | **queue round-trip** (send+receive), Ir | *no C arm* | **123** | — | — | ⬜ −17.6% (§6), then −27 (§10) |
+| 19 | **event-group round-trip**, Ir | *no C arm* | **71** | — | — | ⬜ −1 (§6) |
+| 20 | **queue send refused** (full, 0 ticks), Ir | *no C arm* | **37** | — | — | ⬜ −67.8% (§6); +2 layout, §10 |
+| 21 | **queue receive refused** (empty, 0 ticks), Ir | *no C arm* | **39** | — | — | ⬜ −59.6% (§6), then −21 (§10) |
+| 22 | **event-group wait refused** (0 ticks), Ir | *no C arm* | **39** | — | — | ⬜ −31.7% (§6) |
 | 23 | **owe filter** (`resume_pending`, nothing owed), Ir | *no C arm* | **7** | — | — | ⬜ §8 |
-| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **1,058** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
-| 29 | **queue peek** (item present), Ir | *no C arm* | **45** | — | — | ⬜ the `PEEK` twin, §8; −35 (§10) |
+| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **993** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
+| 29 | **queue peek** (item present), Ir | *no C arm* | **42** | — | — | ⬜ the `PEEK` twin, §8; −35 (§10) |
 | 30 | **queue messages-waiting**, Ir | *no C arm* | **17** | — | — | ⬜ the FLOOR, = `scaffolding` |
-| 25 | **notify round-trip** (give+take), Ir | *no C arm* | **61** | — | — | ⬜ −28.7% (§6) |
-| 26 | **notify take refused** (0 pending, 0 ticks), Ir | *no C arm* | **31** | — | — | ⬜ −43.5% (§6) |
-| 27 | **notify wait refused** (0 ticks), Ir | *no C arm* | **29** | — | — | ⬜ new instrument |
+| 25 | **notify round-trip** (give+take), Ir | *no C arm* | **59** | — | — | ⬜ −28.7% (§6) |
+| 26 | **notify take refused** (0 pending, 0 ticks), Ir | *no C arm* | **29** | — | — | ⬜ −43.5% (§6) |
+| 27 | **notify wait refused** (0 ticks), Ir | *no C arm* | **27** | — | — | ⬜ new instrument |
 | 28 | **one lookup + critical section** (`task_priority_get`), Ir | *no C arm* | **17** | — | — | ⬜ the FLOOR every row sits on |
 | 6 | **whole cooperative switch**, Ir | 110 | **78** | **0.71×** | ≤ 1.25× (K3) | ✅ **PASS — 29 % faster** |
 | 7 | **per task**, RAM | 596 B | **176 B** | **0.30×** | — | ✅ **WIN** — 136 was stale; the bench pins 184 (§11). C is 84 B TCB + 512 B stack + a heap header; **the gap is the stack** |

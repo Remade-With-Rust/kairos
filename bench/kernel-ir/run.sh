@@ -27,6 +27,19 @@
 #   that helps one and hurts another shows up here and would not in a
 #   single-scenario reading.
 #
+#   ★ WIDTH BLINDNESS, and it is structural. This bench runs on a 64-bit
+#   host, where a `u64` comparison is ONE instruction. On every target this
+#   kernel ships to `usize` is four bytes and the same comparison costs a
+#   second load, a `snez` and an `or`. So a change that narrows an operand
+#   measures EXACTLY ZERO here while being worth five instructions per tick
+#   on rv32 -- which is what `reset_next_task_unblock_time`'s fix measured
+#   (`bench/tick-work` tick_idle 14 -> 9, this bench 0 to the instruction).
+#
+#   Use this bench for algorithmic and structural work, which is
+#   width-neutral. For anything about OPERAND WIDTH use `bench/tick-work`,
+#   which runs the real target and has a C arm. A zero here is not a
+#   measurement of that class of change; it is the absence of one.
+#
 #   Denominator warning: the sim spends roughly half its instructions
 #   FORMATTING THE TRACE (`core::fmt`), which firmware does not have. Read
 #   the per-function kernel rows, never the program total, and never quote
