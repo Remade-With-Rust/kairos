@@ -18,13 +18,45 @@ rusty_rtos_port-core = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port
 rusty_rtos_port-riscv = { path = "../../../rusty_rtos_port/crates/rusty_rtos_port-riscv", default-features = false }
 
 [profile.release]
-# Matches the C arm's -Os. `lto` and one codegen unit are left OFF on
-# purpose: the C arm is compiled per translation unit with
-# -ffunction-sections and garbage-collected at link, and LTO would give the
-# Rust arm a whole-program optimisation the C arm is not getting.
+# Matches the C arm's -Os.
 opt-level = "s"
+
+# OFF, and for the reason stated: the C arm is compiled per translation unit
+# with -ffunction-sections and garbage-collected at link, so LTO would give the
+# Rust arm a whole-program optimisation the C arm is not getting.
 lto = false
+
+# ★ ON, and it is an ASYMMETRY IN OUR FAVOUR -- measured 2026-09-25 at
+# **4,154 bytes**, which is 21% of the pinned total. At the default 16 this arm
+# is 24,032 B and the K3 row reads 1.73x instead of 1.43x; `mv` is 1,079
+# instead of 828.
+#
+# The comment that used to sit here claimed one codegen unit was "left OFF on
+# purpose" on exactly the fairness grounds that argue against it, while the
+# setting was 1. The documented basis and the build disagreed by those 4,154
+# bytes, which is the same class of defect as the linker relaxation in §14 --
+# that one favoured the C arm and was corrected; this one favours ours and is
+# NOT corrected here, because it is a call about what the row means.
+#
+# The case for keeping it: a CRATE is the Rust unit of compilation, as a .c file
+# is C's, and `codegen-units` merely SPLITS one crate at points rustc chooses --
+# 16 does not reproduce C's file boundaries, it just degrades optimisation
+# arbitrarily. The case against: `rusty_rtos_kernel-core` holds the equivalent
+# of SIX FreeRTOS translation units (tasks, queue, timers, event_groups,
+# stream_buffer and the scheduler), and at one unit they are optimised together
+# while C's six are not.
+#
+# Neither value maps onto the C arm's structure. Whoever settles it should state
+# which comparison the row claims to make, and §16 of the scorecard should say
+# so beside the ratio.
 codegen-units = 1
+
 panic = "abort"
+
+# NOTE: there is deliberately no `debug` key. A previous comment here described
+# "line tables ONLY" for the opcode-attribution instrument, but `debug = 1`
+# perturbs codegen by about six bytes and was removed once a pinned number had
+# been taken from it by mistake. Attribution is done on the SHIPPING binary at
+# function granularity instead.
 
 [workspace]

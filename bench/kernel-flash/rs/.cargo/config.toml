@@ -31,3 +31,31 @@ rusty_rtos_port-riscv = { path = "../../../rusty_rtos_port/crates/rusty_rtos_por
 # wiring fault in the bench.
 [patch.crates-io]
 rusty_rtos_core = { path = "../../../rusty_rtos_core/crates/rusty_rtos_core" }
+
+# ★ LINKER RELAXATION, which this arm was not getting and the C arm was.
+#
+# `auipc`+`jalr` is an eight-byte call pair; the linker collapses it to a
+# four-byte `jal` when the relocation carries `R_RISCV_RELAX`. clang emits that
+# annotation by DEFAULT (`-mrelax`), and rustc does not -- so the C arm's calls
+# were relaxed and ours were not. Counted in the disassembly:
+#
+#     auipc + jalr      C:   0     Kairos: 391
+#     auipc + jr        C:   0     Kairos:  66
+#
+# 457 call sites paying four bytes each. Enabling it: **24,242 -> 22,264**,
+# -1,978 bytes, and 8,715 -> 8,226 instructions, because two instructions
+# become one. Nothing about the kernel changed.
+#
+# Symmetric either way -- rebuilding the C arm with `-mno-relax` reads 15,022
+# against its 13,924, so relaxation is worth -7.3% to it and -8.2% to us. The
+# comparison is now both-relaxed; both-unrelaxed would be 24,242 vs 15,022,
+# the same ratio to two places. What is NOT symmetric is a C arm that relaxes
+# against a Rust arm that does not, which is what this row published.
+#
+# CAVEAT, and it is the reason this is a build flag and not a cheer: `relax` is
+# an UNSTABLE `-C target-feature` on rustc ("this feature is not stably
+# supported"). Every Kairos rv32 firmware is carrying this 8% today, and a
+# stable-toolchain user cannot switch it off. That is a finding about the
+# toolchain, not about the kernel.
+[build]
+rustflags = ["-C", "target-feature=+relax"]

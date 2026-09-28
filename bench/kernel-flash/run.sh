@@ -137,8 +137,13 @@ printf '  %-34s %7d\n' "Kairos kernel + RISC-V port"   "$rs_kernel"
 printf '  %-34s %7d   %s\n' "  (Kairos compiler_builtins)" "$rs_builtins" "excluded, see below"
 printf '  %-34s %7s\n' "" "$ratio"
 echo
-printf '  Kairos costs %d bytes more flash for the same operation set.\n' \
-       $((rs_kernel - c_text))
+delta=$((rs_kernel - c_text))
+if [ "$delta" -lt 0 ]; then
+    printf '  Kairos costs %d bytes LESS flash for the same operation set.\n' \
+           $((c_text - rs_kernel))
+else
+    printf '  Kairos costs %d bytes more flash for the same operation set.\n' "$delta"
+fi
 echo
 
 echo "where the C arm's bytes are:"
@@ -147,14 +152,19 @@ awk '$0 ~ /\.o:\(\.text/ { sz = strtonum("0x" $3); n = $0
      END { for (k in t) printf "  %-18s %6d\n", k, t[k] }' "$BUILD/c_kernel.map" | sort -k2 -nr
 echo
 
-echo "the tick-width asymmetry, which is NOT a language cost:"
+echo "the tick-width difference, now PRICED instead of asserted:"
 echo "  Kairos uses a u64 tick; the FreeRTOS RISC-V port types TickType_t as"
 echo "  portUBASE_TYPE (portmacro.h:68), so on rv32 it is 32-bit and"
 echo "  configTICK_TYPE_WIDTH_IN_BITS is not honoured at all. Setting it to 64"
 echo "  was tried: the type stayed 32-bit and clang reported a constant"
-echo "  truncating to 0 -- a broken build, not a matched one. So part of the"
-printf '  gap above is a 64-bit tick that never wraps, including the %d bytes\n' "$rs_builtins"
-echo "  of compiler_builtins already excluded. It is a design difference."
+echo "  truncating to 0 -- a broken build, not a matched one."
+echo
+echo "  This text used to say part of the gap was a 64-bit tick. Nobody had"
+echo "  measured that. Building this arm with Tick = Bits32 reads 13,288"
+echo "  against 13,318: the u64 tick costs THIRTY BYTES of .text, not a part"
+printf '  of any gap -- its helpers live in the %d bytes of compiler_builtins\n' "$rs_builtins"
+echo "  already excluded from BOTH arms. We keep it: it never wraps, and it"
+echo "  is very nearly free."
 echo
 
 echo "instrument checks -- a linker that discards nothing measures nothing:"
@@ -179,7 +189,160 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # in neither of ITS context switches -- and it only became visible when adding
 # the preemptive switch moved the number. The pin went DOWN because the bug was
 # in our favour to remove, not because the kernel shrank.
-check "Kairos kernel + port"   "$rs_kernel" 16008
+# 14,520 -> 13,986 on 2026-09-24: `prvInitialiseMutex`s give stopped going
+# through the general `queue_send_generic`. See `Kernel::prime_mutex`.
+#
+# ★ 13,318 -> 25,762 the same day, and THAT is the number that was wrong, not
+# this one. The probe passed COMPILE-TIME CONSTANTS where the C arm passes
+# nothing it can fold:
+#
+#   * every handle was `Default::default()`, which is index 0, generation 0.
+#     `Arena::resolve` tests `slot.generation != handle.generation ||
+#     !live(slot.generation)`, and with a constant generation of 0 that reads
+#     `g != 0 || g is even` -- TRUE for every g, because 0 is even. LLVM proved
+#     the resolve always fails and deleted the whole operation.
+#     `kairos_stream_buffer_send` compiled to TWO BYTES, and the linker folded
+#     it with `..._receive` because both had become the same early return.
+#     Worth 13,588 bytes.
+#   * every block time was a literal 0, folding the blocking halves: 1,340 B.
+#   * `NotifyAction`, `notify_take`s clear flag and `event_group_wait_bits`
+#     two bools were literals, folding arms the C compiles: 206 B.
+#
+# The C arm folds none of it: `-u xQueueReceive` roots the real function with
+# every parameter unknown. The two arms were not doing the same work.
+#
+# `rs/src/lib.rs` records that the FIRST version of this probe called everything
+# from one function and "13,314 bytes were attributed to the probe". That is
+# this 13,588 -- splitting into one entry point per operation is what turned the
+# handles into constants. So the row never measured the real bodies, and every
+# figure it published -- 2.21x, 1.22x, 1.16x, 1.04x, 1.00x, 0.96x -- was taken
+# with 23 operations folded to an error return. **The 2.21x it once reported was
+# approximately RIGHT**, and the session that called it stale was wrong.
+#
+# Every argument that gates control flow now arrives through the entry points
+# own parameters, where nothing can fold it. 25,762 includes two real wins made
+# the same day: -1,704 B from `Name::new` (see `name.rs`) and -986 B from the
+# A4 split on `queue_send_generic`.
+# 22,264 -> 22,058 on 2026-09-24, from two REPRESENTATION fixes rather than any
+# design change. Both were found by attributing single opcodes to source lines,
+# which needed `debug = 1` on this profile to get line tables at all -- the
+# first attempt attributed 1 of 49 `mul` and 0 of 78 `srli`, which reads as
+# "the opcodes are in core" and actually meant "this profile emits no debug
+# info". That build is SCRATCH: debug info perturbs codegen, so it is never the
+# one this pin is taken from.
+#
+#   * `Handle` was two `u16`s, so four bytes, so rv32 passed it in ONE register
+#     and every use extracted the halves -- `slli 16`/`srli 16`, because
+#     rv32imac has no `zext.h` and `andi` cannot hold a 0xFFFF immediate.
+#     `handle.rs:143` alone held 41 of the 78 `srli`. Word-wide fields are two
+#     registers and no extraction.
+#   * `Arena::resolve` tested the generation PARITY on every call: 118 copies of
+#     one `andi` between `resolve` and `resolve_mut`, half the whole `andi`
+#     count. A legitimately issued handle is always ODD and the only even one is
+#     NULL's zero, so the test belongs at `Handle::from_raw` -- the one boundary
+#     a forged handle enters through. The use-after-free defence is INTACT: a
+#     forged even generation normalises to NULL and gets the same
+#     `InvalidHandle` the arena would have answered. Slots now start at
+#     generation 2 and `remove` skips zero, so no slot can carry the null
+#     generation and NULL can never match one.
+#
+# Measured: `andi` 236 -> 133, `srli` 130 -> 78, `mv` 1,027 -> 978, `slli`
+# 266 -> 237. `mul` went 32 -> 58 -- a REGRESSION, because widening `Handle`
+# changed `size_of::<Slot<T>>()`. It is unrepaid and is the next thing owed.
+# 22,064 measured WITHOUT debug info. The attribution instrument needs
+# `debug = 1` for line tables and that perturbs `.text` by 6 bytes (22,058 with,
+# 22,064 without) -- enough to fail this check, so the attribution build is
+# scratch and never the one a pin is taken from. The OPCODE counts below are
+# identical either way: debug info moves layout, not the instruction mix.
+# 19,132 over the SAME 46 operations the C arm forces, plus the one
+# (`check_terminated`) whose C counterpart the forced set reaches through
+# `prvIdleTask`. It was 19,490 over FIFTY-FOUR until 2026-09-25: this cell
+# exported seven entry points the C arm links no symbol for, because C spells
+# them as MACROS over already-forced generics -- `xSemaphoreGive` over
+# `xQueueGenericSend`, `xSemaphoreCreateBinary` over `xQueueGenericCreate`,
+# `xQueueOverwrite` over `xQueueGenericSend`, `xSemaphoreCreateRecursiveMutex`
+# over `xQueueCreateMutex` -- and because `xTimerGenericCommandFromTask` is ONE
+# symbol where we exported four (`timer_start`/`stop`/`reset`/`change_period`).
+# Worth 358 bytes, charged to us for operations C got for nothing.
+# 19,790 is the POST-INCIDENT baseline (2026-09-28). It was 19,244 before a
+# non-atomic write truncated `kernel.rs` to zero bytes; the file was rebuilt from
+# the newest backup plus the documented session record and now passes
+# `conform --all` 26/26 and 102/102 kernel tests, but roughly 546 bytes of
+# earlier kernel.rs work has no surviving record and is NOT in this number.
+# See docs/LEDGER.md, 2026-09-28.
+check "Kairos kernel + port"   "$rs_kernel" 19790
+
+# ---- the opcode counts, PINNED ---------------------------------------------
+#
+# `.text` is one number and it hides direction. The class census that opened
+# the 1.6x investigation found the gap is instruction COUNT at equal encoding
+# density, and that the worst ratios are in opcodes that are not real work:
+# `mv` (register pressure), `mul` (non-power-of-two indexing), `srli`/`slli`
+# (u16 half-extraction), `andi` (masks).
+#
+# Those four were UNGATED, and it showed: widening `Handle` took `srli` 130 to
+# 78 and `andi` 236 to 133 while quietly taking `mul` 32 to 58, because it
+# changed `size_of::<Slot<T>>()`. Nothing failed. The regression was found only
+# because somebody happened to be counting that hour.
+#
+# A total can fall while its parts move in opposite directions, so the parts
+# are pinned separately. A pin that moves DOWN is still a failure here -- it
+# means the number changed and nobody wrote down why.
+#
+# TWO LABELS WERE WRONG and are corrected above (2026-09-24):
+#
+# `mv` is NOT register pressure. The attribution says 57% of it is CALL-ARGUMENT
+# SETUP: 445 of 829 sit immediately before a `jal`, and in the three functions
+# holding the most, 109 of 146 are `saved -> arg` -- a receiver parked in a
+# callee-saved register and re-supplied at each call. `queue_take_blocking`
+# makes 26 calls and 48 of its 56 `mv` are their arguments. `mv` per call is
+# 1.43 against C's 0.67, and 183 of the moves are the single `mv a0, sN` that
+# rv32 cannot avoid, because `a0` is caller-saved. The lever is CALL COUNT.
+#
+# `andi` is not all waste. 19 of the 130 are `ListsOf::at`'s hand-written
+# `& (N-1)`, which REPLACES a compare, a branch and a panic edge -- the cheapest
+# bounds check the ISA offers, and C's lower count is C doing none. DRIVING THIS
+# PIN DOWN CAN MAKE THE BINARY BIGGER. Read the immediates before treating a
+# rise as a regression: 0x3f is a bounds mask, 0x1 is a bool, 0x4/0xfb is the
+# `F_WAIT` test-and-clear.
+#
+# And five changes measured `mv` DOWN while costing flash: inlining the
+# critical-section pair (-165 `mv`, +1,866 B), `exit_critical` alone (-70,
+# +2,054 B), `add_task_to_ready_list` (-9, +212 B), narrowing `Handle` to four
+# bytes (+9 -- the wrong way -- and +1,160 B) and rounding the list count.
+# The flash total is what arbitrates; an opcode pin alone never does.
+OD=${OD:-$(command -v llvm-objdump || echo "/c/Program Files/LLVM/bin/llvm-objdump")}
+"$OD" -d --no-show-raw-insn "$BUILD/rs_kernel.elf" 2>/dev/null > "$BUILD/rs_ops.asm"
+# `zext.b` IS `andi rd, rs, 0xff` -- encoding `0ff57593` is OP-IMM funct3=111
+# with imm 0x0FF -- and llvm-objdump prints the PSEUDO. A census keyed on the
+# mnemonic therefore missed 49 of our ANDI instructions and 2 of the C arm's,
+# which is 1.6x of the andi count hiding behind a disassembler label. Count the
+# pseudo as what it encodes. Same trap for any other alias this ISA prints.
+# ...and `compiler_builtins` is EXCLUDED, because the byte total beside these
+# counts excludes it (`rs_kernel = rs_text - rs_builtins`, above) and the C arm
+# links no `mem*` at all -- zero `memcpy`/`memset`/`memcmp` symbols and zero
+# calls to any. Counting them here described different code from the number they
+# sit next to: `mv` read 828 for a binary whose pinned size covers 819 of them.
+ops() {
+    awk -v op="$1" '
+        /^[0-9a-f]+ <.*>:$/ {
+            ours = ($0 ~ /compiler_builtins|<mem(cpy|set|cmp|move)>/) ? 0 : 1
+            next
+        }
+        ours && /^ +[0-9a-f]+:/ {
+            m = $2
+            if (m == "zext.b") m = "andi"
+            if (m == op) n++
+        }
+        END { print n+0 }' "$BUILD/rs_ops.asm"
+}
+echo
+echo "opcode counts -- the four the 1.6x investigation named:"
+check "mv   (call-argument setup)" "$(ops mv)"   774
+check "mul  (non-p2 indexing)"     "$(ops mul)"    0
+check "srli (u16 extraction)"      "$(ops srli)"  76
+check "slli (u16 extraction)"      "$(ops slli)" 262
+check "andi (incl. zext.b)"        "$(ops andi)" 167
 
 echo
 if [ "$fail" -eq 0 ]; then

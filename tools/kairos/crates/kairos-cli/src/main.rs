@@ -244,6 +244,17 @@ fn find_package<'a>(manifest: &'a Manifest, name: &str) -> Result<&'a Package> {
 // ------------------------------------------------------------------ process --
 
 /// Run a command, echoing it first. In `dry` mode only the echo happens.
+/// A Windows path as WSL sees it: `F:\a\b` -> `/mnt/f/a/b`.
+///
+/// Only used to RETRY a bench whose tools live in WSL. `None` when the path is
+/// not of that shape, which is every non-Windows box.
+fn wsl_path(path: &Path) -> Option<String> {
+    let text = path.to_str()?;
+    let (drive, rest) = text.split_once(":\\")?;
+    let letter = drive.chars().next()?.to_ascii_lowercase();
+    Some(format!("/mnt/{letter}/{}", rest.replace('\\', "/")))
+}
+
 fn run(dry: bool, cwd: &Path, program: &str, args: &[&str]) -> Result<String> {
     run_env(dry, cwd, program, args, &[])
 }
@@ -970,6 +981,49 @@ fn flash_and_watch(cell: &Path, elf: &Path, name: &str) -> Result<BoardOutcome> 
     })
 }
 
+/// Every bench under `<root>/bench` that compares us against C FreeRTOS.
+///
+/// Discovered by a PROPERTY rather than a list, for the same reason the qemu
+/// cells are: a hand-written list is how a bench gets forgotten, and
+/// forgetting is exactly what happened here. The property is that the
+/// script builds a C arm out of the pinned `oracle/` checkout — which is
+/// what makes it a comparison rather than a self-benchmark, and is the one
+/// thing such a script cannot do without.
+///
+/// It matters that this is narrow. The first version took every `run.sh`
+/// and immediately started `soak-each`, which runs the whole corpus for an
+/// hour of simulated time per scenario: a gate that takes hours is a gate
+/// nobody runs, which is the failure being fixed. Today that selects
+/// `kernel-flash`, `kernel-ram`, `list-cost`, `switch-cost` and `tick-work`,
+/// and leaves `kernel-ir`, `sb-ir` and `soak-each` alone.
+fn comparison_benches(root: &Path) -> Vec<(String, PathBuf)> {
+    let mut found = Vec::new();
+    let Ok(entries) = std::fs::read_dir(root.join("bench")) else {
+        return found;
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        let script = dir.join("run.sh");
+        if !script.is_file() {
+            continue;
+        }
+        // A script that never reaches for the oracle has no C arm, so it is
+        // a self-benchmark and belongs to whatever gate owns that.
+        let Ok(body) = std::fs::read_to_string(&script) else {
+            continue;
+        };
+        if !body.contains("oracle/") {
+            continue;
+        }
+        let name = dir
+            .file_name()
+            .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned());
+        found.push((name, script));
+    }
+    found.sort();
+    found
+}
+
 fn qemu_cells(dir: &Path) -> Vec<(PathBuf, String)> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir(dir.join("firmware")) else {
@@ -1166,6 +1220,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     let with_qemu = has_flag(args, "--qemu");
     let with_board = has_flag(args, "--board");
     let with_soak = has_flag(args, "--soak");
+    let with_bench = has_flag(args, "--bench");
     let only: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let mut failures = Vec::new();
     let mut ran = 0usize;
@@ -1521,6 +1576,71 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
             if let Err(e) = run(false, &tool, "cargo", &["check", "--all-targets"]) {
                 failures.push(format!("tools/{name}: {e}"));
             }
+        }
+    }
+    // The comparison benches: ours against C FreeRTOS, each with pins that
+    // fail loudly.
+    //
+    // They were not gated, and the cost of that is the reason this block
+    // exists. Every one carries a pinned total and exits non-zero when it
+    // moves -- `kernel-flash` has `check "Kairos kernel + port" "$rs_kernel"
+    // 16008` -- and on 2026-09-23 it was found failing at **31222**, having
+    // drifted for 117 umbrella commits because nothing ran it. Two of the
+    // five had READMEs quoting numbers that were no longer true, and the
+    // published kernel README quoted one of them.
+    //
+    // A pin nobody evaluates is a comment. Behind a flag because these build
+    // a C arm and a bare-metal Rust arm and take minutes, not seconds.
+    if with_bench {
+        for (name, script) in comparison_benches(root) {
+            println!("$ sh {}   (bench)", script.display());
+            // `sh`, not the shell this runs under: the scripts are POSIX and
+            // the box's default may be PowerShell.
+            if let Err(e) = run(
+                false,
+                root,
+                "sh",
+                &[script.to_string_lossy().as_ref()],
+            ) {
+                let why = e.to_string();
+                // A MISSING TOOL AND A MOVED PIN ARE DIFFERENT STATES, and
+                // the qemu block below says why that distinction is worth
+                // the code: it is the difference between "install gcc" and
+                // an afternoon reading a kernel diff.
+                //
+                // The first version of this block did not make it, and
+                // reported `bench/list-cost` -- which wants gcc through WSL
+                // and exits 127, `command not found` -- as "a pinned
+                // comparison moved". It had not moved. It had not run.
+                // A missing tool is worth ONE retry before it becomes a
+                // report. On Windows the POSIX `sh` is Git Bash, which cannot
+                // see gcc or callgrind, so `list-cost` exits 127 and the
+                // message below says "did not run" -- truthfully, and
+                // forever. An instrument that never runs reports nothing,
+                // INCLUDING that it stopped compiling: `list-cost` was broken
+                // by a signature change and carried a 6.4% regression for
+                // several rounds behind exactly this message.
+                let retried = if why.contains("exit code: 127")
+                    || why.contains("command not found")
+                {
+                    wsl_path(&script).and_then(|p| run(false, root, "wsl", &["-e", "sh", &p]).ok())
+                } else {
+                    None
+                };
+                if retried.is_some() {
+                    // It ran under WSL and passed; nothing to report.
+                } else if why.contains("exit code: 127") || why.contains("command not found") {
+                    failures.push(format!(
+                        "bench/{name}: a tool it needs is not on PATH ({}).                          The bench did NOT run, so this is not a verdict about                          the code. `list-cost` wants gcc and callgrind, which on                          Windows means `wsl -e sh bench/{name}/run.sh`.",
+                        why.lines().next().unwrap_or("command not found").trim()
+                    ));
+                } else {
+                    failures.push(format!(
+                        "bench/{name}: {why} -- a pinned comparison against C                          FreeRTOS moved. The pin is in that bench's run.sh; if                          the change is intended, move the pin IN THE SAME COMMIT                          and say why in docs/LEDGER.md."
+                    ));
+                }
+            }
+            ran += 1;
         }
     }
     if ran == 0 {

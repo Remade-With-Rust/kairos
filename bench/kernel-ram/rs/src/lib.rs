@@ -70,6 +70,7 @@ macro_rules! ksize {
                 $bytes,
                 $timers,
                 $groups,
+                { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
             >,
         >()
     };
@@ -85,6 +86,40 @@ const BUFFERS_8: usize = ksize!(8, 8, 64, 8, 1024, 16, 2);
 const BYTES_2048: usize = ksize!(8, 8, 64, 4, 2048, 16, 2);
 const TIMERS_32: usize = ksize!(8, 8, 64, 4, 1024, 32, 2);
 const GROUPS_4: usize = ksize!(8, 8, 64, 4, 1024, 16, 4);
+
+// ---------------------- the same dimensions, ONE unit at a time ----------
+//
+// Every slope above is taken across a DOUBLING, and the list arena rounds:
+// `list_slots_for` ends in `next_power_of_two()`, so 8 -> 16 tasks and
+// 16 -> 32 timers each cross a 64 -> 128 slot step and charge the step to
+// the unit. The ledger caught this for timers in September and published the
+// corrected 40 B -- and left the bench computing 104, which is the number CI
+// has been checking ever since.
+//
+// These neighbours differ from BASE by ONE, so a slope taken against them is
+// the marginal cost with no step in it. `KAIROS_SLOTS_*` below is the guard:
+// it is the list-slot COUNT of each geometry, and `run.sh` refuses a slope
+// whose count moved. A structural counter beside the bytes, which is what
+// makes the arithmetic checkable rather than merely plausible.
+const TASKS_9: usize = ksize!(9, 8, 64, 4, 1024, 16, 2);
+const QUEUES_9: usize = ksize!(8, 9, 64, 4, 1024, 16, 2);
+const BUFFERS_5: usize = ksize!(8, 8, 64, 5, 1024, 16, 2);
+const TIMERS_17: usize = ksize!(8, 8, 64, 4, 1024, 17, 2);
+const GROUPS_3: usize = ksize!(8, 8, 64, 4, 1024, 16, 3);
+
+/// The list-slot count of a geometry -- the structural counter the byte
+/// totals have to be read against.
+macro_rules! kslots {
+    ($tasks:literal, $queues:literal, $timers:literal, $groups:literal) => {
+        list_slots_for($tasks, $timers, lists_for(PRIOS, $queues, $groups))
+    };
+}
+
+const SLOTS_BASE: usize = kslots!(8, 8, 16, 2);
+const SLOTS_TASKS_9: usize = kslots!(9, 8, 16, 2);
+const SLOTS_QUEUES_9: usize = kslots!(8, 9, 16, 2);
+const SLOTS_TIMERS_17: usize = kslots!(8, 8, 17, 2);
+const SLOTS_GROUPS_3: usize = kslots!(8, 8, 16, 3);
 
 /// The geometry the conformance corpus actually runs, on every architecture
 /// it runs on. Read off the mangled names in the built rv32 firmware:
@@ -107,7 +142,187 @@ probe!(KAIROS_RAM_BUFFERS_8, BUFFERS_8);
 probe!(KAIROS_RAM_BYTES_2048, BYTES_2048);
 probe!(KAIROS_RAM_TIMERS_32, TIMERS_32);
 probe!(KAIROS_RAM_GROUPS_4, GROUPS_4);
+
+probe!(KAIROS_RAM_TASKS_9, TASKS_9);
+probe!(KAIROS_RAM_QUEUES_9, QUEUES_9);
+probe!(KAIROS_RAM_BUFFERS_5, BUFFERS_5);
+probe!(KAIROS_RAM_TIMERS_17, TIMERS_17);
+probe!(KAIROS_RAM_GROUPS_3, GROUPS_3);
+
+probe!(KAIROS_SLOTS_BASE, SLOTS_BASE);
+probe!(KAIROS_SLOTS_TASKS_9, SLOTS_TASKS_9);
+probe!(KAIROS_SLOTS_QUEUES_9, SLOTS_QUEUES_9);
+probe!(KAIROS_SLOTS_TIMERS_17, SLOTS_TIMERS_17);
+probe!(KAIROS_SLOTS_GROUPS_3, SLOTS_GROUPS_3);
+
+// ---- the per-task 136, decomposed by component ---------------------------
+//
+// `footprint-decomposition` §2: the lines have to sum to the slope, or a
+// consumer has been missed. Base and Base+1-task, component by component.
+type TaskBase = Kernel<
+    PosixDemoConfig,
+    SimPort,
+    NoTrace,
+    NoTickHook,
+    8,
+    { list_slots_for(8, 16, lists_for(PRIOS, 8, 2)) },
+    { lists_for(PRIOS, 8, 2) },
+    8,
+    64,
+    4,
+    1024,
+    16,
+    2,
+    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+>;
+type TaskPlus1 = Kernel<
+    PosixDemoConfig,
+    SimPort,
+    NoTrace,
+    NoTickHook,
+    9,
+    { list_slots_for(9, 16, lists_for(PRIOS, 8, 2)) },
+    { lists_for(PRIOS, 8, 2) },
+    8,
+    64,
+    4,
+    1024,
+    16,
+    2,
+    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+>;
+probe!(KAIROS_TB_TCBS, TaskBase::FOOTPRINT_TCBS);
+probe!(KAIROS_TB_LISTS, TaskBase::FOOTPRINT_LISTS);
+probe!(KAIROS_TB_SIDE, TaskBase::FOOTPRINT_PER_TASK_SIDE);
+probe!(KAIROS_TP_TCBS, TaskPlus1::FOOTPRINT_TCBS);
+probe!(KAIROS_TP_LISTS, TaskPlus1::FOOTPRINT_LISTS);
+probe!(KAIROS_TP_SIDE, TaskPlus1::FOOTPRINT_PER_TASK_SIDE);
 probe!(KAIROS_RAM_CORPUS, CORPUS);
+
+// ------------------------------------------- what DECLARING buys you --
+//
+// `BASE` is a hand-picked geometry: 8 tasks, 8 queues, 16 timers, a 1 KiB
+// byte arena. The whole point of declaring is that an application that uses
+// less pays less, and the static-vs-static ratio against C is measured at a
+// geometry nobody's application actually has. These are the geometries a real
+// firmware declares, so the row can be read at the size it will be paid at.
+
+/// A blinker: two tasks, one queue, one timer, no stream buffers at all.
+const TINY: usize = ksize!(2, 1, 8, 0, 0, 1, 0);
+/// A small sensor node: four tasks, two queues, two timers, one event group.
+const SMALL: usize = ksize!(4, 2, 16, 0, 0, 2, 1);
+/// The same, with a 256-byte stream buffer for a UART.
+const SMALL_SB: usize = ksize!(4, 2, 16, 1, 256, 2, 1);
+
+probe!(KAIROS_RAM_TINY, TINY);
+probe!(KAIROS_RAM_SMALL, SMALL);
+probe!(KAIROS_RAM_SMALL_SB, SMALL_SB);
+
+// ---------------------------------------------------- the decomposition --
+//
+// One total is not a decomposition, and neither is a set of SLOPES: `ITEMS`
+// and `LISTS` are derived from `TASKS`, `QUEUES` and `GROUPS`, so the size
+// function is not linear and the per-dimension slopes above do not sum to
+// `BASE`. Adding them up and calling the difference a "constant term" gives
+// a number that means nothing -- it was tried, and it read 696 bytes of
+// nonsense.
+//
+// These are the actual fields, measured on the target by the kernel itself
+// (the arena types are private to `rusty_rtos_kernel-core`, so nothing out
+// here can do it). `ACCOUNTED` is their sum; `BASE - ACCOUNTED` is the
+// scalar tail plus layout padding, and it is printed rather than assumed.
+
+/// The BASE geometry as a type, so the kernel's own footprint consts can be
+/// read off it.
+type Base = Kernel<
+    PosixDemoConfig,
+    SimPort,
+    NoTrace,
+    NoTickHook,
+    8,
+    { list_slots_for(8, 16, lists_for(PRIOS, 8, 2)) },
+    { lists_for(PRIOS, 8, 2) },
+    8,
+    64,
+    4,
+    1024,
+    16,
+    2,
+    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+>;
+
+probe!(KAIROS_FP_TOTAL, Base::FOOTPRINT);
+probe!(KAIROS_FP_TCBS, Base::FOOTPRINT_TCBS);
+probe!(KAIROS_FP_QUEUES, Base::FOOTPRINT_QUEUES);
+
+// Arena slot STRIDE: what `index * size_of::<Slot<T>>()` must multiply by. A
+// power of two is one `slli`; anything else is shifts-and-adds or a real `mul`,
+// and `mul` reads 58 against the C arm's 3.
+probe!(STRIDE_TCB, Base::FOOTPRINT_TCBS / 8);
+probe!(STRIDE_QUEUE, Base::FOOTPRINT_QUEUES / 8);
+probe!(KAIROS_FP_LISTS, Base::FOOTPRINT_LISTS);
+probe!(KAIROS_FP_SLOTS, Base::FOOTPRINT_SLOTS);
+probe!(KAIROS_FP_BUFFERS, Base::FOOTPRINT_BUFFERS);
+probe!(KAIROS_FP_TIMERS, Base::FOOTPRINT_TIMERS);
+probe!(KAIROS_FP_GROUPS, Base::FOOTPRINT_GROUPS);
+probe!(KAIROS_FP_TIMER_MESSAGES, Base::FOOTPRINT_TIMER_MESSAGES);
+probe!(KAIROS_FP_BYTES, Base::FOOTPRINT_BYTES);
+probe!(KAIROS_FP_FREE_LISTS, Base::FOOTPRINT_FREE_LISTS);
+probe!(KAIROS_FP_PER_TASK_SIDE, Base::FOOTPRINT_PER_TASK_SIDE);
+probe!(KAIROS_FP_ACCOUNTED, Base::FOOTPRINT_ACCOUNTED);
+
+// ------------------------------------- the per-TIMER slope, decomposed --
+//
+// The row reports 120 B a timer against the C's 40, and a total says nothing
+// about WHERE. `Timer` itself is only 36 B of fields. These are the same
+// geometry as `Base` with TIMERS raised to 32, so each component's slope is
+// `(T32 - Base) / 16` and the parts must sum to the 120 the bench measures.
+type T32 = Kernel<
+    PosixDemoConfig,
+    SimPort,
+    NoTrace,
+    NoTickHook,
+    8,
+    { list_slots_for(8, 32, lists_for(PRIOS, 8, 2)) },
+    { lists_for(PRIOS, 8, 2) },
+    8,
+    64,
+    4,
+    1024,
+    32,
+    2,
+    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+>;
+
+probe!(KAIROS_T32_TOTAL, T32::FOOTPRINT);
+probe!(KAIROS_T32_TIMERS, T32::FOOTPRINT_TIMERS);
+probe!(KAIROS_T32_LISTS, T32::FOOTPRINT_LISTS);
+probe!(KAIROS_T32_ACCOUNTED, T32::FOOTPRINT_ACCOUNTED);
+
+/// TIMERS = 17: one more than `Base`, and INSIDE the same power-of-two band
+/// of list slots. `Base` needs `8*2 + 16 + 29 = 61` slots and this needs 62;
+/// both round to 64. So `T17 - Base` is the marginal cost of one timer with
+/// no granularity step in it, and `T32 - Base` is not.
+type T17 = Kernel<
+    PosixDemoConfig,
+    SimPort,
+    NoTrace,
+    NoTickHook,
+    8,
+    { list_slots_for(8, 17, lists_for(PRIOS, 8, 2)) },
+    { lists_for(PRIOS, 8, 2) },
+    8,
+    64,
+    4,
+    1024,
+    17,
+    2,
+    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+>;
+
+probe!(KAIROS_T17_TOTAL, T17::FOOTPRINT);
+probe!(KAIROS_T17_TIMERS, T17::FOOTPRINT_TIMERS);
+probe!(KAIROS_T17_LISTS, T17::FOOTPRINT_LISTS);
 
 /// A staticlib needs one even though nothing here can panic.
 #[panic_handler]

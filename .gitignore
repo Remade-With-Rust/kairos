@@ -26,6 +26,8 @@ Thumbs.db
 
 # Recordings from bench/kernel-ir: callgrind dumps, 16MB and regenerable.
 bench/kernel-ir/out/
+# `out4` is the fourth corpus shape, same story: 23MB and regenerable.
+bench/kernel-ir/out4/
 # Same, from bench/sb-ir. `out3` is the third corpus shape a kernel-wide
 # probe has to be checked against; both are rebuilt by one run.
 bench/sb-ir/out/

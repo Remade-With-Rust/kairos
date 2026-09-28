@@ -54,6 +54,8 @@ fn main() {
         }
         // taskSELECT_HIGHEST_PRIORITY_TASK: walk the round robin.
         for _ in 0..ITEMS {
+            // `next_round_robin` answers `NO_ITEM` rather than `None` for an
+            // empty list now; this list is never empty here.
             let owner = lists
                 .next_round_robin(READY)
                 .expect("the list exists")

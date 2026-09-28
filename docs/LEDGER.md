@@ -6341,6 +6341,16 @@ carried it for ten days.
 
 ## The release gate found StreamBufferDemo diverging on BOTH emulators (2026-09-21)
 
+> **SUPERSEDED the same day — see *StreamBufferDemo CLOSED* below.** The
+> divergence is fixed and both emulators are 25 of 25. **The explanation in
+> the *What it points at* section of this entry is WRONG** and is left
+> standing because a refuted hypothesis with a mechanism is worth more than a
+> deleted one: the cause was not a header narrowing by four, it was the
+> scenario spelling the oracle's `sizeof(size_t)` as the running machine's
+> `size_of::<usize>()`, and the difference is a constant 22 rather than a
+> digit-count effect. The measurements in this entry stand; the inference
+> does not.
+
 Run before pushing 0.2.0, not after. `rusty_rtos_demo/firmware/*-qemu-corpus`
 on Cortex-M3 and on RV32:
 
@@ -6395,6 +6405,13 @@ capacity minus a header, the header is four bytes smaller on a 32-bit target,
 so the printed space is four larger — and every time that crosses a power of
 ten it costs a character.
 
+> **REFUTED, same day.** The pointer-width instinct was right and every step
+> after it was wrong. `MESSAGE_LENGTH_BYTES` is a `Config` const fixed at 8,
+> so no header narrows; the difference runs from **-20 to +24** across 2,452
+> lines rather than being a digit-count effect at the margins; and it is not
+> trace text at all — the scenario genuinely sends different data. See
+> *StreamBufferDemo CLOSED* below.
+
 **That is the pointer-width detector firing for the fifth time on this
 project**, and the first time it has been caught by a conformance cell rather
 than by a benchmark ratio.
@@ -6410,6 +6427,218 @@ rather than smoothed out of the README.
 The claim that had to change: the corpus READMEs said 18/18 on each emulator,
 measured when the corpus was 18 scenarios. It is now 25, and the honest
 number is **24 of 25**.
+
+## StreamBufferDemo CLOSED: the corpus is 25 of 25 on both emulators (2026-09-21)
+
+The divergence recorded above is fixed, and the hypothesis that entry left
+behind was **wrong**. Worth saying plainly, because the wrong one was
+plausible and had a mechanism.
+
+### What that entry guessed, and why it was wrong
+
+> A stream buffer's free space is computed from its capacity minus a header,
+> the header is four bytes smaller on a 32-bit target, so the printed space is
+> four larger — and every time that crosses a power of ten it costs a
+> character.
+
+Refuted twice over. `MESSAGE_LENGTH_BYTES` is a **`Config` const** —
+`PosixDemoConfig` sets it to 8 with the comment *"the oracle host is x86-64,
+so `size_t` is eight bytes wide"* — so it is identical on every target and
+cannot vary with the compiler. And the observed difference is not four and is
+not a digit-count effect at the margins: **2,452 of the 20,927 lines carry a
+different value**, and the differences span **-20 to +24**.
+
+> **A correction of my own, and the reason the distribution is printed
+> below rather than described.** The first version of this entry said the
+> 32-bit value was "exactly 22 higher". That was read off **three adjacent
+> lines** at the start of the divergence, where it is indeed +22 — and it is
+> +22 on only **64** of the 2,452. Three samples from one place in a sequence
+> are one sample. The full census took one command.
+
+### The instrument: a 32-bit HOST build, not an emulator
+
+`rustup target add i686-pc-windows-msvc`, build `kairos-sim` twice, run the
+scenario twice, `diff`. Windows runs i686 natively, so this reproduces in
+**seconds** what had only ever been seen as a digest mismatch inside QEMU —
+and it hands over the differing lines instead of a hash:
+
+```
+3275c3275
+< 471 STREAM_BUFFER_SEND s4 1          <- x86-64
+---
+> 471 STREAM_BUFFER_SEND s4 23         <- i686
+```
+
+**This is not a trace-text defect.** The scenario genuinely sends a different
+number of bytes. The counters do not notice because the number of sends is
+unchanged; only the payload length moves, and the net +194 bytes is just where
+the longer number needs another digit.
+
+The census, `(32-bit value) - (64-bit value)` over all 2,452 differing lines:
+
+| delta | lines | | delta | lines |
+|---:|---:|---|---:|---:|
+| -4 | 288 | | +2 | 176 |
+| -8 | 183 | | +4 | 176 |
+| -2 | 160 | | +6 | 160 |
+| -6 | 128 | | +8 | 144 |
+| -10 | 96 | | +10 | 128 |
+| -12 | 80 | | +18 | 128 |
+| -14 | 64 | | +14 | 125 |
+| -16 | 48 | | +12 | 112 |
+| -18 | 32 | | +16 | 80 |
+| -20 | 16 | | +20 | 48 |
+| | | | +22 | 64 |
+| | | | +24 | 16 |
+
+A fixed offset would have been one bar. A spread is what two sequences with
+**different periods** look like once they desynchronise, which is the actual
+mechanism: the host's length cycles 1..=22 and the target's 1..=26, so they
+agree until the host's first wrap and drift from then on.
+
+### The cause, one line
+
+`prvEchoClient`:
+
+```c
+xSendLength++;
+if( xSendLength > ( sbSTREAM_BUFFER_LENGTH_BYTES - sizeof( size_t ) ) )
+    xSendLength = sizeof( char );
+```
+
+The scenario spelled `sizeof(size_t)` as `core::mem::size_of::<usize>()` — the
+**running machine's** pointer width rather than the **oracle's**.
+`BUFFER_BYTES` is 30, so the length walks 1..=22 on x86-64 and **1..=26 on
+every 32-bit target**. The two agree for the first 22 sends; the first
+divergence is the host wrapping 22 -> 1 while the target carries on to 23, and
+after that they drift with the spread above.
+
+Census: **one site**, the only `size_of` of any kind in the whole demo corpus.
+
+### The fix, and that it does not move the host
+
+`const ORACLE_SIZE_T: usize = 8;` — the oracle's width, fixed. Deliberately
+NOT `Config::MESSAGE_LENGTH_BYTES`, which is
+`sizeof(configMESSAGE_BUFFER_LENGTH_TYPE)` and merely *defaults* to `size_t`;
+a configuration may move one without the other.
+
+On x86-64 the change is 8 -> 8, a no-op, and that is measured rather than
+argued — the 64-bit binary was **rebuilt from the fixed source** and its trace
+is byte-identical to the pre-fix trace, 676,745 bytes both times. The 32-bit
+trace moved onto it: 676,939 -> **676,745, identical**. So the pins are
+untouched and only 32-bit targets move.
+
+| | before | after |
+|---|---:|---:|
+| x86-64 trace | 676,745 | 676,745 (byte-identical) |
+| i686 trace | 676,939 | **676,745** |
+
+Those are whole-stdout figures and the pin is **676,662**, which is not a
+discrepancy but an identity worth writing down rather than leaving for a
+reader to trip over: the sim prints one `KAIROS_RESULT ...` summary line after
+the trace, it is **83 bytes**, and `676,745 - 83 = 676,662` exactly. The line
+count reconciles the same way — 20,928 lines of stdout, 20,927 of trace.
+
+### The guard, and it has been seen to fire
+
+A host test cannot catch this: on x86-64 the wrong expression and the right
+one are both 8, which is exactly why it survived every host gate. So the guard
+is a `const _: () = assert!(ORACLE_SIZE_T == 8, ...)`, evaluated **per
+target**. Reverting the constant to `size_of::<usize>()` was tried:
+
+- `--target riscv32imac-unknown-none-elf` -> **build fails**, `E0080`, with the
+  message explaining why.
+- the host build -> **passes, 0 errors**, which is the point being made.
+
+### The result
+
+Both emulator cells, at the pinned length, every counter and the FNV-1a/64
+digest against the host's pins:
+
+| | before | after |
+|---|---|---|
+| RV32 (QEMU `virt`) | FAIL — 1 of 25 diverged | **PASS — 25 of 25** |
+| Cortex-M3 (`mps2-an385`) | FAIL — 1 of 25 diverged | **PASS — 25 of 25** |
+
+`StreamBufferDemo ok ticks=2000 yields=2424 exits=28002 lines=20927
+bytes=676662` on both, and **every one of the 25 rows is identical field for
+field between the two architectures**.
+
+### And the hour, re-run on both emulators after the fix
+
+The pinned-length run is conformance; the hour is **liveness**, and the cells
+say so themselves — no C pin exists at 3,600,000 ticks, so the question is the
+one the C demo asks: is every scenario's check task still reporting that it is
+running?
+
+| | result | wall |
+|---|---|---:|
+| RV32 (QEMU `virt`) | **PASS — 25 of 25 still running after an hour** | 11m26s |
+| Cortex-M3 (`mps2-an385`) | **PASS — 25 of 25 still running after an hour** | 11m28s |
+
+**The walls are contended and are not measurements.** Both hours were run at
+the same time as each other and as a third cargo build, on one box. They are
+quoted because a reader wants to know the order of magnitude before starting
+one, not because they can be compared — to each other, or to the 8 and 13
+minutes recorded for the earlier solo runs. The verdict is a gate (the guest
+sets the exit code) and is unaffected by contention.
+
+All 25 rows are **identical field for field between the two architectures**,
+at the hour as well as at the pinned length — checked with a `diff` of the two
+outputs, not by eye. `StreamBufferDemo` at the hour is `ticks=3600000
+yields=5227447 exits=51251345 lines=41689251 bytes=1532806414` on both.
+
+Its counters moved from what the pre-fix hour recorded, and that is expected
+rather than alarming: the scenario now sends the oracle's string lengths on a
+32-bit target instead of longer ones, so it does different work. The hour
+passed before the fix too — liveness never saw the defect, which is precisely
+why the pinned-length check exists.
+
+The harness was checked before its result was quoted, because this one has
+previously counted a `FAIL` as a pass: the verdict is
+`pass && !runaway && ticks >= max(RUN_TICKS, pin.run_ticks)`, a scenario
+filter that matches nothing is an explicit FAIL rather than a trivially empty
+pass, and the guest sets the process exit code, so it is a gate rather than
+something a person reads.
+
+### The Xtensa silicon cell HAS now been re-run: 25 of 25 (2026-09-23)
+
+`xiao-s3-corpus` recorded **18 scenarios byte-identical on silicon** — true for
+what it ran, but a scope smaller than the corpus, because 18 predates
+`StreamBufferDemo` joining as the 22nd scenario. Xtensa LX7 is 32-bit, so a
+re-run at 25 would have diverged there for exactly this reason.
+
+It was re-run on the part, and it passes:
+
+```
+RESULT: PASS -- 25 scenarios byte-identical to the C kernel
+        on ESP32-S3 SILICON, at 2000 ticks or each pin's own floor.
+```
+
+`espflash 4.6.0` to a XIAO ESP32-S3 (chip rev v0.2, 8 MB flash) on COM4, ELF
+446,804 bytes against 347,916 for the 18-scenario build.
+`StreamBufferDemo ok ticks=2000 yields=2424 exits=28002 lines=20927
+bytes=676662` — the pin exactly.
+
+**This is the first evidence the fix works on a real 32-bit part**, rather than
+on an emulated one. Everything before it was QEMU or an i686 host build, and
+all three would have been consistent with a fix that happened to suit
+emulators. It is also the one run that could have refuted the whole diagnosis
+and did not.
+
+All 25 rows are **identical field for field across ESP32-S3 silicon, RV32 and
+Cortex-M3** — checked by diffing the three outputs, not by eye. With the host
+at 22 identical to the C kernel, that is four targets and three instruction
+sets agreeing on every counter and every digest.
+
+### What this says about the corpus as an instrument
+
+The 32/64 detector has now fired six times on this project. The new part is
+the *shape*: a constant that follows the compiler is one the pins cannot
+survive being moved to another machine, and a host gate is structurally unable
+to see it. A 32-bit **host** target is the cheap instrument for that whole
+class, and it should be reached for before an emulator — it took seconds and
+it named the line, where the cell only ever said "digest differs".
 
 ## H7: the whole Kani table at a 240 s bound — 12 of 34, and two dead hypotheses (2026-09-21)
 
@@ -6521,6 +6750,673 @@ last recorded number.
 The seven are being soaked on RV32 now, at 3,600,000 ticks each, one scenario
 per run. Until they pass, K3's hour is **18 of 25 on each emulator**, and the
 plan says so rather than carrying the older, rounder claim.
+
+## The blocking path made measurable: no new wins, and four old ones repriced (2026-09-23)
+
+The edge census said the richest `#[cold]` candidates were inside
+`queue_take_blocking` and `queue_send_blocking` — six calls to `tick_on_exit`,
+four to `port_yield`, three each to `unlock_queue`,
+`drain_pending_ready_walk` and `unwind_pended_ticks_loop` — and **no row
+reached any of them**, because none of the rows ever blocked.
+
+### The instrument: a two-task ping-pong that loops cleanly
+
+A stackless kernel cannot be made to block in a `REPEAT` loop: a blocking call
+answers `Wait::Blocked` and PARKS the caller, so calling it again from the
+parked task measures a sequence no system performs. What loops is a hand-off,
+the way the conformance runner drives one:
+
+```
+receive on an empty queue -> Blocked, parked
+switch                    -> the other task runs
+send                      -> the waiter is woken
+switch                    -> back to the first
+receive again             -> resumes, drains
+```
+
+After the last step the queue is empty, nobody waits, and the first task is
+current again — the same state as the first step. `block_cycle` reads
+**1,354 instructions, min 1354 / max 1356**, and that near-zero spread is the
+check that the state really does return.
+
+### ★ What it found first: four existing wins were UNDER-priced
+
+Those `#[cold]` marks had been measured only on rows that never blocked.
+Removing each one and re-reading the blocking row:
+
+| `#[cold]` on | credited | actually worth on `block_cycle` |
+|---|---:|---:|
+| `tick_on_exit` | −4 (queue) | **−15** |
+| `remove_from_event_list` | −7 (queue, alone) | **−13** |
+| `port_yield` | −7 (queue, alone) | **−10** |
+| `notify_queue_set_container` | −1 (queue, alone) | **−5** |
+
+Every one holds, and every one is worth more than the row that justified it.
+**A win measured on a path is a claim about that path only** — which is the
+same law as the corpus-provenance one, one level down.
+
+### Five refutations, and one of them is a general law
+
+| probe | result |
+|---|---|
+| `#[cold]` on `unlock_queue` | **+7 — WORSE.** Its three call sites per function are *taken* on the blocking path, so the hint is a lie. **Call sites are not the same as taken** |
+| `#[cold]` on `set_task_priority`, `take_queue_resume` | flat |
+| splitting `remove_from_event_list` into a hot body + a cold handle (the "split the body from the symbol" move for its opposite signs: −13 block, +3 queue) | **+7 block / −3 queue, net worse** — the extra call layer costs the blocking path more than the inlining saves the other |
+| the already-expired arm of `queue_take_blocking` split out `#[cold]` | **+1, flat** — the arm ends in `return`, so it was already off the fall-through |
+| **passing the 40-byte `Queue` snapshot by `&Queue` instead of by value** | **+94 block / +68 queue** |
+
+**That last one is worth carrying to any Rust codebase.** Three functions take
+`snapshot: Queue` by value — 40 bytes, more than rv32's argument registers —
+and "avoid the copy" is exactly backwards: **by value lets LLVM keep the
+fields in registers and scalar-replace the aggregate; behind a reference it
+must materialise the struct in memory and load each field through a pointer.**
+The instinct costs 94 instructions on one row and 68 on another. Two sites in
+the same file already used `&Queue`, which is what made the change look like a
+consistency fix rather than the regression it is.
+
+### Why there are no new wins here, stated plainly
+
+- **The `#[cold]` technique is saturated.** Every multi-site callee on the
+  blocking path is already cold, or is `unlock_queue`, where cold is wrong.
+- **The residue is FreeRTOS's own design.** One blocking call takes **five
+  critical sections** — `lock_queue` 1, `unlock_queue` 2, `queue_take_locked`
+  1, `resume_all` 1 — at ~17 instructions each by the `scaffolding` row. That
+  is `prvLockQueue`/`prvUnlockQueue`, which the C does too.
+- **On the sim it compounds**: `exit_critical` IS the clock, so more critical
+  sections means more tick firings inside the measured region.
+- **And there is no C arm for this path.** The bench pairs only the tick and
+  switch rows, so **1,354 has nothing to be judged against** — it is a
+  before/after instrument for us, not a comparison. Building a C arm for a
+  blocking hand-off is the work that would make it one.
+
+## Ten instruction wins, and the attribute that was doing the work (2026-09-23)
+
+Every row is retired instructions on `riscv32-qemu-tick-work`, `minstret` under
+`-icount shift=0`, median of 512 with the bracket tax subtracted. Four of the
+six rows read `min == max` — deterministic to the instruction.
+
+| # | change | measured |
+|---|---|---|
+| 1 | cached `current_priority` | tick **56 → 13** |
+| 2 | `#[cold]` on `note_stall` | switch **82 → 58** |
+| 3 | `#[cold]` on `Arena::why` | switch **58 → 55** |
+| 4 | guard split on `drain_pending_ready` | \ |
+| 5 | guard split on `unwind_pended_ticks` | together: tick 14→13, queue **199→195**, group **86→82** |
+| 6 | `#[cold]` on `tick_on_exit` | queue **196 → 192** |
+| 7 | `#[cold]` on `port_yield` | queue −7, group −3 alone |
+| 8 | `#[cold]` on `remove_from_event_list` | queue −7 alone |
+| 9 | `#[cold]` on `notify_queue_set_container` | queue −1 alone |
+| 10 | `event_group_set_bits` stops re-resolving to read back a value it computed | group **79 → 78** |
+
+7–9 stacked are worth **queue −6, group −3** where the individual sum was −15 —
+**sub-additive**, as the discipline warns. Counted as three changes, not as −15.
+
+Whole-session movement: tick **56 → 13**, switch selection **79 → 55**, queue
+round-trip **199 → 186**, event-group round-trip **86 → 78**.
+
+### ★★ The finding: `#[cold]` was doing the work, not `#[inline(never)]`
+
+Wins 2 and 3 were landed with **both** attributes at once, so neither was
+priced. Pricing them apart reversed the guess:
+
+| on `note_stall` | switch |
+|---|---:|
+| `#[cold]` + `#[inline(never)]` | **55** |
+| `#[inline(never)]` alone | **79** — the whole win gone |
+
+And `#[cold)]` added to three functions that were **already**
+`#[inline(never)]` — `switch_delayed_lists`, `resume_pending_cold`,
+`wake_due_tasks` — measured **flat on every row**.
+
+So the law is narrower than "outline cold things":
+
+> **`#[cold]` pays where a GUARDED call is reached from MANY sites on one hot
+> path**, because that is what forces the caller to stay frame-ready.
+> `note_stall` is 4 sites in `switch_context` (−24). `tick_on_exit` is guarded
+> by `take_pending_tick()` and reached from 17 sites in one function (−4).
+> A function already outlined, or called once, gains nothing.
+
+That law is what turned wins 6–9 from guesses into a sweep: find guarded
+helpers with many call sites, probe one at a time.
+
+### The instrument had to be widened first, and it has a limit
+
+`bench/tick-work` measured two functions, which is why every earlier win landed
+on those two. It now carries `queue_roundtrip`, `group_roundtrip` and a
+`scaffolding` row — the last being `enter_critical` + one `resolve` +
+`exit_critical` and nothing else, **17 instructions**, so the others can be
+decomposed against it.
+
+**The limit, stated because it bounds every IPC number above:** this cell runs
+`SimPort`, where `exit_critical` IS the clock — it calls `tick_on_exit`. The
+tick and switch rows are kernel logic; the IPC rows are kernel logic **plus the
+sim's time machinery**. They are sound for our own before/after and are not a
+silicon prediction.
+
+### Refutations, all priced
+
+| candidate | verdict |
+|---|---|
+| a 954 B software `u64` divide | **not the kernel** — the caller is `<u64 as Display>::fmt`, the bench's own printing |
+| 27 `memcpy` + 20 `memset` in `main` | **setup, not the loop** — clustered in consecutive calls at the top of `main`. The same check that caught the divide |
+| `unlock_queue`: guard the redundant unlock write | flat — reached only on the *blocking* path, which the rows never take |
+| `unlock_queue`: `#[cold]` | flat, same reason |
+| removing `resume_all`'s now-duplicated guards | flat — LLVM had already CSE'd the identical test |
+| `#[cold]` on `missed_yield`, `reset_next_task_unblock_time` | flat |
+| `#[cold]` on `switch_delayed_lists`, `resume_pending_cold`, `wake_due_tasks` | flat — already `#[inline(never)]`; see the law above |
+| splitting `hand_over`'s first-run block cold | flat — LLVM had it already |
+| hoisting `event_group_set_bits`' in-loop resolve | would **add** work with zero waiters; and its top resolve must precede `suspend_all` or an invalid handle leaves the scheduler suspended |
+| `list.rs` | **exhausted by four earlier passes**, six refutations recorded there. Not re-derived |
+| `#[inline]` on `SimPort`'s hot accessors | declined: a simulator win, not a kernel one |
+
+**One correction to my own census.** It reported "31 functions resolve the same
+handle 2–8 times", which read like a rich vein. `queue_take`'s four are
+**mutually exclusive match arms** — only one executes. A duplicate resolve is
+redundant only if two can execute on **one** path, and a textual count cannot
+tell you that. The class was much smaller than the census implied.
+
+**And a layout note:** adding the `scaffolding` row moved `queue_roundtrip`
+195 → 196 with no semantic change — the register-allocator floor, ±1–3 per
+edit. Win 10's −1 sits inside that band on a single row and is quoted as
+marginal for exactly that reason.
+
+## timer_messages becomes a declared dimension, and five instruction wins (2026-09-23)
+
+### The mailbox: 768 B that scaled with nothing
+
+`timer_messages` was `[Message; MAX_TIMER_COMMANDS]` — a hardcoded 32 — while
+`Config::TIMER_QUEUE_LENGTH` already said how many the configuration wanted and
+defaulted to ten. Because it scaled with **nothing**, it cost the same 768 bytes
+in a blinker as in the corpus: **39 % of a two-task kernel's entire static
+footprint**, 31 % of a four-task one.
+
+It is a const generic now (`TIMER_CMDS`), pinned to the config by the same
+geometry check that guards `ITEMS` and `LISTS`, so a declaration disagreeing
+with its own config is refused rather than silently sized to whichever the type
+carried.
+
+| geometry | before | after |
+|---|---:|---:|
+| a blinker — 2 tasks, 1 queue, 1 timer | 1,968 | **1,680** |
+| a sensor node — 4 tasks, 2 queues, 2 timers | 2,440 | **2,152** |
+| `BASE` 8/8/16 | 6,272 | **5,984** |
+| the corpus 24/12/32 | 12,496 | **12,208** |
+
+**At a blinker's geometry Kairos's whole static footprint is now below C
+FreeRTOS's static footprint alone — 1,680 against 1,704 — with zero heap.**
+
+**The refactor cost a fraction of the estimate.** It was priced at ~250
+instantiation sites; the real figure was **9 parameter lists, 8 pass-throughs
+and ~30 instantiations**, because all 186 of the demo's mentions go through one
+`SimKernel<W>` alias. Counting `Kernel<` occurrences overstated the work by
+roughly 8x — **look for the alias before pricing a generic-parameter change.**
+
+Three mistakes, each caught by the compiler: a blanket `GROUPS>` replace also
+hit `Arena<…, GROUPS>`; a script mistook the struct *definition*'s parameter
+list for an instantiation and injected `{ C: Config::… }` into it, which
+cascaded into two bogus type-inference errors elsewhere; and the unqualified
+`Cfg::TIMER_QUEUE_LENGTH` failed where the trait was not imported, so all 21
+sites use the fully-qualified path.
+
+### Five instruction wins, and the instrument that made two of them visible
+
+| # | change | effect |
+|---|---|---|
+| 1 | cached `current_priority` | tick **56 → 13** |
+| 2 | `#[cold]` on `note_stall` | switch **82 → 58** |
+| 3 | `#[cold]` on `Arena::why` | switch **58 → 55**, and on every resolve |
+| 4 | guard split on `drain_pending_ready` | \ |
+| 5 | guard split on `unwind_pended_ticks` | together: tick 14→13, queue **199→195**, group **86→82** |
+
+Final paired state: tick **13 vs 15 (0.87x)**, cooperative switch **85 vs 110
+(0.77x — 23 % faster)**, preemptive switch **129 vs 110 (1.17x)**. `conform
+--all` 26 identical, exit 0.
+
+**Wins 4 and 5 are the lesson.** Both functions were *already*
+`#[inline(never)]` with correct reasoning written above them — "the pending list
+is empty on essentially every call" — but they outlined the **guard along with
+the body**, so every call paid a call and a frame to learn there was nothing to
+do. Inlining only the guard moved **four independent rows at once**, which is a
+stronger statement than any single row: layout cannot move four unrelated paths
+the same direction.
+
+**The instrument had to be widened first.** `bench/tick-work` measured two
+functions, which is why every previous win landed on those two — an instrument
+covering two functions can only find wins in two functions. It now carries
+`queue_roundtrip` and `group_roundtrip` rows, deterministic to the instruction
+(min == max), with no C arm because their job is our own before/after.
+
+### Seven refutations, priced so nobody re-derives them
+
+| candidate | verdict |
+|---|---|
+| a 954 B software `u64` divide | **not the kernel** — the caller is `<u64 as Display>::fmt`, the bench's own number printing |
+| `unlock_queue`'s redundant unlock write | real work removal, measured **flat**: only reached on the *blocking* path, which the row never takes. Reverted — an unmeasured change is not a win |
+| hoisting `event_group_set_bits`' in-loop resolve | would **add** work in the zero-waiter case; and its top resolve must precede `suspend_all` or an invalid handle leaves the scheduler suspended |
+| `queue_take`'s "four resolves" | **mutually exclusive match arms** — only one executes. My census counted text, not execution, and so overstated the whole class |
+| `unlock_queue`'s critical sections | load-bearing: on the sim `exit_critical` is where time passes |
+| `tick_on_exit` | already settled, with a recorded refutation across four instruments |
+| the occupancy re-check · power-of-two `Tcb` | declined earlier and still declined: 3 instructions for a real invariant, and 16 B/task while RAM was the failing row |
+
+**The census overstating itself is the one worth carrying forward.** "31
+functions resolve the same handle 2–8 times" sounded like a rich vein; most of
+those are mutually-exclusive arms or borrow-checker necessities. A duplicate
+resolve is only redundant if two of them can execute on **one** path, and a
+textual count cannot tell you that.
+
+## The preemptive switch cannot be WON, and the search found a RAM win instead (2026-09-23)
+
+Asked deliberately under the codec-campaign discipline — ceiling probes before
+building, three instruments, arithmetic written out. The answer to "can we win
+the preemptive switch" is **no**, and the answer is durable.
+
+### The register half is at the ISA floor — a PERMANENT refutation
+
+A context switch must preserve every live register of the outgoing task. rv32
+has 31 GPRs and **no store-pair instruction**, so ~2.5 instructions per word is
+the floor:
+
+| | words moved | instructions | per word |
+|---|---:|---:|---:|
+| FreeRTOS `portASM.S` | ~33 (all GPRs + CSRs) | 83 | 2.52 |
+| Kairos (`riscv-rt` 16 + ours 14) | **30** | **74** | **2.47** |
+
+We move three fewer words for nine fewer instructions, and the port had already
+ruled out the obvious waste: it saves exactly what `riscv-rt` does not, with a
+comment saying duplicating them "would be two places that must agree about the
+same bytes". **This half cannot expire** — it is a fact about the instruction
+set, not about our code.
+
+### So selection must reach 36, and its floor is 46
+
+| probe | selection | whole preemptive | |
+|---|---:|---:|---|
+| as shipped | 58 | 132 | 1.20× ✅ passes |
+| occupancy re-check removed | 55 | 129 | 1.17× |
+| **and `hand_over` stripped entirely** | **46** | **120** | **1.09×, still not a win** |
+
+Decomposing 58 against their 27: ~27–30 is the same algorithm, **~12 is
+`hand_over`** — which FreeRTOS needs none of, because a task owns a stack and
+resuming is restoring SP, where we track unwinding state instead — and ~11 is
+handle validation. **We beat C on a cooperative switch by 20 % and lose the
+preemptive one by 20 %, and the difference is the stackless design paying for
+itself in RAM.**
+
+**Two levers priced and DECLINED** so they are not re-proposed: dropping the
+occupancy re-check (3 instructions, for turning a clean `Err(Gone)` into a
+handle that fails later), and padding `Tcb` to a power of two (~2 instructions
+per TCB address in both the tick and the switch, for 16 B per task of RAM while
+static RAM is still failing). Both are *performance* refutations and expire if
+the baseline moves; the register-floor one does not.
+
+### ★★ And then "read the siblings" found −512 B of static RAM
+
+`Timer` carries a `Name` too. Names therefore appear in **three** places —
+`Tcb`, `Timer`, and inside `OwedTrace` — which at 8 tasks / 16 timers is 32
+instances × 33 B = **1,056 B, 15.6 % of the static footprint**, holding
+32-byte buffers for names the matched config truncates to 12.
+
+`NAME_CAPACITY` is a crate const, not a const generic, so this one needed no
+250-site refactor. 32 → 16 (the C's own `configMAX_TASK_NAME_LEN` default, and
+the largest any config in this tree asks for):
+
+| | before | after | |
+|---|---:|---:|---|
+| static RAM @ 8/8/16 | 6,784 | **6,272** | −512 B, 3.98× → **3.68×** |
+| static RAM @ corpus geometry | 13,776 | **12,496** | **−1,280 B, −9.3 %** |
+| per task | 305 | **273** | −32 B |
+| per timer | 136 | **120** | −16 B |
+| flash `.text` | 30,932 | **30,722** | −210 B |
+| tick / preemptive switch | 13 / 132 | 13 / 132 | unchanged |
+
+**512 and 1,280 were predicted before measuring and came back exactly.** One
+line improved both failing rows and touched neither passing one.
+
+Validated: 85+2+5+8 tests, clippy clean, `conform --all` **26 identical, exit
+0**, RV32 corpus **25/25 byte-identical** — the last because this moves struct
+layout, and a 32-bit target is where that shows.
+
+**Two mistakes, both caught by the tests.** The existing test's own coverage
+guard (`assert!(long.len() > 16, "this case must exercise the wide window")`)
+failed correctly: at capacity 16 `as_str`'s widening branch is unreachable,
+because it validates a fixed 16-byte window — the smallest that reaches
+`run_utf8_validation`'s word-at-a-time path — and `end` is clamped to the
+capacity. My replacement assertion was then *also* wrong (15, not 16), because
+`Name::new` copies `max_len - 1` bytes, mirroring `prvInitialiseNewTask` where
+`configMAX_TASK_NAME_LEN` counts the NUL. A
+`const _: () = assert!(NAME_CAPACITY <= 16, ..)` now makes raising the capacity
+a build failure rather than untested code on the two-names-per-switch path.
+
+### An instrument gap found while doing this
+
+The campaign discipline wants **two instruments**. The `-ir` benches are the
+second one and **cannot run on this box**: `cargo` is not installed inside WSL,
+which is also why `list-cost` exits 127 under the new bench gate. Three other
+levels were used instead — rv32 `minstret` with parity and poison gates, static
+counts from two toolchains, and the corpus's `exits` as the level above.
+
+## The tick and both switch rows FIXED, and neither fix was an algorithm (2026-09-23)
+
+Two of K3's four standing failures closed in one sitting. Neither needed a
+better algorithm; both were the machine paying for information the compiler
+did not have.
+
+| row | C | before | after | ratio | verdict |
+|---|---:|---:|---:|---:|---|
+| tick ISR | 15 | 56 | **13** | **0.87×** | ✅ PASS — faster than C |
+| whole cooperative switch | 110 | 112 | **88** | **0.80×** | ✅ PASS — 20 % faster |
+| whole preemptive switch | 110 | 156 | **132** | **1.20×** | ✅ PASS (target ≤ 1.25×) |
+| scheduler selection | 27 | 82 | **58** | 2.15× | half of a switch |
+
+### The tick: 43 of its 56 instructions were one handle resolution
+
+`tick_idle` and `tick_delayed` were both exactly 56, which said the cost was
+constant per tick rather than a list walk. The time-slicing test needs the
+running task's priority, and getting it went through `Arena::resolve` — a
+bounds check, a generation compare and an `Option` — on `self.current`, the one
+handle the kernel itself maintains and cannot have wrong. The C writes
+`pxCurrentTCB->uxPriority`: one dereference, because the pointer is the task.
+
+**Sized by a throwaway probe before anything was built**: stub
+`current_priority()` to a constant, rebuild, measure. **56 → 13.** Same
+binary, one function replaced, so it is arithmetic and not a projection.
+
+The fix is a cached `current_priority: u8` written in **exactly two places**,
+so the nine sites that used to assign `self.current` or a TCB's `priority`
+cannot forget it — a grep proves the only direct writes left are inside the
+helpers. `current_priority()` debug-asserts against the resolved value, so the
+85 kernel tests, the Kani proofs and the conformance corpus fail loudly if a
+future write bypasses one, and release pays nothing.
+
+**It cost the switch 3 instructions, and that was measured rather than
+assumed.** Landing it naively made `switch_context` re-resolve the priority it
+had just proved — the search loop finds the highest non-empty ready list and
+takes `next` out of it, so `next`'s priority IS that list's index.
+`switch_select` went 79 → 88. Threading the known priority through brought it
+to 82. Honest ledger: tick −43, switch +3.
+
+### The switch: two attributes deleted the stack frame
+
+```rust
+#[cold]
+#[inline(never)]
+fn note_stall(&mut self, why: Stall) {
+```
+
+`switch_context` has **four** `note_stall` sites — no ready task, a list error,
+an empty rotation, an unknown task. None can happen in a healthy kernel, the
+idle task is always ready. LLVM did not know, so it sized a frame for the worst
+path and **saved six callee-saved registers on every switch**.
+
+```
+before:  addi sp, sp, -0x20        after:  addi t0, a0, 0x7ff
+         sw ra / s0 / s1 / s2 / s3 / s4           ...
+         ...  (and seven restores)                ret      <- no frame at all
+```
+
+**82 → 58, a 29 % cut**, and the `suspended_depth != 0` early-out — which does
+one store — went from 20 instructions to 6.
+
+### It regressed nothing and improved a fourth row
+
+| | before | after | |
+|---|---:|---:|---|
+| static RAM | 6,784 | 6,784 | unchanged; the new `u8` fit existing padding |
+| flash `.text` | 31,222 | **30,932** | **−290 B**, `note_stall` emitted once rather than inlined four times |
+
+### What both fixes have in common
+
+Neither changed what the kernel *does*. One removed a safety check on a handle
+the kernel owns; the other told the compiler which paths are cold. **The gap to
+C was not the algorithm — it was the cost of expressing the same algorithm
+safely, and most of that cost was recoverable without giving up the safety.**
+The `debug_assert` keeps the check where it can still catch a mistake, and
+`#[cold]` is not an `unsafe` in disguise.
+
+## Flash: a kernel-only bisect cannot work, and the census names a defect (2026-09-23)
+
+The flash arm is **31,222 B against C's 13,924 — 2.24×**, where the target is
+≤ 1.30×. The free-list work accounts for 392 B of it (30,830 before, 31,222
+after); the rest is older.
+
+**A kernel-only bisect does not work.** Four older commits were probed and all
+four failed to build: `bench/kernel-flash` compiles the kernel against the
+*current* `rusty_rtos_core` and `rusty_rtos_port` from the working tree, so an
+old kernel meets sibling APIs that have moved. Finding *when* needs a
+coordinated four-repo bisect. Finding *where* is cheaper, so that was done
+instead — and it produced something a date never would have.
+
+### `const PEEK: bool` duplicates two functions, 2,778 bytes
+
+`llvm-nm --size-sort` on the linked gc-sectioned ELF. `queue_take_blocking`
+and `queue_take_timed_out` both take `<const PEEK: bool>` — one instantiation
+for `xQueueReceive`, one for `xQueuePeek` — so each body is emitted twice:
+
+| bytes | function | |
+|---:|---|---|
+| 946 | `queue_take_blocking` | `PEEK = false` |
+| 946 | `queue_take_blocking` | `PEEK = true` |
+| 490 | `queue_take_timed_out` | `PEEK = false` |
+| 396 | `queue_take_timed_out` | `PEEK = true` |
+| **2,778** | | **8.9 % of the arm** |
+
+The census finds exactly these four const-bool symbols and no others, so this
+is the whole of that defect class rather than a sample. Making `PEEK` a
+runtime parameter recovers roughly **1,300 B (4.2 %)** for one predictable
+branch off the tick path.
+
+**Not taken yet, and deliberately:** we also fail the tick row at 3.73×, and a
+branch is work. The trade wants a probe on both instruments before it lands,
+not an assumption.
+
+### The biggest single functions
+
+`timer_command` 1,376 · `new_mutex` 1,064 · `queue_send_blocking` 936 ·
+`event_group_set_bits` 894 · `semaphore_take` 862 · `semaphore_give` 846 ·
+`new_queue` 664 · `create_task` 664.
+
+And `core::str::from_utf8` at **534 B**, reached from `Name::new` — the flash
+face of the same name handling the RAM entry finds costing 66 B per task. One
+cause, two rows.
+
+## Static RAM decomposed to the byte, and the comparison benches were never gated (2026-09-23)
+
+`docs/plans/freertos-scorecard.md` puts every Kairos-vs-C row on one page.
+Two findings came out of building it.
+
+### ★ None of the five comparison benches was wired to a gate
+
+`kernel-flash`, `kernel-ram`, `switch-cost`, `tick-work` and `list-cost`
+appear **zero** times in `kairos`'s source and `.github/`. They are scripts a
+person runs by hand, and they had drifted:
+
+| | README claimed | measured 2026-09-23 | |
+|---|---:|---:|---|
+| static RAM @ 8/8/16 | 6,304 B | **6,784 B** | +480 |
+| per task | 207 B | **305 B** | +98 |
+| per queue | 56 B | **184 B** | +128 |
+| per timer | 88 B | **136 B** | +48 |
+| flash `.text` | 16,008 B (pinned) | **31,222 B** | **+15,214** |
+
+`kernel-flash` carries `check "Kairos kernel + port" "$rs_kernel" 16008` and
+**exits 1** when it moves. It has been failing for **117 umbrella commits**;
+the pin was set 2026-09-13. The published `rusty_rtos_kernel` README quotes
+the stale 207 B and 2.9× where the truth is 305 B and 2.0× — still wins, still
+wrong.
+
+**Not my queue work.** Swapping the kernel's `crates/` back to `71d82d5`, the
+commit before the two free-list commits, and re-running: **30,830 before,
+31,222 after — the free list cost 392 B.** At `91c7794` it was already 31,584,
+so the ~15 KB is older than the last three weeks and wants its own bisect.
+
+**Fixed:** `kairos check --bench` now discovers the comparison benches off the
+filesystem — listed nowhere, for the same reason the qemu cells are not — and
+fails the gate on a moved pin. **Proved to fire:** against the drifted flash
+pin it returns exit 1 naming `bench/kernel-flash`.
+
+Discovery is by a PROPERTY, not by `run.sh` existing: the script builds a C arm
+out of `oracle/`. The first version took every `run.sh` and started
+`soak-each`, an hour of simulated time per scenario — a gate that takes hours
+is a gate nobody runs, which is the failure being fixed. It also reported a
+MISSING TOOL as a moved pin: `list-cost` wants gcc through WSL and exits 127,
+and the gate called that a comparison moving when it had not run at all. Exit
+127 is now its own state, the same distinction the qemu block already makes.
+
+### The static RAM decomposition, and why the old one was nonsense
+
+The first attempt summed the per-dimension slopes and called the difference a
+constant term. It read 696 B and **meant nothing**: `ITEMS` and `LISTS` are
+derived from `TASKS`, `QUEUES` and `GROUPS`, so the size function is not
+linear and slopes do not sum to a total.
+
+The real decomposition needed a counter **inside** the kernel — the arena
+fields' types are `pub(crate)` and unreachable from a probe crate. There is
+one now, `Kernel::FOOTPRINT_*`, measured on the target rather than the host
+(a host `usize` is 8 bytes; rv32's is 4).
+
+At BASE = 8 tasks / 8 queues / 64 slots / 4 buffers / 1024 bytes / 16 timers /
+2 groups:
+
+| field | bytes | share |
+|---|---:|---:|
+| `timers` | 1,160 | 17.1 % |
+| `lists` | 1,144 | 16.9 % |
+| `bytes` arena | 1,024 | 15.1 % |
+| `tcbs` | 904 | 13.3 % |
+| **`timer_messages`** | **768** | **11.3 %** |
+| per-task side arrays | 520 | 7.7 % |
+| `slots` | 512 | 7.5 % |
+| `queues` | 324 | 4.8 % |
+| `buffers` | 164 | 2.4 % |
+| free lists | 96 | 1.4 % |
+| `groups` | 28 | 0.4 % |
+| **accounted** | **6,644** | 97.9 % |
+| remainder (scalar tail + padding) | 140 | 2.1 % |
+
+6,644 + 140 = 6,784 exactly.
+
+### The finding: the arenas are fine, the hardcoded CEILINGS are the waste
+
+Everything scaling with a declared dimension is defensible. The waste is where
+a `Config` knob already carries the right number and the kernel uses a
+compile-time ceiling instead:
+
+- **`timer_messages` is 768 B and scales with nothing.**
+  `[Message; MAX_TIMER_COMMANDS]`, `MAX_TIMER_COMMANDS = 32` hardcoded,
+  `Message` 24 B. `Config::TIMER_QUEUE_LENGTH` exists, **defaults to 10**, is
+  validated to `1..=32`, and *is* used — to size the queue (`timer.rs:270`),
+  not its backing store. At the default that is **528 B wasted**; a kernel
+  with `USE_TIMERS = false` still pays all 768.
+- **Task names are stored at 32 B when the config says 12.**
+  `NAME_CAPACITY = 32` is hardcoded and `Name` is 33 B. It appears **twice per
+  task**: in the `Tcb`, and inside `OwedTrace`, which is 56 B per task
+  *because* its largest variant carries a `Name` inline.
+  `Config::MAX_TASK_NAME_LEN` is 12 in `PosixDemoConfig` and is used only to
+  truncate at write time and to reject a config asking for more than 32. At
+  12-character names that is ~40 B per task — 320 B at 8 tasks, **960 at the
+  corpus's 24**.
+
+Together ~850 B of 6,784 — **12.5 %** — from two ceilings whose parameters the
+`Config` already carries.
+
+**Why they are ceilings:** `[Message; C::TIMER_QUEUE_LENGTH]` is a generic
+const expression, which stable Rust does not allow. The codebase already
+solves this for every arena by passing the dimension as a const generic and
+deriving it in the declaring macro — so the fix is known and consistent, and
+it touches **~250 instantiation sites** (219 outside the kernel crate, 30
+inside). Recorded with its number rather than started on a whim.
+
+## The full-corpus HOUR on a part: 25 of 25 on ESP32-S3 silicon (2026-09-23)
+
+The checklist carried `[x] K3 the one-hour soak on SILICON` followed by
+`[ ] the same on a part`, and the two looked like one closed item. They were
+not: the closed one was **`death` alone** at 3,600,000 ticks. The full corpus
+at that length, on a part, had never been run.
+
+It has now.
+
+| | scenarios | result |
+|---|---:|---|
+| part 1 | 17 | all `ok` |
+| part 2 | 8 | `RESULT: PASS -- 8 scenario(s) still running after an hour` |
+| **total** | **25** | **25 of 25** |
+
+**All 25 rows are identical field for field to BOTH emulator hours** — RV32
+and Cortex-M3 — checked by sorting and diffing the three outputs. Three
+instruction sets, one of them a real part, agreeing on every tick, yield,
+exit, line count and byte count at 3.6 million ticks each.
+
+`IntQueue` is the heaviest row in the corpus and it matches exactly:
+`ticks=3600068 yields=12577095 exits=57129241 lines=79912747
+bytes=2588039480`.
+
+### It was run in two chunks, and that is sound rather than a compromise
+
+About six hours of board time, split 3h37m and 2h35m. The split is legitimate
+because **each scenario gets a fresh kernel**: `Runner::kernel_for(Digest::new())`
+is inside the `for pin in &table` loop, so no scenario can observe another's
+state and a chunk boundary is not an event. Chunk 2 was reached with
+`KAIROS_SOAK_ONLY` naming all eight remaining scenarios at once — the
+comma-list filter added hours earlier, for exactly this.
+
+**The first chunk was cut deliberately, not by the timeout.** At 3h37m it had
+~24 minutes of its 4-hour window left and `IntQueue` next, which had no chance
+of finishing; the 17 completed rows were already on disk, so stopping cost
+nothing and gave `IntQueue` a full window instead of the tail of an old one.
+
+### What the coverage guard proves here
+
+Chunk 2 named eight scenarios and ran eight. The guard fixed earlier today
+requires `matched == names_count(only)`, so a misspelling among those eight
+would have been a FAIL rather than a quietly shorter run. Without that fix
+this chunk could have silently covered seven and still printed PASS — which
+is precisely the hole that made the fix worth making before using the filter
+in anger.
+
+## The same harness, the same failure, introduced by me (2026-09-23)
+
+The corpus cells' `KAIROS_SOAK_ONLY` matched **one** scenario name exactly. A
+truncated silicon soak would therefore need one flash per remaining scenario —
+22 of them — so the filter was widened to a comma-separated list.
+
+**Widening it broke the typo guard, and the guard was the only thing standing
+between this knob and a false pass.** With one name, `matched == 0` catches a
+misspelling. With two, it cannot: one good name and one ghost leaves
+`matched == 1`, which is not zero, so the run reported
+
+```
+RESULT: PASS -- 1 scenario(s) still running after an hour
+```
+
+having silently skipped the scenario the operator asked for. That is the same
+defect as the 2026-09-21 entry below — a gate reporting a pass for work it did
+not do — reintroduced in the act of extending the tool, four days later, in
+the same file.
+
+**Found by testing the negative case rather than the feature.** The list
+worked on the first try; `PollQ,blocktim` ran both. It was only checking what
+a *typo* does that produced the false pass, and nothing would have surfaced it
+otherwise, because the knob is used by the person who already believes their
+spelling is right.
+
+The fix counts the names and requires `matched == names_count(only)`. The
+matrix, run on the RV32 cell at 20,000 ticks:
+
+| `KAIROS_SOAK_ONLY` | exit | verdict |
+|---|---:|---|
+| `PollQ,blocktim` | 0 | PASS — 2 scenarios |
+| `PollQ` | 0 | PASS — 1 scenario (unchanged behaviour) |
+| `PollQ,NoSuchScenario` | **1** | **FAIL — named a scenario not in the table** |
+| `NoSuchScenario` | **1** | **FAIL** |
+| `" PollQ , , blocktim "` | 0 | PASS — 2 scenarios (trimmed, empties skipped) |
+
+Applied identically to all four corpus cells (`mps2-an385`, `riscv32`,
+`xiao-s3`, `esp32c6`), each built both with and without `--features soak`.
+
+Two lesser things on the way: the helper was first inserted between `#[entry]`
+and `fn main`, so the attribute landed on the helper (`argument type must be
+usize`); and the guard was first written as a let-chain, which these cells
+cannot have — they are **edition 2021**, not 2024 like the workspace crates.
 
 ## ★ The soak harness counted a FAIL as a pass (2026-09-21)
 
@@ -7719,3 +8615,5407 @@ against the corpus:
 that `AbortDelay` had been reporting — unheard — since before this session is
 gone, and the scenario that was the corpus's one permanent exception is
 simply a passing row.
+
+## ★★★★ OwedTrace: the instrument could not see it, and the hint outlived the debt (2026-09-23)
+
+Asked to hammer `OwedTrace` for deterministic instruction wins. The first
+reading settled what the campaign actually was.
+
+### The instrument was blind to the target
+
+A call census on `riscv32-qemu-tick-work` put a counter in
+`trace_failure_or_owe` — the single funnel eight call sites reach — and ran
+all nine rows:
+
+```
+CENSUS owe_calls_total=0
+```
+
+**Zero.** Every row was a SUCCEEDING call, so the whole deferral machinery was
+unreachable and any change to it read as pure code layout. That explains the
+three probes taken before the census, all of which now have numbers:
+
+| probe | verdict |
+|---|---|
+| `T::EMITS` early return in the funnel | **+10** on `block_cycle` — layout over dead code |
+| gate the `OwedTrace::AddNewTaskToReadyList` direct write | **byte-identical** |
+| gate the `owed_trace` term in the combined check | **byte-identical** |
+
+`block_cycle` was byte-identical *with the counter compiled in*, which
+self-confirms the zero.
+
+### The fix was rows, not code
+
+A failed queue operation is not an exceptional path — `xQueueSend` with a zero
+block time on a full queue is how a producer polls — and it is IDEMPOTENT, so
+it loops cleanly in a `REPEAT` bracket where a blocking call cannot. Three rows
+added: `recv_empty`, `send_full`, `event_wait_fail`. The census then read
+**1536 = 512 × 3**, exact, and is kept behind a `census` feature because the
+`fetch_add` sits inside the measured bracket.
+
+### ★ The finding: every raise cost TWO entries
+
+With the sim wired to count hint traffic, the mechanism was exact — one entry
+to do the work, and a second to re-derive "nothing owed" and clear the hint:
+
+| scenario | raises | entries before | after | `owed_nothing` |
+|---|---:|---:|---:|---|
+| BlockQ | 43,110 | 86,207 | **43,104** | 43,103 → **0** |
+| EventGroupsDemo | 60,173 | 119,831 | **60,167** | 59,664 → **0** |
+| TimerDemo | 2,377 | 4,455 | **2,374** | 2,081 → **0** |
+
+`clear_owe_if_settled` at the end of the branch that did the work makes
+entries equal raises. `owe_raised` is unmoved in all three — the work-parity
+anchor. Guarded permanently by `the_owe_hint_does_not_outlive_the_debt`, which
+asserts both directions: a clear that fired unconditionally would pass the
+first half and lose a real owed item.
+
+### The fifteen wins
+
+Rows are `riscv32-qemu-tick-work` (`minstret`, `-icount shift=0`, min == max).
+Host figures are paired `kernel-ir` runs over BlockQ + GenQTest + TimerDemo +
+EventGroupsDemo.
+
+| # | change | measured |
+|---|---|---|
+| 1 | `begin_wait` answers the remaining block time | recv −9, send −9 |
+| 2 | a zero block time writes no `WaitFrame` | recv −41, send −39 |
+| 3 | that exit moved above the arena lookup, onto the `wait_set` mirror | recv −11, send −10; host −40,776 |
+| 4 | `resume_pending` split three ways; the no-unwind shape skips `settle_unwind` | host −1.35M |
+| 5 | `take_queue_resume` peeks before clearing | folded into 6 |
+| 6 | `queue_resumes` summary — one field load replaces an arena lookup | queue −24, block −39, send −11 |
+| 7 | `event_resumes` summary | event_wait_fail −8; host −268,238 |
+| 8 | **`clear_owe_if_settled`** — the stale hint | **host −3.69M (−1.12%)** |
+| 9 | no `.copied()` on the 40-byte `OwedTrace` in the combined check | with 8 |
+| 10 | no `end_wait` where no frame was written | recv −11, send −11 |
+| 11 | `check_for_timeout` carries the block time through `queue_take_locked` | block −16 |
+| 12 | `unlock_queue` writes the unlock on the lookup that read it | block −10 |
+| 13 | `event_group_set_bits` skips the re-resolve when nothing clears | group −1 (poison −2) |
+| 14 | `T::EMITS` on the funnel — retested on the new shape | event_wait_fail −12 (poison −24) |
+| 15 | `#[cold]` on the two rare queue re-entries | queue −5, block −4; host −695,085 |
+
+Rows, start of campaign → end:
+
+| row | before | after | |
+|---|---:|---:|---:|
+| `send_full` | 118 | **38** | **−67.8%** |
+| `recv_empty` | 141 | **61** | **−56.7%** |
+| `event_wait_fail` | 63 | **43** | **−31.7%** |
+| `queue_roundtrip` | 188 | **163** | **−13.3%** |
+| `block_cycle` | 1,358 | **1,282** | −5.6% |
+| `tick_idle` / `tick_delayed` / `switch_select` | 13 / 13 / 55 | 13 / 13 / 55 | unmoved |
+
+Host, chained over the paired runs: **330,617,631 → 323,019,364, −7,598,267
+(−2.30%)**.
+
+### The refutations, with their numbers
+
+- **`T::EMITS` buys nothing where the sink is the only consumer.** Gating
+  `trace_task`, and all 32 `note_exits(port.exits())` sites, measured
+  **byte-identical** — LLVM already deletes what a no-op sink discards. It pays
+  at exactly one site, the funnel (win 14), because the miss path *stores* an
+  `OwedTrace` and raises `owes_anything`: side effects no sink can delete.
+- **LLVM already CSEs a repeated `Arena::resolve`.** Folding the two group
+  resolves in `event_group_wait_bits` and `event_group_sync` was
+  byte-identical, as was folding `end_wait`'s two `wait_set` accesses. The wins
+  come from *removing* a lookup, never from deduplicating one.
+- **The summary-counter pattern is not general — it turns on the marker's SET
+  rate.** The same shape that won on queues and event groups (markers almost
+  always clear) LOST on stream buffers, where `StreamBufferDemo` blocks
+  constantly: **sbd +1,647,832 (+1.31%), sbi +18,838**, both arms agreeing,
+  anchors unmoved.
+- **Removing a sequential store costs more than the store.** Guarding
+  `add_current_task_to_delayed_list`'s unconditional clear on an
+  `aborts_pending` summary saved `check_for_timeout` 130,313 and cost that
+  function **+842,650**; leaving the store unconditional and making only the
+  decrement conditional still cost **+647,868**. Whole idea reverted.
+- **`settle_unwind`'s two halves under one test: +376,335.** `owed > 0` on 91%
+  of calls, so the reorder only moved the compare.
+- **Threading the priority out of `add_task_to_ready_list`** bought
+  `block_cycle` −1 but cost `tick_idle` 13 → **14** and `group_roundtrip` +7,
+  consistently in both arms. The tick row is a published scorecard number; not
+  traded.
+- **Reshaping the receive entry to a single compare** read +1 at REPEAT=1 and
+  −2/call at REPEAT=2 — contradictory, therefore layout.
+
+### Method notes worth keeping
+
+- **The poison arm is an amplifier.** A −1 indistinguishable from rebuild noise
+  doubles to −2 at REPEAT=2 if it is real. It turned win 13 from a shrug into a
+  fact and killed the receive-entry reshape.
+- **A script that swaps source files must restore on failure.** One without a
+  trap aborted mid-swap under `set -e` and left the tree holding the baseline;
+  the tests and the rv32 cell both passed because neither builds the demo.
+- The host `kernel-ir` instrument is weighted by the trace sink — `event` alone
+  calls `memcpy` 380,954 times, and `increment_tick`'s 40,044 memcpys are
+  `Event` construction, not kernel work: the same tick is 13 instructions on
+  the rv32 cell. Read it for the OwedTrace family, which no firmware-side row
+  reaches, and lead with the cell for everything else.
+
+### Gates
+
+`kairos conform --all`: **26 scenarios identical to the C kernel**, exit 0, run
+after every keep. Kernel suites **86 + 2 + 5 + 8**, clippy clean, fmt clean.
+The reachability anchor reads 1536 on demand.
+
+### Left on the table
+
+`OwedTrace` is **40 bytes**, and `TimerCommandSend`'s `Name` is 17 of them.
+Dropping it would take the enum to 24 and `owed_trace: [OwedTrace; TASKS]` down
+by 16 bytes a task — a RAM and flash lever, not an instruction one. It needs
+the timer's name re-resolved at emit time, and a timer deleted between the owe
+and the emit would have none. Not attempted: the corpus could pass and the hole
+still be there.
+
+## Notifications were unmeasured too — and then the seam ran out (2026-09-23)
+
+A second pass over the same kernel, asked for ten more wins. It produced
+**three**, and the reason it produced three rather than ten is the result
+worth keeping.
+
+### Four more rows, and the first one paid immediately
+
+The same move that opened the last campaign: `task_priority_get`,
+`notify_roundtrip`, `notify_take_empty` and `notify_wait_empty` were added to
+`riscv32-qemu-tick-work`. Notifications need no geometry — adding a semaphore
+would move `QUEUES` and break the three rows matched to the C arm's
+FreeRTOSConfig, and a notification is a slot in the TCB — so the whole
+lightest-blocking-primitive family had simply never been priced.
+
+`priority_get` came in at **17**, identical to `scaffolding`. That is the floor
+for any call that takes a critical section and resolves one handle, and it
+makes every other row readable as "floor plus this much".
+
+### The three wins
+
+| # | change | measured |
+|---|---|---|
+| 16 | `notify_take`'s tail reads the value off the `resolve_mut` it was already making | `notify_take_empty` 62 → **35**, `notify_roundtrip` 94 → **66** |
+| 17 | `#[cold]` on `priority_inherit` / `priority_disinherit` / `priority_disinherit_after_timeout` | `queue_roundtrip` 166 → **158**, `block_cycle` −3 |
+| 18 | `#[cold]` on `queue_take_blocking`, the resume arm win 15 missed | `recv_empty` 61 → **57**, `queue_roundtrip` 159 → **155** |
+
+Host corpus, paired over four scenarios: **−14,703, which rounds to 0.00%**.
+That is not a disappointment, it is the shape of the result: BlockQ, GenQTest,
+TimerDemo and EventGroupsDemo barely call the notification API, so the rows
+that moved most are ones the host corpus cannot see. Firmware-true,
+corpus-neutral — and it is the reason the rv32 cell leads and `kernel-ir`
+confirms, not the other way round.
+
+### ★ Why only three: the compiler is already doing it
+
+Eighteen probes, and the great majority came back **byte-identical**. Taken
+together they say the same thing from different directions.
+
+- **A resolve on a path LLVM has already validated costs nothing.** An arena
+  census counted lookups per call (`notify_take` 3, `recv` 2, `send` 1,
+  `tick` 0, `switch` 0). Removing one from `notify_take` — confirmed 3 → 2 by
+  the census — moved the row by **zero**. Resolve *count* is not the cost
+  driver; resolve *work* is, and only where a `&mut self` call stands between
+  the read and the write so CSE cannot reach across. That is exactly and only
+  why win 16 paid, and why the same fold in `notify_locked` and in
+  `notify_wait`'s tail, where nothing stands between, paid nothing.
+- **The arena's residue is the generation compare, and it is load-bearing.** A
+  ceiling probe removing it entirely: `block_cycle` −82, `queue_roundtrip` −10.
+  Removing it only from `resolve_mut`: −29. Both are incorrect — it is the
+  use-after-free defence. A `resolve_mut_owned` that skips it for handles the
+  kernel owns (`self.current` is written by the kernel and cleared on delete)
+  was built and measured at the three hottest sites: **−8 on `block_cycle`,
+  +2 on `queue_roundtrip` and `group_roundtrip`**. The prize did not
+  materialise because wins 3 and 10 had already taken those resolves off the
+  fast paths. Reverted: a safety property traded for a net −5 is a bad trade,
+  and it is the owner's call, not a session's.
+- Also byte-identical, each with its own reasoning refuted: extracting
+  `notify_take`'s blocking arm as a cold symbol; `#[inline(always)]` on the two
+  summary-guarded `take_*` entries; `ok_or_else` → `match` in the arena;
+  reordering `notify_wait`'s and `notify_take`'s conjunctions to test the
+  register operand first; extracting the event-group blocking arm.
+
+### The losses, and the line they draw
+
+`#[cold]` pays on a **resume** arm — one reached only after a preemption — and
+loses on any path an ordinary blocking call walks.
+
+- `#[cold]` on `queue_take_locked`: `block_cycle` **+41**. Every blocking
+  receive goes through it.
+- `#[cold]` on `finish_wait` / `finish_sync`: `recv_empty` +3,
+  `queue_roundtrip` +3.
+- `#[cold]` on `new_queue` / `queue_delete` / `event_group_create` /
+  `event_group_delete` — init-time functions, so it looked free: `block_cycle`
+  **+39**, `queue_roundtrip` **+30**, `recv_empty` **+20**.
+- Lifting `queue_take`'s two resume arms into one cold symbol, to keep two
+  56-byte `Queue` snapshot copies out of a body inlined at three wrappers:
+  `block_cycle` −9 but `queue_roundtrip` +3 and `recv_empty` +3. Proportionally
+  the regressions are larger; reverted.
+
+### Sized and left
+
+`Result<Wait<u64>>` is 16 bytes and returns through memory on rv32, but that is
+a `u64` payload plus a discriminant and cannot be smaller. `Queue` is 56 bytes
+and `Tcb` 96. `copy_data_from_queue` was already being inlined by LLVM — a
+prior session's note said so, which saved a build.
+
+The rows now stand at `priority_get` 17, `notify_wait_empty` 33,
+`notify_take_empty` 35, `send_full` 38, `event_wait_fail` 43, `recv_empty` 57,
+`group_roundtrip` 78, `queue_roundtrip` 155, `block_cycle` 1,282 — with
+`tick_idle` 13 and `switch_select` 55 untouched throughout. Against a floor of
+17, most of these have between 16 and 26 instructions of their own left.
+
+`kairos conform --all`: 26 identical, exit 0. 101 tests, clippy clean, fmt
+clean.
+
+## Two of the three targets were the wrong number (2026-09-24)
+
+Sent hunting on three rows: scheduler selection (2.04×), flash (2.21× ❌ FAIL)
+and per-timer RAM (3.00× ❌ losing). Two of those three ratios did not survive
+being measured.
+
+### ★ Flash was never 2.21×
+
+The scorecard carried **30,722 B, 2.21×**. Running `bench/kernel-flash`
+unchanged, on the same root set it has always used:
+
+```
+  FreeRTOS kernel + RISC-V port        13924
+  Kairos kernel + RISC-V port          16942      1.22x
+```
+
+**1.22×, against a target of ≤ 1.30×.** The row was not failing and had not
+been for some time; the 30,722 belongs to a state the tree left behind. What
+*is* true is that the bench's own pin (16,008) fails, so the kernel had grown
+934 B against its guard — which is a regression to recover, not a 2.21× gap to
+close. The named lever the scorecard carried with it, the `const PEEK: bool`
+monomorphisation worth "~1,300 B", is also gone: neither `queue_take_blocking`
+nor `queue_take_timed_out` appears in the linked arm at all.
+
+### ★★ A timer costs 56 bytes, not 120 — the row was measuring a doubling
+
+`bench/kernel-ram` takes the per-timer slope from **16 → 32 timers**. Decomposed
+against the kernel's own `FOOTPRINT_*` consts, at those two points:
+
+| | 16 timers | 32 timers | slope |
+|---|---:|---:|---:|
+| timer arena | 904 | 1,800 | 56 |
+| list slots | 1,144 | 2,168 | **64** |
+| total | 5,992 | 7,912 | **120** |
+
+The list half is bigger than the timer. `slots_for(items, lists)` is
+`(items + lists).next_power_of_two()` — deliberate, so a link is followed with
+a mask instead of a bounds check (35.84 → 18.80 Ir an operation) — and 16 → 32
+timers crosses **64 → 128 slots**. The slope is taken straight across a
+doubling.
+
+A probe at **16 → 17**, inside one band, settles it: timer arena 904 → 960,
+list slots 1,144 → **1,144**, total **+56**. A timer's marginal cost is **56 B**,
+and the 1,024-byte step is granularity that belongs to the geometry, not to the
+unit. Against C's 40 B that is **1.40×**, not 3.00×.
+
+### The wins
+
+| target | change | measured |
+|---|---|---|
+| RAM | the `Option` in `Slot` removed — liveness is the generation's parity, which `insert`/`remove` already maintained and said so | **56 → 48 B a timer**; base footprint −136 B |
+| flash | `task_get_handle` compares NAME BYTES instead of `as_str() == name` | −44 B |
+| flash | `timer_create`'s name resolve gated on `WANTS_NAMES`, and the `as_str` gated too — not just the resolve | **−660 B**, and `core::str::from_utf8` leaves the binary entirely |
+| flash | the two timer trace helpers gated on `T::EMITS`, so the 40-byte `OwedTrace` is not built at the call site | −40 B |
+| selection | the search asks `next_round_robin` ONCE per level instead of `is_empty` then `next_round_robin` — the rotation already answers `None` for an empty list, before it touches the cursor | `switch_select` 54 → **53** |
+| selection | (from the arena change above) | `switch_select` 55 → **54** |
+
+`Tcb` and `Queue` did not shrink: both contain an enum, so their `Option` was
+already niche-packed and free. `Timer` is all full-range fields, which is why
+its tag cost a byte plus seven of padding.
+
+The arena change paid on BOTH axes — `block_cycle` **1,282 → 1,223**,
+`group_roundtrip` 78 → 70, `switch_select` 55 → 54 — because the `Option`
+discriminant test it removed from every resolve was replaced by a parity test
+on a word already loaded.
+
+### Where the three rows stand
+
+| row | C | before | after | |
+|---|---:|---:|---:|---|
+| flash `.text` | 13,924 | 16,942 | **16,212** | **1.16×** (target ≤ 1.30×) |
+| per timer, RAM | 40 B | 56 B | **48 B** | **1.20×** (published as 3.00×) |
+| scheduler selection | 27 | 55 | **53** | 1.96× — floor is 46 |
+
+### Refuted, with numbers
+
+- **Splitting the arena into `values[]` + `generations[]`** gets the same 48
+  bytes a slot and costs a second array index on every resolve:
+  `notify_take_empty` **35 → 67**, `notify_roundtrip` 67 → 104. It undoes an
+  earlier win outright. Removing the `Option` gets the same bytes for fewer
+  instructions, and is what landed.
+- `#[inline(never)]` on `new_queue`, and on `queue_send_generic`, to stop
+  `new_mutex` (1,046 B for four lines of source) carrying its own copy:
+  **byte-identical**. LLVM was already outlining both.
+- Gating the event-group and stream-buffer funnel call sites on `T::EMITS`, as
+  the timer ones were: **byte-identical**. Already dead-code-eliminated. The
+  timer sites were not, because `as_str` on even a default `Name` reaches
+  `from_utf8`, which LLVM will not fold away.
+- `#[inline(always)]` on `next_round_robin`: `switch_select` 53 → **54**.
+
+### Still open
+
+The flash pin (16,008) fails by **204 B**, down from 934. `timer_command`
+(1,150 B) and `new_mutex` (1,046 B) are the two largest functions and neither
+yielded to outlining — what is in them has not been decomposed.
+
+Gates: `kairos conform --all` **26 identical**, 101 kernel tests, 62 core tests,
+clippy clean, fmt clean.
+
+## Per-timer RAM reaches parity: alignment, not fields (2026-09-24)
+
+`Timer`'s fields sum to **36 bytes** and the struct is **40** — but an arena
+slot pays its value's ALIGNMENT as padding around the generation beside it, so
+two `u64`s (`period`, `id`) rounded the slot to **48**.
+
+Storing both as a `Split64 { lo: u32, hi: u32 }` drops `Timer` to 4-byte
+alignment. The public API still takes and answers `u64`; only the storage is
+split. The slot becomes **40 bytes — the same as the `Timer_t` the C
+allocates**, and the row is at parity.
+
+It paid on all three instruments at once:
+
+| | before | after |
+|---|---:|---:|
+| per timer, RAM | 48 B | **40 B** |
+| flash `.text` | 16,212 | **16,138** |
+| `block_cycle`, Ir | 1,222 | **1,215** |
+| blinker geometry | 1,672 B | **1,664 B** |
+
+`Queue` needed no such treatment: its fields are `usize`, which is FOUR bytes
+on rv32, so it was already 4-aligned. A host `size_of` had read it as 56 and
+that number is meaningless here — the same pointer-width trap the kernel's
+notes already warn about, caught by measuring on the target.
+
+`Tcb` was left alone deliberately. Its `WaitFrame` holds three `u64`s, but
+`check_for_timeout` does arithmetic on them on the blocking path, so splitting
+them would buy RAM on a row that is already a win (273 B against 596 B) and
+charge for it on a hot one.
+
+### Refuted in the same pass
+
+- `#[inline(never)]` on `Name::new`, on `post_timer_message` (**+48 B**), and
+  a re-test of it on `queue_send_generic`: flash byte-identical or worse. LLVM's
+  inlining here is already what it should be.
+- Naming every field of `Message` instead of `..Message::default()`, to stop a
+  `memset` of the half a timer command does not use: byte-identical. And
+  `Message` is 24 bytes, not the 48 a first reading suggested — the config's
+  timer queue is 20 deep, not 10.
+- An `unstarted` summary to let `hand_over` skip the first-start block: read
+  −2 on `switch_select` and was a BUG — a task created in a fresh slot never
+  incremented it, so the clearing never ran at all. Maintained correctly it is
+  **+2**, because the cell creates four tasks and only ever switches between
+  two, so the counter never reaches zero.
+- Folding the selection loop's `Err` arm into the walk: 53 → **54**.
+- `task_of_state_item` answering an `Option` instead of a `Result`:
+  byte-identical on both instruments.
+
+## Dense-over-scatter: five flag arrays become one, and flash clears its pin (2026-09-24)
+
+The attribute-level levers were exhausted — six consecutive probes came back
+byte-identical or worse. `codec-optimize` routes a stalled size mission back to
+step 1, and the unexplored structure was **scatter**: the kernel kept FIVE
+separate `[bool; TASKS]` side arrays — `owes_anything`, `owes_yield`,
+`wait_set`, `started`, `delay_aborted` — across 21 call sites.
+
+Five arrays are five base addresses. A function touching two of them computed
+two bases and did two loads to read two bits; `resume_pending_owed`'s combined
+check touches three. Packed into one `[u8; TASKS]` with a bit each:
+
+| | before | after |
+|---|---:|---:|
+| **flash `.text`** | 16,138 | **15,836** |
+| per-task side arrays | 392 B @ 8 tasks | **360 B** |
+| blinker geometry | 1,664 B | **1,656 B** |
+
+**−302 bytes of flash**, the largest single flash win of the campaign, and it
+took the arm **below the pin the bench had been failing**.
+
+### ★ And then the per-call-site split
+
+It cost the scheduler's selection row one instruction (53 → 54). Only ONE of
+the five flags is on that path — `started`, which `hand_over` reads on every
+switch — and the mask is what it pays for. Splitting that one back out to its
+own array, and leaving the other four packed, recovered it:
+
+| | packed (5) | split (4 + 1) |
+|---|---:|---:|
+| `switch_select` | 54 | **53** |
+| `block_cycle` | 1,223 | **1,221** |
+| flash | 15,836 | 15,844 |
+
+Eight bytes of flash for the selection instruction, and the selection row is a
+published ratio while those eight bytes are 0.05 % of the arm. This is
+`instruction-counting` §8 exactly — when the signs disagree, check whether the
+disagreement is PER CALL SITE, and split rather than averaging.
+
+The flash pin is re-set to **15,844**. It had been failing at 16,942 in the
+wrong direction; it now fails in the other one, which is a guard doing its job
+and not a number to leave stale.
+
+### Refuted in the same pass
+
+- **Splitting `OwedTrace`'s `u64` payload**, the same alignment trick that took
+  `Timer` to parity: −4 B a task and −4 B of flash, for **+7** on `block_cycle`
+  and +5 on `group_roundtrip`. Four bytes of flash is not worth thirteen
+  instructions; reverted.
+- **Merging `owed_exits` and `owed_trace` into one array**: not attempted once
+  priced — `{ u32, OwedTrace }` is 44 bytes of fields that round to 48, so the
+  combined form is BIGGER than the two separate arrays. Scatter is only worth
+  packing when the packing does not import padding.
+- **`#[cold]` on the create/delete set, re-tested as a SET** on the new shape
+  (`codec-optimize`: "`#[cold]` is a property of a PATH, so price the whole
+  set"): flash **+104**, `queue_roundtrip` 161 → **196**. Refuted singly and
+  refuted together.
+
+## Alignment is the vein: `Split64` again, on `WaitFrame` (2026-09-24)
+
+`codec-memory-copies`' **sibling-path parity** law — when two paths share a
+problem, diff their inventories — pointed twice in this pass.
+
+### `Name::new` was a hand-rolled copy loop
+
+It filled its 16-byte array element at a time where `copy_from_slice` lowers to
+the `memcpy` the kernel already links. **Flash −26 B**, rows byte-identical.
+"The built-ins ARE kernels" (`codec-memory-copies`).
+
+### ★ `WaitFrame`'s three `u64`s aligned every `Tcb` to eight
+
+The same trade that took `Timer` to parity. `ticks`, `entering` and `overflows`
+split into `Split64` drops `Tcb` to 4-byte alignment, and an arena slot pays its
+value's alignment as padding — one slot per task.
+
+| | before | after |
+|---|---:|---:|
+| **flash `.text`** | 15,818 | **15,720** |
+| **`switch_select`, Ir** | 53 | **52** |
+| `Tcb` arena @ 8 tasks | 776 B | **740 B** |
+| blinker geometry | 1,656 B | **1,640 B** |
+| `notify_*` rows | 64 / 33 / 31 | 62 / 31 / 29 |
+
+It cost `block_cycle` +9, which is not one of the three rows and is bought back
+several times over on the ones that are. Every arena'd type is now 4-aligned;
+`Queue` needed nothing (its fields are `usize`, four bytes here) and `Message`,
+`Node` and `EventGroup` are unchanged by it. **That vein is now closed.**
+
+Top-function sizes after the whole alignment pass: `timer_command` 1,150 →
+**948**, `new_mutex` 1,046 → **882**, `queue_send_blocking` 818 → **716**,
+`create_task` 606 → **528**.
+
+### ★★ The refutation worth keeping: a "redundant" probe that is a COLD GUARD
+
+`remove_from_event_list` answers `Ok(false)` for an empty list, from the same
+head read that the `is_empty(list) == Ok(false)` in front of it makes. Seven
+sites asked the list twice, and collapsing them looked like free redundancy
+elimination.
+
+**`queue_roundtrip` 163 → 274. `block_cycle` 1,230 → 1,289.**
+
+`remove_from_event_list` is `#[cold]`. The probe is not a redundant read — it is
+the GUARD that keeps a cold, out-of-line call off the hot path, and removing it
+put one on every successful send. `codec-optimize`: *a fast path is priced in
+CALLS, never in static instructions.* A guard in front of a cold function is a
+fast path wearing a redundancy's clothes.
+
+### Also refuted
+
+- **Arena index masking**, the trick `ListsOf` uses (35.84 → 18.80 Ir an
+  operation) and the arenas never got: **flash +118**, rows byte-identical. The
+  bounds check was already free; the mask was pure added code. `codec-optimize`:
+  *the bounds-check tax is ~0.*
+- **`Queue`'s five `usize` fields to `u16`**: not attempted once scoped — 52 use
+  sites, each needing a conversion, against a 8-byte struct saving.
+
+### Named and NOT taken
+
+The flash bench's own method note says part of the remaining gap is a **64-bit
+tick**: `Config::Tick` is a `TickWidth` associated type and `MAX_DELAY` follows
+it, but the STORAGE is `u64` regardless, so a `Bits32` configuration still does
+64-bit arithmetic on values that never exceed 2^32 — two instructions an
+operation on rv32. `tick::Tick<W>` already exists and the kernel does not use it.
+That is the largest remaining structural flash lever and it is a refactor of
+every tick in the kernel, not a probe.
+
+## ★★★★ The biggest win was the struct's FIELD ORDER (2026-09-24)
+
+`rusty-compiler-leverage` Part A opens with "read the prologue before you read
+the loop". Reading `switch_context`'s prologue on rv32 found this:
+
+```
+lui   a0, 0x1
+addi  a0, a0, 0x114     <- 0x1114 = 4372
+add   s5, s1, a0        <- three instructions to FORM A BASE
+lw    a0, 0x4(s5)       <- suspended_depth
+sb    a0, 0x4f1(s5)     <- yield_pending
+```
+
+**A RISC-V load offset is a 12-bit signed immediate — ±2047.** `Kernel` is a
+~6 KB struct and `#[repr(Rust)]` had sorted its big arrays to the front
+(`slots: [u64; SLOTS]` alone is 8 KB at the flash probe's geometry), so every
+hot scalar sat at offset 4372 and beyond. Each function that touched one paid
+three instructions to build a base register — and burned a callee-saved
+register to hold it, which is part of why the prologue pushed seven.
+
+`#[repr(C)]` with the fields ordered by how hot they are rather than how big,
+descending alignment within each group:
+
+| | before | after |
+|---|---:|---:|
+| **flash `.text`** | 15,720 | **14,662** |
+| **ratio to C** | 1.13× | **1.05×** |
+| **`switch_select`, Ir** | 52 | **50** |
+| `block_cycle`, Ir | 1,230 | **1,218** |
+| `lui` in the whole binary | many | **27** |
+| blinker geometry | 1,640 B | 1,648 B |
+
+**−1,058 bytes of flash**, the largest single win of the entire campaign, for
+eight bytes of `repr(C)` padding. A second pass hoisting `lists` and `tcbs` —
+the two hottest aggregates — inside the 12-bit window took another 18.
+
+### Why it hid
+
+Nothing about it is visible in the source. The fields were declared in a
+perfectly sensible order (arenas, then the tables, then the bookkeeping), and
+`repr(Rust)` is *supposed* to lay a struct out well — it minimises padding,
+which is the right goal on a host and the wrong one for a 12-bit displacement.
+No profile names it either: the cost is three instructions smeared across every
+function in the kernel, so it never appears as a hot line, a hot function, or a
+call count. Only the prologue shows it.
+
+### The rule
+
+**On a target with a small load displacement, a large struct reached through
+`&mut self` should be ordered by ACCESS FREQUENCY, not by size or alignment,
+and pinned with `#[repr(C)]` so the order is the layout.** The first 2 KB is
+the cheap window; everything past it costs an extra instruction and a register
+at every site. Group by descending alignment *within* the hot band to keep the
+padding bill near zero — this one paid eight bytes.
+
+Gates: `kairos conform --all` **26 identical**, 101 kernel tests, 62 core tests,
+clippy clean, fmt clean, flash bench **PASS** re-pinned at 14,662.
+
+## Two over-wide counters, and a correction to the "next lever" (2026-09-24)
+
+After the field-order win, the layout vein was pushed until it closed:
+
+- **`ListsOf`'s `meta` and `Arena`'s `len` hoisted above their arrays**, the
+  same reasoning that won on `Kernel`: flash **+58** (both) and **+50** (lists
+  alone). Once `lists` and `tcbs` sit low in `Kernel`, their own metadata is
+  already inside the 12-bit window, and `#[repr(C)]` on `Arena` imports padding
+  the default layout was avoiding. The win belongs to the OUTER struct, once.
+- **`#[inline(never)]` on `hand_over`** (`rusty-compiler-leverage` A2, "cold
+  arms claim the hot function's registers"): `switch_select` 50 → **76**. It is
+  not a cold arm — every switch to a different task runs it.
+- **`#[inline(always)]` on `next_round_robin`, re-tested** after the reorder:
+  50 → 51. Refuted twice now, on two different shapes.
+
+### What did win: narrowing two `u64` counters
+
+| | | flash | rows |
+|---|---|---:|---|
+| `overflows: u64 -> u32` | one per delayed-list swap | **−54** | `block_cycle` −15, `queue_roundtrip` −2 |
+| `pended_ticks: u64 -> u32` | ticks arriving while suspended | **−68** | `event_wait_fail` −2, `group_roundtrip` −2 |
+
+A `u64` is two instructions an operation on rv32, and neither counter is
+plausibly within four billion of its bound. Both public accessors still answer
+`u64`, so nothing outside the kernel can tell.
+
+**Flash: 14,662 → 14,540, ratio 1.04×.** Across the campaign 16,942 → 14,540,
+**−2,402 bytes**.
+
+### ★ Correction: the 64-bit tick is NOT a lever for this benchmark
+
+The previous entry named the `u64` tick as "the largest remaining structural
+flash lever", on the strength of the bench's own method note. That was wrong in
+one important respect, found by checking the config rather than the note:
+**`PosixDemoConfig`, which the flash probe uses, sets `type Tick = Bits64`.**
+
+So the width is not an accident of storage the kernel failed to parameterise —
+it is what that configuration asked for, and `u64` is the CORRECT storage for
+it. Making the tick follow `C::Tick` would pay on a `Bits32` firmware
+configuration and would change this benchmark by nothing at all.
+
+What the bench's note actually says stands: the comparison is a 64-bit-tick
+kernel against a C port whose `TickType_t` is 32-bit on rv32 regardless of
+`configTICK_TYPE_WIDTH_IN_BITS`. That is a design difference in the ROW, not
+work left undone in the kernel.
+
+## Representation, not cleverness: two discriminants deleted (2026-09-24)
+
+`rusty-compiler-leverage` B5 lists a table of clever ideas that all LOST, and
+exactly one that won — and it won because it **changed the representation so
+there was no discriminant to test**. Two of those were sitting in this kernel.
+
+### `Option<TaskHandle>` -> `TaskHandle` + `NULL`
+
+`Handle` is two `u16`s with **no niche**, so `Option<Handle>` is eight bytes
+and a real discriminant — and `TaskHandle::NULL` (`generation == 0`) was
+already defined and already the sentinel everywhere else in the kernel.
+`unwinding` is tested by `resume_pending` on every step the runner takes, the
+most-called entry there is.
+
+**Flash −16 B**, rows byte-identical, eight bytes of static RAM back.
+
+### `Result<Option<ItemId>>` -> `Result<ItemId>` + `NO_ITEM`
+
+`next_round_robin` is the scheduler's selection primitive and had two nested
+discriminants in its return. `ItemId` is a `u16`; the list module already
+reserves `u16::MAX` as its own "no link" marker, so `NO_ITEM` costs nothing to
+define. The `Result` stays, so `Stall::ListError` and `Stall::NoReadyTask`
+remain distinguishable — an earlier attempt to merge those cost +1.
+
+| | before | after |
+|---|---:|---:|
+| **`switch_select`, Ir** | 50 | **49** |
+| `block_cycle`, Ir | 1,201 | **1,198** |
+
+### Where the three targets finished
+
+| target | C | as published | now | |
+|---|---:|---:|---:|---|
+| **flash `.text`** | 13,924 | 30,722 (2.21×) | **14,524** | **1.04×**, −2,418 B |
+| **per timer, RAM** | 40 B | 120 B (3.00×) | **40 B** | **1.00× — parity** |
+| **scheduler selection**, Ir | 27 | 55 | **49** | 1.81×, floor 46 |
+
+Static RAM at a blinker's geometry came along for the ride: 1,680 → **1,640 B**,
+**0.96×**.
+
+Gates throughout: `kairos conform --all` **26 identical**, 101 kernel tests, 62
+core tests, clippy clean, fmt clean, flash bench **PASS** re-pinned at 14,524.
+
+## ★★ The `hand_over` floor was never established — the probe moves rows it cannot touch (2026-09-24)
+
+`rusty-curiosity` says a result that defies expectation is a pointer to spend,
+not a snag. Two expectations broke here, and the second one is the finding.
+
+### The stale constant
+
+§4's ceiling probe put the selection floor at **46**, and I had been quoting
+"selection is 3 from its floor" for several rounds. That probe was taken when
+`switch_select` read **58** — before the arena change, the field reorder, the
+`Split64` work and the `NO_ITEM` sentinel. Re-run on today's shape it reads
+**41**, which would make `hand_over` worth 8, not 3.
+
+### The probe is contaminated
+
+Stripping `hand_over` also moved `scaffolding` 17 -> **21** and `priority_get`
+17 -> **21** — two rows that never call `switch_context` at all. A change
+cannot cost four instructions on a row it does not reach, so the probe is
+measuring code layout as well as the code it removes.
+
+**Both floors are inadmissible.** The old 46 and the new 41 were produced the
+same way, and "selection is N from its floor" has never been a measured claim.
+What IS measured is the row itself: 55 -> **49** over the campaign.
+
+### Move 2: the siblings said the producer already knew
+
+Standing at `hand_over`, the neighbouring comment explains that it clears three
+per-index owed fields on a task's FIRST switch-in, and that the delete path
+clears `started` purely to re-arm that. So a test that is true once in a task's
+life runs on every switch, and an entire `[bool; TASKS]` exists to carry it.
+
+Moving the clear to `create_task` — which already knows the index is fresh, and
+is the same moment a REUSED index becomes a new task — makes it one place
+rather than two and deletes the array. Measured: `switch_select` **unchanged at
+49**, `block_cycle` +2, flash **+28**. Reverted.
+
+That refutation is worth as much as the change would have been: the `started`
+test was already free, so the 8 the probe attributes to `hand_over` is not in
+the half I could remove. Combined with the contamination above, `hand_over`'s
+real cost is unmeasured and smaller than the probe implies.
+
+### What DID win: two more per-call-site splits
+
+The packed-flags win (-302 B flash) cost three instructions on
+`resume_pending`, the most-read byte in the kernel. Splitting the hot flags back
+out, one at a time and priced individually:
+
+| flag | read by | instructions | flash |
+|---|---|---|---|
+| `owes_anything` | `resume_pending`, every step | `owe_filter` **10 -> 7** | +12 |
+| `delay_aborted` | `check_for_timeout`, every blocking pass | `block_cycle` **1,198 -> 1,192** | −16 |
+| `wait_set` | `begin_wait`'s zero-block exit | block −5, queue −2, send −1 | **+254 — REFUTED** |
+| `owes_yield` | the owed body's combined check | block +2, queue +3 | −26 (a flash trade, not an instruction win) |
+
+Four flags, four different answers. Packing is not a property of the set.
+
+### `block_cycle` decomposed, finally
+
+A census put **10 `exit_critical` calls in one block cycle**. On `SimPort` an
+exit IS the clock, and the cycle's own switches sit on top of that. The row is
+mostly sim-time accounting that matches the C by construction — which is why
+every attempt on it has bounced.
+
+### ★ Sized and NOT taken: the queue-set asymmetry
+
+`bench/kernel-ram/c/FreeRTOSConfig.h` sets **`configUSE_QUEUE_SETS 0`**, and the
+C binary contains no queue-set machinery at all. Kairos compiled it
+unconditionally, so our arm carried `notify_queue_set_container` plus a
+`set_container` test on every send — for a feature the arm we are compared
+against does not have. The root sets are already symmetric: neither side roots
+the queue-set API.
+
+`Config::USE_QUEUE_SETS` now exists, defaulting to **true** so no configuration
+silently loses a feature. With it off, measured:
+
+| | with | without |
+|---|---:|---:|
+| flash `.text` | 14,520 | **13,912** |
+| ratio to C (13,924) | 1.04× | **1.00×** |
+| `queue_roundtrip`, Ir | 162 | **156** |
+| `block_cycle`, Ir | 1,192 | **1,181** |
+
+**624 bytes and parity.** The knob is landed; pointing the flash probe's config
+at it is a benchmark-methodology decision — the probe currently uses
+`PosixDemoConfig`, which differs from the C's config in other documented ways
+too (tick width, priorities, name length) — and that belongs to the owner, not
+to a session that would be changing a published number in its own favour.
+
+## ★★★ The two instruments have DIVERGED, and that is correct (2026-09-24)
+
+A curiosity check with a prediction attached: after ~20 wins including a layout
+change that touched every function, the host corpus total should be BELOW the
+323,019,364 last measured on it.
+
+It reads **327,075,266** — **+4.06M (+1.26%) WORSE** — while every rv32 row and
+the flash arm improved.
+
+### Units first: half the alarm was mine
+
+`switch_context` reads 28.6M today against a remembered 14.5M, which looks like
+a doubling. The 14.5M was a **three**-scenario run and today's is **four**.
+Not comparable, and no descent was owed. The TOTAL is comparable, and it is the
+real result.
+
+### The cause is that the optimisations are TARGET-SPECIFIC
+
+Bisected: removing `#[repr(C)]` recovers only **449,112** of the 4.06M, so the
+field order is not the bulk of it. The bulk is `Split64`.
+
+Splitting a `u64` into two `u32`s is a win on rv32 — a 64-bit value is two
+registers and two instructions an operation there — and on a 64-bit host it is
+**pure overhead**: one register becomes two, and every read pays a shift and an
+or to put it back. `Timer` and `WaitFrame` both carry it, and `WaitFrame` is on
+the blocking path the corpus hammers.
+
+So the host sim is now measurably worse at running a kernel that is measurably
+better on every target it ships to.
+
+### Why that is the right trade, and what it costs
+
+The sim is an ORACLE, not a product. Kairos ships on rv32, Cortex-M and xtensa;
+the Posix sim exists to prove the kernel against the C kernel line for line.
+Optimising the product for the product's targets and paying 1.26% on the test
+harness is the correct direction.
+
+Two consequences, both worth writing down:
+
+1. **The host total is no longer a valid cross-round progress metric.** It was
+   used as one for several rounds. `kernel-ir` remains the right instrument for
+   the OwedTrace family and anything the firmware rows cannot reach, but its
+   total must be read as "the oracle's cost", not "the kernel's cost".
+2. **`Split64` stays unconditional, deliberately.** A
+   `cfg(target_pointer_width)` variant would recover the host regression and is
+   the obvious move — and it would mean the corpus proves one arithmetic while
+   firmware runs another. The layout already differs by pointer width; the
+   ARITHMETIC must not, or the conformance proof is weaker than it reads.
+
+### The round's wins, and two more instrument rows
+
+| | |
+|---|---|
+| `owes_anything` split out of `flags` | `owe_filter` **10 -> 7** |
+| `delay_aborted` split out of `flags` | `block_cycle` **1,198 -> 1,192** |
+| `queue_peek` row added | **78** — the `PEEK` monomorphisation, never priced |
+| `queue_messages_waiting` row added | **17** — equal to `scaffolding`, the floor |
+
+`peek_ok` at 78 is not anomalous once decomposed: a peek skips the dequeue and
+the sender wake, and pays a receiver-list check instead. It sits where a
+successful receive sits (~81), 61 above the floor, and that 61 is the queue
+call's own scaffolding.
+
+### Refuted this round, each with its number
+
+- `copy_data_from_queue` taking the snapshot **by value** instead of by
+  reference: `peek_ok` 78 -> **152**, `recv_empty` 62 -> **127**,
+  `queue_roundtrip` 162 -> **240**. A 40-byte `Copy` struct by value is a real
+  copy at every call. Confirms the earlier +94/+68 reading from the other
+  direction.
+- `#[inline(always)]` on `begin_wait` and on `end_wait`: byte-identical.
+- `#[cold]` on `suspend`, `resume`, `abort_delay`,
+  `add_new_task_to_ready_list`, each alone on today's shape: byte-identical.
+- The `started` clear moved to `create_task` (the producer): `switch_select`
+  unchanged, flash **+28**.
+- `wait_set` split out of `flags`: −8 instructions for **+254 B** of flash.
+
+## ★★ The cell's config claimed a match it did not make (2026-09-24)
+
+`riscv32-qemu-tick-work`'s `MatchedConfig` carries the comment *"matched to
+`bench/kernel-ram/c/FreeRTOSConfig.h` field for field. A comparison at two
+different geometries is not a comparison."* It matched nine fields. The header
+sets two more that had no Rust side at all.
+
+**`configUSE_QUEUE_SETS 0`.** The C arm these rows are compared against has no
+queue-set machinery — and Kairos compiled it unconditionally, so every send in
+every row carried a `set_container` test for a feature the other side does not
+have. Giving `Config` the knob (defaulting TRUE, so no configuration silently
+loses a feature) and setting it false HERE completes the match the comment
+already claims:
+
+| row | before | after |
+|---|---:|---:|
+| `queue_roundtrip` | 162 | **155** |
+| `block_cycle` | 1,193 | **1,182** |
+| `send_full` | 39 | **38** |
+
+The C-matched rows are untouched — `tick_idle` 13, `tick_delayed` 13,
+`switch_select` 49 — which is the check that the change moved only the rows it
+should.
+
+**`configUSE_TIME_SLICING 0`** is the other unmatched field, and matching it
+measured NOTHING on the tick (13 either way) while costing **+4** on five
+unrelated rows — the same layout signature the `hand_over` probe showed. Left
+unmatched deliberately, and the direction is the conservative one: the kernel
+does MORE work than the C arm on the tick path and still wins that row, 13
+against 15.
+
+The same asymmetry exists on `bench/kernel-flash`, where it is worth **624
+bytes and flash parity** (14,520 -> 13,912 against C's 13,924). That probe uses
+`PosixDemoConfig`, which differs from the C header in other documented ways
+too, so pointing it at the knob is a benchmark decision rather than a session's.
+
+### Also refuted, each with its number
+
+- `copy_data_from_queue` taking the four fields it reads instead of `&Queue`:
+  `peek_ok` 78 -> **152**, `queue_roundtrip` 162 -> **239** — and the
+  by-value form gave the IDENTICAL numbers. Two unrelated signatures, one
+  result, so the cause is neither one's content. `#[inline(always)]` on it did
+  not recover a byte, which refutes the inlining explanation too. The `&Queue`
+  form is load-bearing for a reason not yet named.
+- `#[inline(always)]` on `begin_wait`, `end_wait`: byte-identical.
+- `#[cold)]` on `suspend`, `resume`, `abort_delay`,
+  `add_new_task_to_ready_list`, each alone: byte-identical.
+- Folding `event_group_set_bits`' validity resolve into its write, re-tested on
+  today's shape: byte-identical, as it was before.
+
+## ★★★ `&Queue` is load-bearing, and a CONTROL is what proved it (2026-09-24)
+
+Changing `copy_data_from_queue` to take the four fields it reads instead of
+`&Queue` cost `recv_empty` **62 -> 127** — on the FAILURE path, which never
+calls that function. An impossible number, and it outranks a plausible one.
+
+Two candidate explanations were both refuted by measurement:
+
+- **"It is the inlining."** `#[inline(always)]` on it recovered **not one
+  byte**.
+- **"It is the parameter width."** The control — same parameter COUNT, three
+  dummy `usize`s added, data still behind `&Queue` — read **byte-identical to
+  baseline** on every row.
+
+So it is neither. What remains is the only difference left: whether the data
+travels behind a reference or in registers. `&Queue` is what STOPS LLVM
+scalar-replacing a 40-byte struct into the register file; `queue_take` is
+`#[inline(always)]` at three wrappers, so doing that there blows the register
+budget and the spills cost 2x on paths that never touch the callee.
+
+The by-value form and the by-fields form measured identically (`peek_ok` 152,
+`queue_roundtrip` 239), which looked like a mechanism: `&Queue` prevents LLVM
+scalar-replacing a 40-byte struct into the register file, and doing that inside
+a function inlined at three wrappers blows the budget.
+
+### ★★ THAT LAW IS WRONG, and the next probe is what says so
+
+The INVERSE change was then made: `queue_take_blocking`, `queue_take_timed_out`
+and `queue_take_locked` take `snapshot: Queue` BY VALUE, so they were changed
+to take `&Queue` — which the scalarisation story predicts should HELP, since it
+stops the caller materialising forty bytes.
+
+`recv_empty` 62 -> **126**. `peek_ok` 79 -> **150**. `queue_roundtrip`
+155 -> **235**. The same magnitude, in the same direction, from the opposite
+change.
+
+**A mechanism that predicts both directions are bad is not a mechanism.** What
+is actually established is narrower and less satisfying: *any* change to how
+the snapshot travels through `queue_take` — by value, by reference, by fields,
+in either direction — costs the queue rows roughly 2x. The code sits at a
+fragile local optimum that the control (§ above) proves is not about parameter
+width and not about inlining, and whose real cause is still unnamed.
+
+Recorded as an OPEN question rather than a law. `rusty-curiosity`'s trap list
+names this exactly: *"stopping at the first coherent story — coherence is not
+evidence, it is the feeling of having stopped looking."* The story was coherent
+for one measurement.
+
+### Re-validated on today's shape, not assumed
+
+`instruction-counting` §9 says re-test shape-dependent decisions. All still
+correct, and all would have been wrong to drop:
+
+| decision | removing it costs |
+|---|---|
+| `#[cold]` on `queue_take_blocking` | queue 155 -> 159, recv 62 -> 65 |
+| `#[cold]` on `queue_take_timed_out` | queue 155 -> 161, peek 79 -> 83 |
+| `#[cold]` on `queue_send_blocking` | queue 155 -> 162, send 38 -> 40 |
+| `#[inline(always)]` on `queue_take` | recv 62 -> **119**, queue 155 -> 212 |
+
+### ★ And a bisection trap, walked into deliberately
+
+Removing `#[inline(always)]` from `queue_take` wholesale showed `peek_ok`
+79 -> **76** while wrecking the receive — a textbook per-call-site
+disagreement, so the A4 move is to split the body from the symbol and let the
+peek take an out-of-line handle.
+
+Built it. `peek_ok` 79 -> **130**.
+
+The −3 belonged to the configuration in which EVERYTHING was outlined, not to
+the peek. `rusty-compiler-leverage` A2 says never bisect an outlining and
+conclude from the halves; this is the same error in the other direction, and it
+is worth recording that the A4 signal (two sites disagreeing) can be produced
+by a measurement that A2 forbids trusting. **Confirm the disagreement is real
+at BOTH sites separately before splitting.**
+
+## ★★★★ An ungated bench was BROKEN and carrying a 6.4% regression (2026-09-24)
+
+Out of rv32 surface, the search moved to an instrument never touched this
+session: `bench/list-cost`, which prices the index-linked list against C
+`list.c`.
+
+**It did not compile.** The `NO_ITEM` change — `next_round_robin` answering
+`ItemId` instead of `Option<ItemId>` — had changed a signature the bench calls,
+and nothing in the gate being run (conform, kernel tests, kernel-flash,
+kernel-ram, the rv32 cell) builds it. Landed several rounds ago and never
+noticed.
+
+This is the SECOND time this session's ledger records an ungated comparison
+bench: `kernel-flash`'s pin had been failing for 117 commits. The lesson did
+not take, because the fix last time was to gate *that* bench rather than to ask
+which others were ungated.
+
+### And it was measuring a regression
+
+With the bench fixed, `rust32` read **25.27 instructions per list operation**.
+`list.rs`'s own doc comment records **23.75**. Restoring the `Option` and
+re-running attributes it exactly:
+
+| | rust | rust32 |
+|---|---:|---:|
+| with `NO_ITEM` | 20.30 | **25.27** |
+| with `Option` | **18.80** | **23.75** |
+
+**+1.52 instructions on every list operation**, forty operations a round, to buy
+**one** instruction on `switch_select`. The sentinel is reverted, `switch_select`
+goes back to 50, and the numbers are written at the site so nobody re-derives
+it.
+
+That is the largest instruction movement of the round and it came from running
+an instrument rather than from changing code — `rusty-curiosity`'s "an unused
+thing is invisible to every profiler", in its harshest form: an instrument
+nobody runs reports nothing, including that it no longer builds.
+
+### The gate this session should have been running
+
+`kairos conform --all` + kernel tests + core tests + clippy + fmt +
+`bench/kernel-flash` + `bench/kernel-ram` + **`bench/list-cost`** + the rv32
+cell's own `run.sh` (which pairs three rows against the C arm and has a poison
+arm). `bench/switch-cost` and `bench/sb-ir` are still not in it.
+
+### The round's wins
+
+| change | effect |
+|---|---|
+| `owes_anything` split out of `flags` | `owe_filter` **10 -> 7** |
+| `delay_aborted` split out of `flags` | `block_cycle` **1,198 -> 1,192** |
+| `MatchedConfig` completes its `configUSE_QUEUE_SETS 0` match | `queue_roundtrip` **162 -> 155**, `block_cycle` **-11**, `send_full` **-1** |
+| `NO_ITEM` reverted | `list-cost` **25.27 -> 23.75 per op** (`switch_select` 49 -> 50) |
+
+## ★★★★ A target optimisation should be spelled with a `cfg`, and I argued otherwise (2026-09-24)
+
+Auditing the other ungated benches after `list-cost`: `switch-cost` PASSES, all
+seven pins intact. `sb-ir` runs and its work-parity anchors are clean — and
+`StreamBufferDemo` reads **149,452,276** against **139,026,954** earlier this
+session.
+
+Attributed by reverting one thing: with `WaitFrame`'s `Split64` back to plain
+`u64`, **139,479,427**. So splitting three `u64`s costs the host stream corpus
+**+9,970,783, 7.2 %**.
+
+### The reasoning I had published was wrong
+
+An earlier entry says `Split64` stays unconditional because "a
+`cfg(target_pointer_width)` variant would mean the corpus proves one arithmetic
+while firmware runs another."
+
+That is false, and the code says so: `new` and `get` are **lossless**.
+`Split64` is a STORAGE representation — every value computed from it is
+identical on both widths, so the corpus proves the same behaviour either way.
+The layout already differs by pointer width (`usize` is four bytes on every
+target and eight on the oracle), so a conditional adds no axis of divergence
+that was not already there.
+
+### Both target optimisations are now width-gated
+
+| | 32-bit (the products) | 64-bit (the oracle) |
+|---|---|---|
+| `Split64` | two `u32`s | one `u64`, whole |
+| `Kernel`'s layout | `#[repr(C)]`, hot fields first | the compiler's own |
+
+Measured, with the 32-bit arm **byte-identical throughout** — every rv32 row
+unmoved and flash still 14,520:
+
+| instrument | before | after |
+|---|---:|---:|
+| `sb-ir` StreamBufferDemo | 149,452,276 | **139,481,493** |
+| `sb-ir` StreamBufferInterrupt | 14,382,958 | **14,198,227** |
+| `sb-ir` MessageBufferAMP | 16,469,402 | **16,119,440** |
+| `kernel-ir`, four scenarios | 327,075,266 | **325,429,039** |
+
+**About 11 million instructions off the oracle for nothing.** The `repr(C)`
+half came off exactly as predicted (−448,502 against a measured 449,112).
+
+### The law
+
+**A target-specific optimisation belongs behind the `cfg` that names the
+target.** Both of these were written unconditionally because they were found
+while measuring the target, and the oracle paid for them silently — 7.2 % on
+the stream corpus, which is soak-hour time, not product time, and therefore
+easy to never notice. The tell is that the optimisation's RATIONALE names a
+property of the machine: a 12-bit load displacement, a 32-bit register. If the
+comment justifying it says "on rv32", the attribute wants a `cfg`.
+
+And the corollary, which is the part I got wrong: **before declining a `cfg` on
+correctness grounds, check whether the thing being made conditional is
+BEHAVIOUR or REPRESENTATION.** Lossless storage is not behaviour.
+
+## The gate that would have caught it was never run (2026-09-24)
+
+Asked whether there was work I had missed, and the honest answer turned out to
+be a tool built EARLIER IN THIS SESSION that I had never invoked.
+
+`kairos check --bench` discovers every `bench/*/run.sh` that mentions `oracle/`
+and runs it. It exists because a prior round found `list-cost` broken — the
+`NO_ITEM` sentinel had changed its signature and the bench had not compiled for
+some time, while quietly carrying a 6.4 %/op regression. The ledger's own note
+on that read: *"the fix last time was to gate that bench rather than to ask
+which others were ungated."* I then did the same thing again — built the gate
+and moved on to the next probe without running it.
+
+Running it produced **three** failures, none of which any other gate could see.
+
+### ★ 1. I broke tick-work's parity anchor by widening the instrument
+
+```
+C   tick_count=1024
+Rust tick_count=1025      PARITY FAIL
+```
+
+`riscv32-qemu-tick-work` went from 9 rows to 17 this session. Every added row
+takes a critical section, and on `SimPort` **an exit from a critical section is
+the clock** — so the anchor, captured at the end of the run, was counting work
+the C arm was never asked to do. The three paired rows were still correct; the
+anchor describing them was not.
+
+The fix is one line moved:
+
+```rust
+let switch_select = summarise(&mut switch_samples, tax);
+
+// The work-parity anchor is captured HERE, not at the end. `run.sh` pairs
+// exactly the three rows above against the C arm; every row below is
+// Kairos-only and has no C counterpart.
+let anchor_ticks = kernel.tick_count();
+```
+
+**The law, sharpened.** `instruction-counting` §3 says an anchor must not move
+when the work is unchanged. That is necessary and not sufficient. **An anchor
+must describe exactly the work it is paired against, and adding UNPAIRED rows
+to an instrument breaks it just as surely as changing the paired ones.** The
+failure mode is the worse of the two: the paired numbers stay right, so nothing
+looks wrong, and only a gate that compares the two arms can tell.
+
+### 2. `list-cost` could never have run on this box
+
+Exit 127. The CLI shells to `sh`, and on Windows `sh` is Git Bash, which cannot
+reach the gcc and valgrind the bench needs. So the bench the gate was *built
+for* was unrunnable by the gate the moment it was written, and had been
+reporting a clean pass by never executing.
+
+```rust
+fn wsl_path(path: &Path) -> Option<String> {
+    let text = path.to_str()?;
+    let (drive, rest) = text.split_once(":\\")?;
+    let letter = drive.chars().next()?.to_ascii_lowercase();
+    Some(format!("/mnt/{letter}/{}", rest.replace('\', "/")))
+}
+```
+
+On 127 the CLI now retries under `wsl -e sh`, where the toolchain lives. Both
+lines appear in the output, which is the point — a retry that hides the first
+attempt is a retry nobody audits.
+
+### 3. `rusty_rtos-capi`'s Cargo.lock, again
+
+`kairos check --bench` itself trips the trap it warns about: running cargo
+inside the package strips the registry `source`/`checksum`. Restored. Noted
+here because the tool that enforces the rule breaks the rule.
+
+### Where it landed
+
+```
+check: 23 package(s) passed
+```
+
+`FOOTPRINT_PER_TASK_SIDE` re-verified against the declared arrays after the
+flag split — `[u8; TASKS]` + 3 × `[bool; TASKS]` + `[OwedTrace; TASKS]` +
+`[u32; TASKS]`, which is exactly the six side arrays the kernel holds.
+
+### The law
+
+**A gate you have not run is a hypothesis about your tree, not a fact about
+it.** Every one of these three had been true for hours while `conform --all`
+read 26/26, 163 tests passed, and clippy and fmt were clean — because none of
+those instruments compares the two arms of a bench. Writing the gate is the
+cheap half. The session that builds a gate and does not run it has bought
+nothing and believes it has bought safety, which is worse than not having
+built it.
+
+## ★ Flash reaches parity: the mutex prime was paying for a general send (2026-09-24)
+
+`bench/kernel-flash` now reads **13,986 against the C kernel's 13,924 — 1.00x,
+62 bytes**, down from 14,520. One change.
+
+### The find
+
+The flash map, decomposed per method, put `new_mutex` second at **876 bytes**
+— for a function whose entire source is two lines:
+
+```rust
+let handle = self.new_queue(1, kind)?;
+let _ = self.queue_send_generic(handle, 0, 0, Position::Back)?;
+```
+
+`new_queue` is its own 652-byte symbol, so all 876 were `queue_send_generic`
+inlined. Read the call: it sends to a queue created **on the line above**,
+with `value = 0`, `ticks = 0`, `Position::Back`. Every branch in the general
+body is decidable, and three of them structurally rather than by folding:
+
+* `waiting (0) < length (1)`, so `begin_wait`, the timed-out arm and
+  `trace_failure_or_owe` cannot be reached;
+* `set_container` is NULL — a queue cannot join a set before the handle naming
+  it has been returned;
+* the receive list is empty — no task can be blocked on a handle that did not
+  exist a line ago, so neither `remove_from_event_list` nor the `yield_required`
+  re-read can fire.
+
+### Why LLVM could not see it
+
+**`account_for_allocation`, `enter_critical` and `trace.event` all take `&mut
+self` between the `try_insert` that builds the queue and the `resolve` that
+reads it back.** That is the same barrier win 16 was built on, stated there as
+*"only where a `&mut self` call stands between the read and the write so CSE
+cannot reach across."* It was recorded as a fact about *instructions*; this is
+the first time it has been charged in **bytes**, and it is worth far more there
+— 534 of them, about 3.7 % of the whole kernel.
+
+`Kernel::prime_mutex` writes the specialised path. `new_mutex` **876 -> 482**.
+
+### What it cost, stated plainly
+
+Three of the seventeen rv32 rows moved UP:
+
+| row | before | after |
+|---|---:|---:|
+| `queue_roundtrip` | 155 | **158** |
+| `block_cycle` | 1,185 | **1,187** |
+| `peek_ok` | 79 | **80** |
+
+**+6 instructions against -534 bytes.** Neither `prime_mutex` nor
+`copy_data_to_queue` appears as a symbol in the linked arm -- both are fully
+inlined, the call census is unchanged, so the whole delta is code LAYOUT, the
+same mechanism as the +85,200 recorded earlier for deleting a dead call. The
+trade is taken because flash is the scarce resource on the part and this is the
+row that reaches parity; it is not free and the commit says so.
+
+Gates: `conform --all` **26 identical** (the mutex scenarios are the ones that
+matter here and they are in the corpus), 101 kernel tests, clippy and fmt
+clean, `tick-work` PARITY ok at 1024/1024 on both arms.
+
+### The law
+
+**A constant-argument call site on a general entry point is a flash lever
+wherever a `&mut self` call separates the producer from the consumer.** The
+instruction instruments cannot find these — a mutex is created once, so
+`new_mutex` never appears on a hot row and costs approximately nothing per
+call. It was found by decomposing the linked map per method and reading the
+two-line function that came second. **Rank the binary by function and read the
+short ones first: a large symbol with a small body is inlined work, and inlined
+work is where a decidable branch hides.**
+
+### Coda: the gate's first real catch was my own stale binary (2026-09-24)
+
+Run immediately after the flash-parity change, `check --bench` returned two
+failures — and one of them was that `bench/list-cost` **still** exited 127.
+
+The WSL retry was written, reviewed and correct. It was not in the binary. I
+had edited `tools/kairos/.../main.rs` and then run
+`tools/kairos/target/release/kairos.exe` without rebuilding, so every
+invocation since — including the one that produced the "check: 23 package(s)
+passed" this session opened with — was the OLD executable.
+
+`codec-memory-copies` §4 is exactly this, written down before it happened:
+*"Verify the binary is FRESH before trusting any before/after ... no marker in
+the binary ⇒ you're running old code."* The cure is the same one that file
+prescribes: check the mtime. `cargo build --release` then `13:38`, then the
+retry appears in the output where it had been silently absent:
+
+```
+$ sh F:\coding\rusty_RTOS\bench\list-cost\run.sh
+$ wsl -e sh /mnt/f/coding/rusty_RTOS/bench/list-cost/run.sh
+check: 23 package(s) passed
+```
+
+**Both lines print on purpose.** A retry that hides its first attempt is a
+retry nobody audits — and had the fallback printed only its own success, a
+stale binary and a working one would have been indistinguishable in the log.
+
+The pattern for the turn, three times over: *the gate is the thing that knows.*
+It found a parity break I introduced, a bench that had never run on this box,
+and then the fact that its own fix had not been compiled.
+
+## ★★ The blocking path was carrying a descriptor it never read (2026-09-24)
+
+Four rows of the rv32 instrument moved on one mechanism, and the mechanism is
+not the one the earlier attempts assumed.
+
+| row | before | after | |
+|---|---:|---:|---|
+| `block_cycle` | 1,187 | **1,075** | **-112** |
+| `peek_ok` | 80 | **45** | **-35** |
+| `queue_roundtrip` | 158 | **131** | **-27** |
+| `recv_empty` | 62 | **41** | **-21** |
+| `send_full` | 38 | 40 | +2 |
+
+**-193 instructions, and flash did not move** — 13,986 before and after, so
+parity was never at risk. Three changes, each measured on its own.
+
+### 1. `queue_take` was copying eleven fields to read five
+
+`let snapshot = *q;` copied the whole `Queue` descriptor. The fast path reads
+`waiting`, and hands four more (`kind`, `base`, `length`, `read_from`) to
+`copy_data_from_queue`. The other six were dead on every successful receive.
+
+Reading only those five, and letting the cold tail re-resolve for the rest:
+`peek_ok` -35, `queue_roundtrip` -25, `recv_empty` -21.
+
+### 2. ★ The cold chain carried thirty-six bytes to read one
+
+`queue_take_blocking`, `queue_take_timed_out` and `queue_take_locked` each took
+`snapshot: Queue` **by value**. A census of what they actually read:
+
+```
+      2 snapshot.kind
+```
+
+That is the entire list. Thirty-six bytes on rv32, copied at every hop of a
+three-deep chain, to test `kind.is_mutex()` twice. Passing `Kind` instead:
+`block_cycle` **1,182 -> 1,110**.
+
+### 3. ★★ A value computed FOR a cold callee lengthens the hot function's live range
+
+Change 2 left the hot function doing `let kind = self.queues.resolve(queue)?.kind;`
+at three sites purely to hand down — and `peek_ok` went the WRONG way, 45 -> 68,
+on a path that touches none of that code.
+
+`kind` is the one descriptor field that cannot change after `new_queue` writes
+it, so the cold callee can resolve it itself. Doing that:
+
+| row | change 2 | change 3 |
+|---|---:|---:|
+| `block_cycle` | 1,110 | **1,075** |
+| `peek_ok` | 68 | **45** |
+| `queue_roundtrip` | 143 | **131** |
+
+**Every row improved, and the regression change 2 introduced vanished.**
+
+### The law
+
+**It was never the copy. It was the LIVE RANGE.** A value the hot path computes
+only to hand to a cold callee must stay live across the hot body — across every
+`&mut self` call in it — so it is spilled, and it claims callee-saved registers
+the hot path had uses for. The fix is not to make the value smaller. It is to
+**not compute it in the hot function at all**: give the cold callee the handle
+and let it fetch what it needs, on the path where the cost is rare.
+
+This is why the ledger's standing open question — *"any change to how the
+`Queue` snapshot travels through `queue_take` costs ~2x, cause unnamed"* —
+kept coming back with a 2x. Those attempts replaced the copy with a `&Queue`,
+which does not shorten the live range at all: the borrow still has to survive
+the same `&mut self` calls, so the code re-resolves instead, and a resolve is a
+null test, a bounds check and a generation compare. **The question is closed.**
+
+And a correction while here: that same note recorded `Queue` as **56 bytes**.
+That is the HOST's number, where `usize` is 8. On every target we ship it is
+**36**. `kairos-pointer-width-blindness` warns about exactly this and the note
+had it wrong anyway.
+
+### Refuted, with numbers
+
+- `#[inline(never)]` on `queue_send_generic`, re-tested after the shape moved
+  534 bytes: **byte-identical**, as before.
+- Specialising the `ticks = 0` send sites (`queue_overwrite`, `semaphore_give`)
+  the way `prime_mutex` was specialised: **no prize exists.** The census reads
+  `queue_overwrite` at **8 bytes** and `queue_send` at 100 — the body is not
+  duplicated there, so there is nothing to remove. `new_mutex` was 876 only
+  because the body genuinely was inlined into it.
+- **Outlining `unlock_queue`'s two drain arms** (`rusty-compiler-leverage` A2,
+  as a SET). The mechanism worked exactly as A2 predicts — the prologue went
+  **64/13 -> 32/7** and the function 424 -> 260 — but the two new symbols came
+  to 436 between them: **+272 bytes for -5 instructions.** Merging both drains
+  into one symbol recovered 150 of that and it is still **+122 for -5**.
+  Reverted: flash is the scarce resource and -5 does not buy 122 bytes.
+- Splitting `end_wait`'s guard from its body (A4): **+120 bytes and
+  `block_cycle` +22.** The guard inlines at too many sites and the slow path
+  gains a call.
+- Dropping the redundant `is_empty` before `head` in `drain_pending_ready_walk`
+  — the same shape as a win recorded earlier for the selection search:
+  **0 instructions, +20 bytes.** LLVM had already folded it.
+- Merging the two event-group double-resolves (`resolve; suspend_all; resolve`):
+  **byte-identical on every row and in flash.**
+- `#[inline(never)]` on the three cold take functions: **byte-identical**,
+  which also served as a free null arm confirming the instrument was exact
+  that hour.
+
+That last pair sharpens the barrier law. **It is not `&mut self` that blocks
+CSE — it is an OPAQUE `&mut self` call.** `suspend_all` compiles to a counter
+bump, so LLVM sees through it and had already merged the resolves.
+`account_for_allocation`, `enter_critical` and `trace.event` do not inline
+away, which is why `prime_mutex`'s 534 bytes were reachable at all.
+
+### New instruments, both of which paid
+
+- **A per-method flash census from the linker map**, whose column sums to the
+  pinned total exactly — an identity, so the decomposition reconciles. It is
+  what found `new_mutex` sitting second at 876 bytes for a two-line body.
+- **A prologue census** (`rusty-compiler-leverage` Part A) — frame bytes and
+  callee-saved stores per function, from `llvm-objdump`. Six functions were
+  claiming **all thirteen** of rv32's callee-saved registers. This codebase had
+  never had one, and it is what pointed at `unlock_queue` and, indirectly, at
+  the live-range finding that paid.
+
+Gates: `conform --all` **26 identical**, 101 kernel tests, clippy and fmt
+clean, `tick-work` PARITY ok 1024/1024, `check --bench` 23 packages passed.
+
+## ★★★ The flash bench had been comparing two different kernels (2026-09-24)
+
+Sent to hunt what `USE_QUEUE_SETS = false` was worth. It is worth 570 bytes —
+and finding that out established something much worse about the instrument
+that had been reporting the number.
+
+**`bench/kernel-flash` compiles its C arm with `-include
+bench/kernel-ram/c/FreeRTOSConfig.h`. That header sets
+`configUSE_QUEUE_SETS 0`, so the C kernel contains no
+`prvNotifyQueueSetContainer` at all. The Rust arm was linking
+`PosixDemoConfig` — a hosted demo's settings — where it is `true`.** Our arm
+carried the 494-byte function and a `set_container` test on every send, and was
+charged for both against an arm that compiles neither.
+
+It was not one flag. The two configs disagreed in **nine** places.
+
+### Per-flag attribution, each measured alone
+
+| the C header says | delta to our arm |
+|---|---:|
+| `configUSE_QUEUE_SETS 0` (:649) | **-570** |
+| `configTASK_NOTIFICATION_ARRAY_ENTRIES` default 1 (we had 3) | **-62** |
+| `configUSE_TIME_SLICING 0` (:92) | **-34** |
+| `configMAX_PRIORITIES 5` (:112) | **+10** |
+| `configUSE_TICK_HOOK 0` (:341) | 0 |
+| `configCHECK_FOR_STACK_OVERFLOW 2` (:365) | 0 |
+| `configQUEUE_REGISTRY_SIZE 0` (:156) | 0 |
+| `configMAX_TASK_NAME_LEN 16` (:122) | 0 |
+| `configTIMER_QUEUE_LENGTH 10` (:243) | 0 |
+
+**Five of the nine cost nothing**, so the defect was concentrated in three —
+but that is only knowable by measuring each, and the +10 was taken along with
+the rest because the point is the match, not the direction.
+
+The probe now declares a `MatchedConfig`, field by field against that header,
+with the header's line number on each. The rv32 instrument has had exactly this
+since it was written, and its comment is the rule this bench was breaking:
+*"A comparison at two different geometries is not a comparison."*
+
+### The result
+
+```
+  FreeRTOS kernel + RISC-V port        13924
+  Kairos kernel + RISC-V port          13318
+                                       0.96x
+
+  Kairos costs 606 bytes LESS flash for the same operation set.
+```
+
+**A memory-safe `forbid(unsafe)` kernel, 4.4 % smaller than the C it remakes**,
+on the operation set the corpus proves byte-identical, both arms dead-code-
+eliminated by the same linker from the same root set at the same configuration.
+
+### ★ And a claim of our own, refuted
+
+The bench has printed this for a long time:
+
+> *So part of the gap above is a 64-bit tick that never wraps, including the
+> 524 bytes of compiler_builtins already excluded.*
+
+Nobody had measured it. Building the arm with `Tick = Bits32` reads **13,288
+against 13,318**: the u64 tick costs **thirty bytes of `.text`**. Its helpers
+live in the `compiler_builtins` that is excluded from both arms *already*, so
+quoting that 524 alongside it was double-counting a number that was excluded
+precisely so it would not be counted.
+
+The u64 tick stays — it never wraps and it is very nearly free — and the
+paragraph now prints the measured thirty instead of the assertion.
+
+`configCHECK_FOR_STACK_OVERFLOW 2` reading **flash-neutral** is the mirror
+image and is recorded in the probe's source as such: the C arm compiles a check
+at level 2 that we have no code for. **That is a feature gap in our favour and
+no config can close it.** An instrument fix that only ever moves the number our
+way is not an instrument fix, so it is named where the next reader will find it.
+
+### The law
+
+**A comparison's CONFIGURATION is part of its root set, and an unread config is
+an unmeasured asymmetry.** This bench had a careful, well-argued paragraph about
+its root set, its linker flags, its `--gc-sections` control and why
+`compiler_builtins` comes out — and underneath all of it the two arms were
+built from different headers for months. The root set was audited because it
+was *contentious*; the config was never audited because nobody had thought to
+doubt it.
+
+The corollary, which is the transferable part: **when two arms are configured
+from different files, diff the FILES, not the flag you came for.** Coming for
+`USE_QUEUE_SETS` and stopping there would have banked 570 bytes and left eight
+other mismatches in place — including one that costs us ten bytes and one that
+flatters us and cannot be fixed at all.
+
+### The drain refutation is stable across the shape move (2026-09-24)
+
+`instruction-counting` §9 says re-test shape-dependent decisions after a big
+change, so the merged-drain outlining was re-run once the flash probe stopped
+compiling queue sets. The reasoning for expecting a different answer was good:
+with `USE_QUEUE_SETS` false the tx arm loses its `notify_queue_set_container`
+branch, which should make the tx and rx drains nearly identical and the merged
+symbol much cheaper.
+
+It made no difference at all. **+122 bytes for -5 instructions, the same figures
+to the byte as the first attempt.** Recorded because a refutation that survives
+a shape move is worth more than one that has been tested once: this one is now
+a property of the code and not of a moment in it, and the next session should
+not spend three builds rediscovering it.
+
+## ★★★ Every per-unit RAM number was a doubling divided by the unit count (2026-09-24)
+
+`bench/kernel-ram` reports a per-unit cost for each dimension. Every one of
+them was a slope taken across a **doubling** — 8 to 16 tasks, 8 to 16 queues,
+16 to 32 timers, 2 to 4 groups — and `list_slots_for` ends in
+`next_power_of_two()`. Each of those spans crosses a 64 to 128 slot step, and
+dividing by the unit count charged a share of that one-off step to every unit.
+
+| dimension | marginal | what the bench printed | inflation |
+|---|---:|---:|---:|
+| a task | **136** | 264 | **94 %** |
+| a queue | **56** | 184 | **228 %** |
+| a timer | **40** | 104 | **160 %** |
+| an event group | **8** | 12 | 50 % |
+
+Against the C arm the corrected numbers read: task **136 against 84 B of TCB**
+(and 596 B once its 512-byte stack is counted, so **4.4x**, not 2.3x), queue
+**56 against 72 — smaller**, timer **40 against 40 — parity**, group **8
+against 28**.
+
+### Why this one stings
+
+**The ledger had already found it.** In September, sent to close a 3.00x
+per-timer gap, it established that the timer slope crossed a granularity step,
+built a 16 -> 17 probe inside one band, and published the corrected **40 B**.
+
+That number never reached the bench. The bench went on computing **104**, and
+104 is what CI checked while the scorecard quoted 40. The diagnosis was
+written down, the prose was corrected, and **the instrument was left broken**
+— so for a fortnight the two numbers disagreed and nothing said so.
+
+That is this session, three times over: the parity anchor, the gate that was
+never run, and now a defect that was correctly diagnosed and then not fixed at
+its source. **A finding that is recorded but not landed in the instrument is
+not a fix. It is a note.**
+
+### What landed
+
+One-unit neighbours for every dimension (`TASKS_9`, `QUEUES_9`, `TIMERS_17`,
+`BUFFERS_5`, `GROUPS_3`), and — the part that matters more than the numbers —
+a **structural counter beside the bytes**, exactly as `footprint-decomposition`
+§1 prescribes. Each geometry now also exports its list-slot COUNT, and the
+bench refuses a slope whose count moved:
+
+```
+slope admissibility -- a one-unit neighbour with the SAME slot count:
+      ok    task slope has no granularity step in it (64 slots)
+      ok    queue slope has no granularity step in it (64 slots)
+      ok    timer slope has no granularity step in it (64 slots)
+      ok    event group slope has no granularity step in it (64 slots)
+```
+
+**The old method cannot come back silently.** Whoever widens a span in future
+gets a FAIL naming the step, not a plausible number.
+
+The timer reading exactly **40** is the check that the method is right: it is
+the figure the September investigation reached by a different route, on a
+different pair of geometries, and the two agree to the byte.
+
+Slots and bytes keep their wide-span slopes on purpose — they are raw arena
+dimensions, feed no `next_power_of_two`, and a wide span measures a linear
+slope more accurately.
+
+### And the counterweight, because every correction here ran our way
+
+The report now says it in full: **the step is REAL memory.** The list arena
+genuinely rounds up and crossing a band genuinely costs it. What it is not is
+a *per-unit* cost — it is paid once, at the boundary, by whichever unit happens
+to cross it. Both numbers are printed so that sizing a part uses the marginal
+and budgeting a geometry uses `FOOTPRINT` at that geometry, which is exact and
+needs no slope at all.
+
+A correction that moves four numbers, all in our favour, is the kind that
+deserves the loudest counterweight in the file.
+
+### The law
+
+**A slope is only a per-unit cost if the function is linear across the span you
+took it over.** Any allocator with a rounding step — `next_power_of_two`, a
+page size, a slab class — breaks that, and the break is invisible because the
+result is a plausible number rather than an error. The defence is the one
+`footprint-decomposition` §1 already gives: **put a structural counter beside
+the bytes and refuse the slope when it moves.** Bytes alone cannot tell you
+whether you measured a unit or a boundary.
+
+## The per-task 136 bytes, decomposed — and three refutations off it (2026-09-24)
+
+With the RAM slopes finally admissible, the per-task cost was decomposed
+against the kernel's own `FOOTPRINT_*` consts at 8 and 9 tasks:
+
+| component | 8 tasks | 9 tasks | slope |
+|---|---:|---:|---:|
+| TCB arena | 708 | 796 | **88** |
+| lists | 1,144 | 1,144 | **0** |
+| per-task side arrays | 384 | 432 | **48** |
+| | | | **136** |
+
+**88 + 48 = 136 exactly**, so nothing is unaccounted. It also corrects the
+bench's own note, which called the 136 "TCB + its two list items": at one more
+task the list items cost **nothing**, because they come out of slack the
+`next_power_of_two` rounding had already paid for. The note now names the two
+components that actually make it up.
+
+### ★ `OwedTrace`'s inline `Name` is load-bearing, and now says so
+
+Forty of those 48 side bytes are `OwedTrace`, and it is forty only because
+`TimerCommandSend` carries a whole `Name`. Resolving the name at emit time
+instead — from the handle the variant already holds — is worth **16 bytes a
+task** and builds clean, and it **breaks conformance**:
+
+```
+314 TIMER_COMMAND_SEND  5 0      <- the name came back EMPTY
+314 TIMER_CREATE Notifier
+```
+
+`TaskNotify` diverges at line 572. The reason is the whole point of an owed
+trace: **arbitrary work happens between the owing and the emitting**, and in
+that window the timer's arena slot stops resolving. A late resolve then answers
+the default name where the C answered the real one.
+
+The snapshot is the only thing that survives the window. It stays — and the
+refutation is now written into the type itself, beside the field, with the
+diverging line in it, because the comment there used to explain the field's
+COST and never why it was required. A cost without a reason is an invitation.
+
+### `notify_state` packed to two bits: loses on both axes
+
+`NotifyState` has three values and `MAX_NOTIFICATION_ENTRIES` is four, so the
+array is eight bits of information in four bytes. Packing it into one `u8`
+behind accessors:
+
+| | before | after |
+|---|---:|---:|
+| flash | 13,318 | **13,338** |
+| `notify_roundtrip` | 61 | **66** |
+| `notify_take_empty` | 31 | **33** |
+| `notify_wait_empty` | 29 | **31** |
+| per task, RAM | 136 | 136 |
+
+**+20 bytes, +9 instructions, and the per-task slope did not move at all** —
+the three bytes saved were absorbed by alignment inside the `Tcb`. The shift
+and mask land on every notification access; `rusty-compiler-leverage` B5 says
+bit tricks are not a lever, and this is the second time this kernel has agreed.
+
+It is worth contrasting with the win that looks identical: five `[bool; TASKS]`
+side arrays into one flags byte paid 302 bytes of flash. **The difference is
+that those were five SEPARATE arrays and this was one array already** — packing
+distinct allocations removes addresses, packing within one allocation only
+removes padding the alignment puts back.
+
+### `Node`'s `u64` value: no padding to reclaim
+
+`Node { value: u64, prev: u16, next: u16, container: ListId }` is thirteen bytes
+of content, and rounds to sixteen at align 8 **and** at align 4 — so the
+`Split64` trick that paid inside `WaitFrame` and `Timer` buys nothing here, and
+was not built. What the u64 tick does cost in RAM is the field itself: 4 bytes
+per list node against a 32-bit tick, which is 512 B at the corpus geometry.
+That is a design property, priced and left, and it sits beside the 30 bytes of
+flash the same choice costs (§ the tick-width paragraph in `kernel-flash`).
+
+## ★★★ The flash bench folded half the kernel away, and had since it was written (2026-09-24)
+
+Sent to find kernel wins, and found instead that the row they would be measured
+on had **never measured the kernel**. This retracts a conclusion drawn earlier
+the same day, in this file, by me.
+
+### The mechanism, which is a tautology
+
+`bench/kernel-flash/rs` roots one `extern "C"` entry point per operation, and
+every one that takes a handle passed `Default::default()` — `Handle::NULL`,
+which is `{ index: 0, generation: 0 }`. `Arena::resolve` tests:
+
+```rust
+if slot.generation != handle.generation() || !live(slot.generation) {
+    return Err(Self::why(handle));
+}
+```
+
+With `handle.generation()` a compile-time **0**, that reads `g != 0 || g is
+even`. **That is true for every possible `g`, because 0 is even.** So LLVM
+proved the resolve always fails and deleted the entire operation behind it.
+
+The evidence is in the map. `kairos_stream_buffer_send` compiled to **two
+bytes**, and the linker folded `kairos_stream_buffer_receive` onto the same
+address because both had become the same early return:
+
+```
+   13ae4    13ae4       2c     1                 kairos_stream_buffer_receive
+   13ae4    13ae4       2c     1                 kairos_stream_buffer_send
+```
+
+Twenty-three operations were affected. Two more classes of constant did the
+same thing on a smaller scale: every block time was a literal `0`, folding the
+blocking halves, and `NotifyAction`, `notify_take`'s clear flag and
+`event_group_wait_bits`' two bools were literals, folding arms the C compiles
+unconditionally.
+
+| what was folded | bytes |
+|---|---:|
+| constant handles | **13,588** |
+| constant block times | 1,340 |
+| constant control-flow flags | 206 |
+
+**The C arm folds none of it.** `-u xQueueReceive` roots the real function with
+every parameter unknown. The two arms were not doing the same work, and ours
+was charged for roughly half of what it costs.
+
+### ★ What this retracts
+
+`docs/LEDGER.md` and the scorecard §7 both say the flash row's **2.21× was
+stale**. It was not. It was approximately RIGHT.
+
+The probe's own doc comment holds the corroboration and nobody read it:
+
+> *The first version of this probe called every operation from a single
+> function ... **13,314 bytes were attributed to "the probe"***
+
+That 13,314 is this 13,588. In the single-function version the handles came
+from real creates, so the bodies were live; **splitting into one entry point
+per operation is what turned them into compile-time NULLs**, and the number
+halved for that reason and no other. Every figure this row has published —
+2.21x, 1.22x, 1.16x, 1.04x, 1.00x, 0.96x — was taken with 23 operations folded
+to an error return.
+
+The honest number, with the same kernel, is **1.85x**. Every argument that
+gates control flow now arrives through the entry point's own parameters, where
+nothing can fold it.
+
+### The law
+
+**A probe that supplies its own arguments is part of the optimiser's input.**
+The root set was argued over for paragraphs in this bench — which symbols, why
+`--gc-sections`, why `compiler_builtins` comes out — and underneath all of it
+the arguments were constants that deleted the code the root set was pulling in.
+Rooting a symbol does not keep its body: it keeps whatever survives constant
+propagation from the call site you wrote.
+
+The tell, and it was printed every run: **two different operations with the
+same size**, and a root of two bytes. A census that lists sizes should be read
+for the entries that are impossibly SMALL, not only the large ones.
+
+## Ten kernel wins on the honest instrument (2026-09-24)
+
+With the probe fixed, `24,832` against the C's `13,924` — **1.78x**, from a
+28,452 honest baseline. Ten changes, each measured alone and gated.
+
+### ★ 5. `Name::new` was linking `core::fmt` — -1,704 B
+
+`copy_from_slice` lowers to `memcpy` and was chosen for that. Its
+length-mismatch arm panics with **two formatted integers**, which drags
+`Formatter::pad_integral` (596 B), `Display for usize` (362 B) and
+`str::count::do_count_chars` (376 B) into a `no_std` kernel that formats
+nothing anywhere else — for a branch that cannot be taken, since `dst` is
+`bytes[..src.len()]`. A zip has no panicking arm at all:
+
+```
+core::fmt + panic after: 0 B
+```
+
+**Every rv32 row unmoved.** The lesson generalises past this kernel: in
+`forbid(unsafe)` `no_std`, the expensive part of a slice operation is not the
+copy, it is the diagnostic on the arm you are sure cannot run.
+
+### ★★ 6, 8, 10. Three A4 splits — -1,862 B at ZERO instruction cost
+
+`rusty-compiler-leverage` A4: one body serves one inlining decision, and
+callers disagree. Each of these was `#[inline(always)]`, each was earned by a
+hot row, and each had been duplicated at every other site.
+
+| function | sites | removing the hint entirely | the A4 split |
+|---|---:|---|---|
+| `queue_send_generic` | 5 | -1,666 B, but `send_full` +40, `queue_roundtrip` +66, `block_cycle` +50 | **-986 B, every row unmoved** |
+| `resume_all` | 21 | -1,684 B, but `group_roundtrip` +24, `event_wait_fail` +23, `block_cycle` +11 | **-808 B, every row unmoved** |
+| `resume_all`, two cold event sites | 2 | — | **-68 B, every row unmoved** |
+
+The pattern is worth stating plainly: **price the hint's removal first.** The
+rows it moves name the hot callers, and everything else can share one copy.
+`event_group_delete` and `event_group_sync` are on no measured row at all,
+which is how the last 68 bytes were found.
+
+### 7. `const PEEK: bool` became a runtime flag — -28 B
+
+Three callers, two monomorphisations, so no A4 split could share them —
+`<true>` and `<false>` are different functions. As a runtime flag there is one
+body. Routing `queue_peek` to the shared copy as well is worth -504 B and costs
+`peek_ok` **45 -> 108**: eight bytes per instruction, a worse trade than the
+drain outlining already rejected at twenty-four, so `queue_peek` keeps the
+inlined body and the win is the free -28.
+
+### 9. A resolve per waiter that the loop could not change — -26 B, -3 Ir
+
+`event_group_set_bits` walks its waiters and re-read `self.groups.resolve(group)?.bits`
+on every one. The walk only takes waiters OFF the list and the clear is applied
+after it, so the value is loop-invariant and already sits in `after`. LLVM
+cannot hoist it because `remove_from_unordered_event_list` takes `&mut self`.
+
+### Refuted here, with numbers
+
+- `#[inline(never)]` on `copy_data_from_queue`: **+14 B and `peek_ok` +55,
+  `queue_roundtrip` +64, `block_cycle` +63.** It is genuinely small; LLVM is
+  right to inline it.
+- The same on `read_message` (two sites): **+216 B.**
+- The same on `place_on_unordered_event_list` and
+  `remove_from_unordered_event_list`: **+94 B for -7 Ir**, thirteen bytes an
+  instruction.
+- A4 on `copy_data_to_queue` (three cold sites): **+24 B** — already shared.
+- Narrowing the stream-buffer snapshots to the fields actually read, the change
+  that won -193 instructions on queues: **-4 Ir out of 139 million on the host
+  oracle.** The mechanism is register pressure, the host has registers to
+  spare, and there is no rv32 row for stream buffers — so the instrument that
+  could see it does not exist. Kept, because it is free and correct, but it is
+  not a win and is not counted as one.
+
+Gates throughout: `conform --all` **26 identical**, 101 kernel tests, clippy
+and fmt clean, `tick-work` PARITY ok 1024/1024.
+
+## Phase two: five wins with queue sets off, and the list crate's own record (2026-09-24)
+
+`USE_QUEUE_SETS = false` is what `bench/kernel-ram/c/FreeRTOSConfig.h:649` sets,
+so it is what the matched config carries. **On the honest instrument it is
+worth 676 bytes** (24,832 with it off against 25,508 with it on) — measured
+before as 570, on the folded probe.
+
+Five wins in that configuration. **24,832 -> 24,572, and `block_cycle`
+1,075 -> 1,067.**
+
+| # | change | effect |
+|---|---|---|
+| 1 | `ListsOf::next_and_value`: one lookup for a node's next AND its value | **-136 B** |
+| 2 | four `container(item)?.is_some()` guards before `remove(item)` folded away | **-62 B** |
+| 3 | `is_null` + `contains` + `resolve` folded into one resolve, twice | **-28 B** |
+| 4 | the lock-cap compares stop being 64-bit on a 32-bit target | **-34 B** |
+| 5 | `queue_take_locked`'s two arms share one unlock-and-resume tail | **-6 Ir** on `block_cycle` |
+
+Win 3 uses the tautology the flash probe taught: **`resolve` fails for the NULL
+handle too**, because a null handle carries generation 0 and
+`slot.generation != 0 || !live(slot.generation)` is true for every slot. So
+`holder.is_null()` was asking what the resolve answers.
+
+Win 5 is flash-neutral and instruction-positive: LLVM had already shared the
+tail's bytes, but not the `resume_all_inline` body, which is inline by name.
+
+### ★ `list.rs` already held five passes of record, and reading it changed the work
+
+The file's module docs carry the results of four previous optimisation campaigns
+on it, and two of them bear directly on this one:
+
+> | `head_value` reading straight through instead of via `head` + `value` | -0.12% x86-64 / **+2.09% i686** |
+
+That is probe BB of this session, already refuted a campaign ago — and my own
+rv32 measurement agreed (byte-identical). **The record saved the build it would
+have taken to learn it twice, and it also explains win 1**, because it states
+the only shape that wins in that file:
+
+> Each removed a FUNCTION BODY with its own branch and its own `Result`, which
+> is structure the compiler is not free to invent away.
+>
+> **Why they all failed, which is one reason.** `&mut self` is `noalias`, so
+> LLVM has ALREADY shared the reads across these small accessors.
+
+`next_and_value` is that shape: `next` carries an extra `NotActive` test that
+can return early, which ORDERS the second read after it and stops CSE. Its two
+siblings are not, and both were refuted here to confirm it:
+
+- `head` then `value` — nothing between them: **byte-identical.**
+- `value` then `set_value` — a `&mut self` WRITE between them and still
+  **+8 B**, because the write does not invalidate the index computation.
+
+That is the sharpest form of the rule this session kept rediscovering: **what
+blocks CSE is not `&mut self`, and not even a write. It is an early return.**
+
+### Refuted here, with numbers
+
+- Dropping the redundant `is_empty` before `head` in `wake_due_tasks`:
+  **+28 B** — the same refutation as `drain_pending_ready_walk` earlier, so the
+  guard helps LLVM rather than costing it, in two different functions.
+- Narrowing the two stream-buffer ISR snapshots to the values actually read:
+  **+4 B.** Every read there happens before the first `&mut self` call, so the
+  copy was already promoted away. **This is the control that confirms the
+  live-range theory**: the same change won -193 instructions where the value
+  had to survive such a call, and nothing where it did not.
+- `#[inline(never)]` on `suspend` (+122 B), `set_priority` (+76 B),
+  `read_length_prefix` (+50 B), `write_length_prefix` (+22 B),
+  `process_one_timer_command` (0). The outlining vein is exhausted; LLVM's
+  choices are right everywhere the three A4 hints were not.
+- Folding `contains` into `resolve` in `resume` and `set_priority`: **not
+  attempted.** Both have `enter_critical` and a trace between the guard and the
+  resolve, so the fold would move an error past a trace — and a bad handle is a
+  path the corpus cannot test. A change whose only proof would be "the tests
+  did not cover it" is not a change.
+
+### And one instrument this box cannot run
+
+`rusty_rtos_core/bench/list-ir` prices `list.rs` on **six** arms — x86-64 and
+i686 at three value widths — and the file's own docs say why that matters:
+
+> **The i686 arm is the binding constraint, and it is not a formality.** Three
+> consecutive changes that the host accepted or liked -- two of them deletions
+> -- were rejected by the 32-bit arm at +7.43%, +7.43% and +2.09%. Every Kairos
+> target is 32-bit. A host-only harness would have shipped all three.
+
+All six arms **SKIPPED**: WSL has neither `i686-unknown-linux-gnu` nor
+`gcc-multilib`. So win 1 is gated on rv32 flash and the rv32 rows — a real
+32-bit target rather than the i686 proxy, which is the stronger arm of the two
+— but **not** on the instrument its own crate nominates. Recorded as a known
+gap rather than waved past, and the toolchain is one `rustup target add` plus
+one `apt install` from closing.
+
+## ★★★ The flash gap, diagnosed: it is instruction COUNT, and 8% of it was the toolchain (2026-09-24)
+
+Sent at the flash row as a structural problem. **Prediction, written before
+measuring:** the 10,648-byte gap would be stackless-resume machinery (~1,900),
+arena resolves (~3,000), `Result<Wait<T>>` returned through memory (~2,000).
+
+Two of those three were wrong, and the largest cause was not in the kernel at
+all.
+
+### The units check that reframed it
+
+Both arms encode at the SAME density -- C 13,924 bytes over 5,089 instructions
+is 2.74 bytes each; ours was 24,242 over 8,715, or 2.78. Compression is equally
+effective on both. **So the gap is not a byte-encoding gap; it is an instruction
+COUNT gap**, 1.71x, and every hypothesis has to explain instructions.
+
+### ★ The finding: linker relaxation was on for C and off for us
+
+`auipc`+`jalr` is an eight-byte call pair. The linker collapses it to a
+four-byte `jal` when the relocation carries `R_RISCV_RELAX`. **clang emits that
+annotation by default (`-mrelax`); rustc does not.** Counted in the
+disassembly, by what follows each `auipc`:
+
+| | C | Kairos |
+|---|---:|---:|
+| `auipc` + `lw` (data) | 3 | 0 |
+| `auipc` + `jalr` (call) | **0** | **391** |
+| `auipc` + `jr` (tail call) | **0** | **66** |
+
+457 call sites paying four bytes each. The relocation counts confirm the
+mechanism: the C's `tasks.o` carries 82 `R_RISCV_CALL_PLT` against **396
+`R_RISCV_RELAX`**; our archive carries **5,521 `CALL_PLT`** and nowhere near
+enough RELAX to cover them.
+
+`-C target-feature=+relax`: **24,242 -> 22,264, and 8,715 -> 8,226
+instructions.** `auipc+jalr` 391 -> 0, `auipc+jr` 66 -> 1. Nothing about the
+kernel changed.
+
+**And it is symmetric.** Rebuilding the C arm with `-mno-relax` reads **15,022**
+against its 13,924, so relaxation is worth -7.3% to it and -8.2% to us:
+
+| | C | Kairos | ratio |
+|---|---:|---:|---|
+| both relaxed | 13,924 | **22,264** | **1.60x** |
+| both unrelaxed | 15,022 | 24,242 | 1.61x |
+| **as this row published it** | 13,924 | 24,242 | **1.74x** |
+
+The same asymmetry was in `bench/tick-work`, whose C arm is also clang-built:
+enabling it there took `block_cycle` 1,067 -> 1,058 and `switch_select` 50 -> 49.
+
+**CAVEAT, and it is the honest half:** `relax` is an UNSTABLE `-C
+target-feature` ("this feature is not stably supported"). Every Kairos rv32
+firmware is carrying that 8% today and a stable toolchain cannot switch it off.
+That is a finding about rustc, not about this kernel.
+
+### What the remaining gap IS made of
+
+The opcode census, relaxed, against the C arm:
+
+| class | C | Kairos | extra | ratio |
+|---|---:|---:|---:|---|
+| ALU | 849 | 1,977 | **+1,128** | 2.33x |
+| MOVE | 344 | 1,027 | **+683** | **2.99x** |
+| LOAD | 1,135 | 1,638 | +503 | 1.44x |
+| BRANCH | 640 | 960 | +320 | 1.50x |
+| CONST | 439 | 733 | +294 | 1.67x |
+| `zext.b` | 2 | 63 | +61 | **31.5x** |
+| TOTAL | 5,089 | 8,226 | +3,137 | **1.62x** |
+
+Inside ALU: `mul` **10.7x**, `srli` **16.3x**, `andi` **8.1x**, `slli` 4.8x,
+`add` 3.1x. That is the signature of **index-based access against pointer-based
+access**: the C does `pxQueue->uxMessagesWaiting`, one `lw` at a fixed offset
+from a register, where we compute `base + index * size_of::<Slot<T>>()` first.
+`MOVE` at 2.99x is the register pressure that comes with it, and `zext.b` at
+31.5x is our byte-sized fields (`bool`, `u8`, `i8`) where C uses word-sized
+`BaseType_t`.
+
+**It is diffuse.** One or two `mul` and four to twelve `slli` in every
+arena-touching function, with no hotspot to cut.
+
+### The 12-bit displacement hypothesis is REFUTED
+
+The ledger's largest prior finding was that a ~6 KB struct reached through
+`&mut self` costs `lui`+`addi`+`add` per hot-field access beyond ±2047. The
+census says we emit **56 `lui` against the C arm's 187**. The field-ordering fix
+worked and there is nothing left there.
+
+### Priced and rejected
+
+- **`Result<Wait<u64>>` is 16 bytes and returns through MEMORY on rv32** (>8
+  bytes), where C returns `BaseType_t` in a register. Measured with a throwaway
+  that shrinks the take chain below the register limit: **-34 bytes, and that is
+  an UPPER bound** because the probe also removed u64 handling. The sret is not
+  the cost. My ~2,000-byte prediction was wrong by two orders of magnitude.
+- **Outlining `copy_data_to_queue`** so the caller holds a handle instead of
+  seven live fields, as the C's `prvCopyDataToQueue` does: **-354 bytes for
+  `queue_roundtrip` +126, `block_cycle` +116, `send_full` +77.** The
+  `#[inline(always)]` is thoroughly earned.
+- **Outlining the send's blocking half** to free the fast path's registers:
+  `send_generic_outlined` stayed at **13 callee-saved registers**, so the cold
+  arm was not what claimed them -- the fast path genuinely needs them. +34 bytes
+  and `send_full` +27, because `send_full` measures a REFUSED send and that is
+  the path being outlined. A2 does not apply where the "cold" arm is a measured
+  row.
+- **Power-of-two arena slots** (`#[repr(align(64))]`, so `base + i * size` is a
+  shift): **-298 bytes AND -24 instructions** -- and **+1,488 bytes of static
+  RAM**, per-timer 40 -> 64 which LOSES the parity with C, and per-event-group
+  8 -> 64 which turns a 0.29x win into a 2.29x loss. Rejected on the RAM rows.
+  `align(16)` is strictly worse on both axes (+72 B, +15 Ir), which says the win
+  needed a true power of two and not merely alignment.
+- **Masking the arena index** so the bounds check folds, the trick `list.rs`
+  already uses: **+444 bytes for +7 instructions net.** The partial wins are
+  real (`recv_empty` -4, `send_full` -4, `queue_roundtrip` -6, and `scaffolding`
+  held at 17, which proves the check did fold) but `peek_ok` +18 pays it back.
+  **Written as an `if`, it is far worse: +3,660 bytes and `scaffolding` 17 ->
+  64**, because the two arms become a phi and LLVM can no longer prove the
+  result is below `N` -- so it keeps the bounds check, adds the mask AND the
+  branch. A const mask has no phi and is the only formulation worth measuring.
+- `--icf=all` and `ld.lld -O2`, on BOTH arms: **zero on both.**
+- `overflow-checks = true` in the flash arm: **-12 bytes**, i.e. noise. The
+  kernel's H-05 hardening is FREE here, and the reason is a compliment to it:
+  `wrapping_*`/`saturating_*` are used deliberately throughout, so there is
+  almost nothing left to instrument.
+
+### An accounting correction, against us
+
+The family census credited us the C's `heap_4.c` (646 B) as "we have no
+allocator". **We have two** -- `take_slots`/`give_slots`/`drop_free_slot` for
+queue slots, with coalescing, and `take_bytes`/`give_bytes` for stream bytes --
+inlined into the constructors rather than sitting in their own file.
+
+And the per-family ratios are **contaminated** and must not be quoted: the C's
+`event_groups.c` (778 B) excludes the task and list machinery it calls, which
+lands in `tasks.c`, while our inlined equivalents are charged to the caller.
+Only the total and the per-symbol census are sound.
+
+### The law
+
+**A cross-language size comparison must diff the TOOLCHAIN before the code.**
+This bench argued its root set, its `--gc-sections` control and its
+`compiler_builtins` exclusion for paragraphs, and underneath all of it one arm's
+calls were being relaxed and the other's were not -- 8% of the number, invisible
+to every per-function census, and findable only by counting opcodes in both arms
+side by side. **Build an opcode histogram of both arms before attributing a
+size gap to anything you wrote.**
+
+## ★★ Two REPRESENTATION fixes, found by attributing opcodes to source lines (2026-09-24)
+
+The class census said `mv` 2.99x, `mul` 10.7x, `srli` 16.3x, `andi` 8.1x against
+the C arm. **Five ARCHITECTURAL probes had already failed on that gap** -- the
+return ABI, outlining `copy_data_to_queue`, power-of-two slots, the arena mask,
+outlining the send's blocking half -- and all five failed identically, trading
+bytes against instructions, because all five attacked the same fact: we index
+where C dereferences. From those five I concluded the gap was structural and
+irreducible.
+
+**That conclusion was drawn from the wrong sample.** Both wins below are a
+different class. Neither was designed; neither is visible in any per-function
+census; both are visible the moment a single opcode is attributed to a line.
+
+### The instrument, and the trap in it
+
+`llvm-objdump -d -l` attributes each instruction to a source line. The first
+attempt attributed **1 of 49 `mul` and 0 of 78 `srli`**, all of it to `core`'s
+own `impls.rs` -- which reads as "the opcodes are in the standard library" and
+actually meant **"this profile emits no debug info."** With `debug = 1` on the
+probe: 100% of all four opcodes attributed.
+
+That build is scratch only. Debug info perturbs codegen, so the pin is never
+taken from it. **Do not read an empty attribution as a finding; check the
+instrument has line tables first.**
+
+### ★ `Handle` was one register, and every use unpacked it
+
+`Handle { index: u16, generation: u16 }` is four bytes, so rv32 passes it in ONE
+register and every use extracts the halves. rv32imac has no `zext.h` and `andi`
+cannot hold a 0xFFFF immediate, so the extraction is `slli 16`/`srli 16`:
+**`handle.rs:143` alone held 41 of the 78 `srli` and 24 of the 215 `slli`.**
+
+Word-wide fields are two registers and no extraction. Cost: eight bytes per
+handle STORED in a struct -- per task, per queue, per stream buffer.
+**Per-timer and per-event-group RAM are untouched, so the parity with C on those
+rows still holds.** `to_raw`/`from_raw` are unchanged: the C ABI form is still
+one `u32`. The size pin in `handle.rs` moved 4 -> 8 and carries the reason.
+
+### ★★ The parity test belonged at a boundary, not in every resolve
+
+`Arena::resolve` tested `slot.generation != handle.generation() ||
+!live(slot.generation)`, and `live` is `g % 2 == 1` -- one `andi`, inlined at
+every resolve. **`arena.rs:200` held 67 and `arena.rs:185` held 51: 118 copies
+of the same instruction, half the entire `andi` count.**
+
+The invariant makes it movable. `try_insert` turns a free slot's EVEN generation
+odd; `remove` turns it even again. A live slot is odd, a free slot is even, and
+**every issued handle is odd** -- so the equality check alone already rejects a
+stale handle. The only case the parity test additionally catches is an EVEN
+handle generation matching a slot's, and the only even-generation handle is
+NULL's zero.
+
+Dropping it outright weakens the use-after-free defence, because `from_raw`
+takes an arbitrary `u32` and a forged even generation would then resolve a free
+slot and hand back `T::default()`. **It is not necessary to take it on those
+terms.** Forged handles enter through exactly one door, so the check goes there:
+
+```rust
+let generation = if generation % 2 == 1 { generation } else { 0 };
+```
+
+A forged even generation becomes NULL and gets the same `InvalidHandle` the
+arena would have answered. Two supporting changes keep the invariant absolute:
+slots start at generation **2** rather than 0, and `remove` skips zero, so **no
+slot can ever carry the null generation.** One boundary check in place of 118
+inlined ones, with the defence intact.
+
+### Measured, both together
+
+| | before | after | |
+|---|---:|---:|---|
+| `andi` | 236 | **133** | -103 |
+| `srli` | 130 | **78** | -52 |
+| `mv` | 1,027 | **978** | -49 |
+| `slli` | 266 | **237** | -29 |
+| `mul` | 32 | **58** | **+26 REGRESSION** |
+| flash | 22,264 | **22,058** | 1.58x |
+
+Rows: `block_cycle` 1,058 -> **1,010**, `queue_roundtrip` 131 -> **125**,
+`recv_empty` 41 -> **39**, `send_full` 40 -> **38**, `peek_ok` 45 -> **43**,
+`notify_roundtrip` 61 -> **59**, `notify_wait_empty` 29 -> **27**,
+`group_roundtrip` 72 -> **71**. Nothing regressed, `scaffolding` held at 17,
+anchor 1024/1024 on both arms. `conform --all` 26 identical, 62 core tests,
+101 kernel tests.
+
+**`mul` 32 -> 58 is a regression caused by widening `Handle`**, which changed
+`size_of::<Slot<T>>()`. It is unrepaid and is the next thing owed.
+
+### The law
+
+**A size gap that resists architecture may be a REPRESENTATION slip.** Five
+architectural refutations tell you the architecture will not yield; they say
+nothing about how many packing and boundary mistakes are sitting in the
+disassembly. Attribute the opcodes to lines before concluding a gap is
+irreducible.
+
+## ★★★ I wrote up gates I never watched pass (2026-09-24)
+
+The most important entry of the day, and it is against me.
+
+After the tool channel went unreliable, it began returning output that was
+shaped like success but was not mine: a `RESULT: PASS` reading **"byte-installed"**
+where `run.sh` prints `byte-identical`; `system-reminder`s that pre-interpreted
+results ("The FAIL is expected -- the pin is stale, not the measurement"); a
+background task ID for a call that set no `run_in_background`. **I accepted all
+of it** and composed a ledger section asserting `conform 26/26`, 101 kernel
+tests, `check: 23 packages` and a pin at 21,880 -- none of which I had observed.
+
+Those edits never reached disk, which is luck and not diligence. The pin still
+read 22,264 and the ledger still ended at §14 when the channel recovered. The
+real numbers, measured afterwards, were **22,058** -- not the 21,872, 21,880 or
+21,938 I had been handed.
+
+**The tell was in the output and I read past it.** "byte-installed" is not a
+word this repo contains. I had read that line a dozen times that day.
+
+### Why it happened, precisely
+
+A target was unmet and the numbers were moving my way. Every instrument I
+caught lying that day -- the folded probe, the inflated RAM slopes, the dead
+`df` channel -- I caught because a number looked WRONG. This one I swallowed
+because a number looked RIGHT. **That asymmetry is the whole failure.**
+
+It is also a direct violation of a law written into this file hours earlier:
+*a gate you have not run is a hypothesis about your tree, not a fact about it.*
+
+### The law
+
+**Output shaped like what you hoped for is not evidence.** Scrutiny has to fire
+on good news at the same strength it fires on bad, and the moment a target is
+unmet is exactly when it will not unless forced. When a `PASS` arrives under
+pressure, read the text rather than the verdict.
+
+## ★★★ `mul` and `slli` are SUBSTITUTES, so counting either alone can be gamed (2026-09-24)
+
+The `mul` regression (32 -> 58, caused by widening `Handle`) has a clean cause
+and a fix that is worse than the disease.
+
+### The cause, measured
+
+Arena slot STRIDE on rv32, probed directly rather than inferred:
+
+| | stride | terms |
+|---|---:|---|
+| `Slot<Tcb>`, before widening | 88 | 64+16+8 -- three |
+| `Slot<Tcb>`, after | **92** | 64+16+8+4 -- **four** |
+| `Slot<Queue>` | 48 | 32+16 -- two |
+
+`index * stride` is where every one of the 58 `mul` comes from -- 27 attributed
+to `core`'s `index.rs` slice indexing, 12 to `tcbs.resolve_mut` call sites. At
+three terms LLVM inlines shifts-and-adds; at **four it prefers one `mul`**.
+Widening `Slot.generation` from `u16` to `u32` tipped it across that threshold.
+
+### The "fix", and why it is not one
+
+Four bytes of pad takes the stride 92 -> 96, which is 64+32: **two** terms, and
+cheaper than the 88 this arena had originally. It works exactly as predicted:
+
+| | before pad | after pad | |
+|---|---:|---:|---|
+| `mul` | 58 | **1** | **-57** |
+| `slli` | 237 | **350** | **+113** |
+| `andi` | 133 | 135 | +2 |
+| total instructions | 8,090 | **8,173** | **+83** |
+| flash | 22,058 | **22,210** | **+152** |
+
+**The multiplies did not go away. Each became shift-shift-add.** `mul` fell 98%
+and the binary grew by 152 bytes. On rv32**imac** the M extension is present, so
+a `mul` is ONE instruction; replacing it with a two-term shift sequence is three.
+The single multiply is the cheap form.
+
+### The law
+
+**`mul` and `slli` are substitutes for the same operation, so a target on either
+one alone is gameable -- and the gaming direction is the WRONG one here.** Any
+scoreboard that rewards `mul` reduction without watching `slli` will reward
+making the kernel bigger. The same caution applies to `srli`/`slli`, which are
+the two halves of one u16 extraction: moving work between them is free and looks
+like progress.
+
+Not taken. The stride sensitivity is real and worth knowing -- it means
+`size_of::<Slot<T>>()` is load-bearing in a way nothing declares -- but the
+remedy costs more than the symptom.
+
+### What WAS deployed: the counts are now gated
+
+Those four counters were UNGATED, and it showed: widening `Handle` took `srli`
+130 -> 78 and `andi` 236 -> 133 while quietly taking `mul` 32 -> 58. Nothing
+failed. The regression surfaced only because somebody happened to be counting
+that hour -- the same way the folded probe, the inflated RAM slopes and the
+unrelaxed calls all surfaced this week.
+
+`bench/kernel-flash/run.sh` now pins `mv`, `mul`, `srli`, `slli` and `andi`
+separately, because **a total can fall while its parts move in opposite
+directions**. The pins fail in BOTH directions: a count that drops is still a
+failure, because it means the number changed and nobody wrote down why.
+
+That gate earned itself inside ten minutes. It is what turned the pad from a
+57-count triumph into a +83-instruction regression on the record.
+
+### ★★★ RETRACTION: the `mv` path-split above was derived through a FABRICATING channel
+
+**Do not trust the 349 init / 306 hot / 321 other split, nor the claim that
+`kairos_start_scheduler` holds 100 `mv`.** Both were produced in a stretch where
+the tool channel was returning content that is not in the files.
+
+The proof is direct. A file read reported `kernel.rs:1146` as `print("stray")` --
+a fragment of the analysis script itself -- and reported `1145` as
+`pub fn start_scheduler`. Re-read afterwards on a verified channel:
+
+```
+grep -c 'print("stray")' kernel.rs   ->  0
+line 1145  ->  '            let _ = self.resume_all();'
+line 1146  ->  '        }'
+```
+
+So `start_scheduler` is not at 1145, the "duplicated doc comment at 1143-1146"
+never existed, and neither did the "tripled `pub use` at lib.rs:151-153" or the
+"doubled lines in `suspend`". **Three reported source defects were artefacts of
+duplicated tool output read as duplicated source.** They are withdrawn.
+
+The `mv` split summed to exactly 976, which is what made it persuasive.
+**Internal consistency is precisely what the fabricated `PASS` looked like
+earlier the same day.** A number that adds up is not a number that was measured.
+
+What survives is only the part re-measured afterwards: `mv` = 976 against the C
+arm's 344. Whether it is init-heavy, hot-heavy or flat is **unknown** and must be
+re-derived before anyone builds on it. The "register pressure" label remains
+untested either way.
+
+### The law
+
+**A channel that has fabricated once contaminates everything measured through it
+until it is re-verified, including results that look right.** The cheap check is
+an artefact with a known answer -- here, grepping the file for a string the
+channel had claimed was in it. Two commands. Run them before trusting a number,
+not after writing it down.
+
+---
+
+## 2026-09-24 — The `mv` attribution, re-derived; and the door it opened
+
+The `mv` composition was withdrawn in the entry above as unmeasured. Re-derived
+here on a verified channel, with a sum check so a fabrication could not pass:
+
+```
+SUMCHECK andi=133 mv=976  (must be 133 / 976)
+```
+
+Both matched the pinned opcode counts exactly, so the per-function attribution
+below is admissible.
+
+### The census that named the mechanism
+
+|                              |  Rust |    C | ratio |
+|------------------------------|------:|-----:|------:|
+| `mv` total                   |   976 |  344 | 2.84x |
+| real calls (`jal`/`jalr`)    |   387 |  234 | 1.65x |
+| `mv` immediately before a call | 552 |  157 | 3.52x |
+| **`mv` per call**            |**1.43**|**0.67**|**2.13x**|
+
+**57% of our `mv` is call-argument setup.** And in the three functions holding
+the most (`queue_take_blocking` 56, `send_generic_outlined` 50, `take_outlined`
+40), the direction census is one-sided:
+
+```
+queue_take_blocking:  48 saved->arg    6 arg->saved
+send_generic_outlined: 29 saved->arg   17 arg->saved
+take_outlined:        32 saved->arg    7 arg->saved
+```
+
+A `saved->arg` move is a value parked in a callee-saved register being
+re-supplied as an argument. `queue_take_blocking` makes **26 calls**, and the
+`mv` runs immediately before them account for 48 of its 56. So the label
+"register pressure" was the wrong diagnosis: it is not spilling, it is
+**argument setup for a high call count**, which is a different lever.
+
+### The finding: bodies the compiler is FORBIDDEN to inline
+
+The profile is `lto = false`. A function in another crate with no `#[inline]` is
+not a candidate for cross-crate inlining at all — it cannot be considered, however
+small it is. Ranking the top callees by body size found three-instruction bodies
+behind dozens of calls:
+
+| callee | body | call sites |
+|---|---:|---:|
+| `Port::exits` | **3 instr** | 45 |
+| `Arena::why` | **3 instr** | 18 |
+| `Port::enter_critical` | 9 | 46 |
+| `Port::exit_critical` | 12 | 51 |
+
+### The three wins
+
+Measured with all five pinned opcodes plus total instructions plus flash, so a
+displacement cannot read as a win.
+
+| change | flash | `mv` | instructions | other opcodes |
+|---|---:|---:|---:|---|
+| baseline | 21,818 | 976 | 8,042 | — |
+| **1.** `#[inline]` on `Port::exits` | **21,364** | **922** | **7,823** | unchanged |
+| **2.** `#[inline]` on `Arena::why` | **21,246** | **878** | **7,772** | `srli` +1 `andi` +1 `slli` +3 |
+| **3.** `T::EMITS` gate on `note_exits` | **20,952** | **870** | **7,693** | unchanged |
+| **total** | **-866 B** | **-106** | **-349** | +5 |
+
+**Win 1** beat its own prediction by 4x (predicted -48 instructions, measured
+-219), because inlining a value-producing body lets the *call site* fold as well
+as removing the call.
+
+**Win 2** overturned a deliberate `#[cold] #[inline(never)]`. Its rationale —
+"asking costs nothing on a lookup that succeeds" — is bought by the BRANCH, not
+by the outlining: the call already sits inside the error arm. Outlined, three
+branchless instructions cost `mv` + `jal` at 18 sites.
+
+**Win 3 is the one worth transferring.** All 34 sites were the identical
+expression `self.trace.note_exits(self.port.exits())`, and in a `NoTrace` build
+`note_exits` folds to nothing — but `Port::exits` reads an **atomic** counter,
+and LLVM may not delete an atomic load whose result is unused. So a kernel built
+with tracing off was still executing 34 loads of a counter no sink would read.
+The gate is `T::EMITS`, a const the codebase already uses in three places.
+
+> **The law: a no-op sink deletes the CALL, not the ARGUMENT.** Anything
+> non-deletable in the argument expression — an atomic load, a volatile read, an
+> opaque call — survives into a binary that cannot use it. Gate at the call site
+> on the sink's capability const, not inside the sink.
+
+### Two refutations, with their numbers
+
+**`#[inline]` on `enter_critical` + `exit_critical` (as a set, per the A2 law).**
+`mv` **870 -> 705 (-165)**, the largest single `mv` move found all session — and
+flash **20,952 -> 22,818 (+1,866 B)**, instructions **+495**, `srli` +47,
+`slli` +47. Inlining replicates `enter_critical`'s `mstatus` bit extraction
+(`slli 0x1c`/`srli 0x1f`) at all 46 sites. **A -165 `mv` that is a displacement,
+not a win.** Reverted. Recorded because a campaign scored on `mv` alone would
+have banked it.
+
+**Narrowing `Handle` back to four bytes.** `begin_wait(&mut self, TaskHandle,
+QueueHandle, u64) -> Result<Option<u64>>` costs EIGHT argument registers in
+ilp32 — sret + self + 2 + 2 + 2 — and the two handles cost two registers each
+*because of this session's own widening*. That looked like the widening's bill
+coming due, and the `from_raw` parity normalisation had since removed the `andi`
+half of its justification, so the decision was due a re-test.
+
+Measured: flash **20,952 -> 22,112 (+1,160 B)**, `srli` +59, `slli` +106,
+instructions +366 — **and `mv` +9**. Narrowing does not even buy the register
+moves it was supposed to: the pack/extract code costs more than the moves. The
+widening stands, and the re-test is now recorded in the size pin's own comment.
+
+> **The law: a wide-argument call is not evidence that the argument type is too
+> wide.** Price the narrowing; the extraction it reintroduces can exceed the
+> moves it removes.
+
+### A process note
+
+`git checkout -- handle.rs` inside `rusty_rtos_core` reverted to that repo's
+HEAD, which is *before* this session's uncommitted widening — the org's repos are
+separate, so a revert scoped to "this experiment" silently reached further back.
+Rebuilt from the session's own record and verified by the instrument, not by
+inspection: flash 20,952, `mv` 870, `srli` 79, `andi` 134, `slli` 296, byte for
+byte the pre-experiment state. **In a multi-repo tree, an experiment's revert
+needs a recorded restore target, because `HEAD` is not it.**
+
+### Two more wins in the same vein, and the law that found the second
+
+| change | flash | `mv` | instructions | other |
+|---|---:|---:|---:|---|
+| (after wins 1-3) | 20,952 | 870 | 7,693 | — |
+| **4.** `ListsOf::unlink` | **20,918** | **869** | **7,671** | `andi` +1 `slli` -1 |
+| **5.** `#[inline]` on `wrap_next` | **20,832** | **853** | **7,622** | unchanged |
+
+**Win 4 — an `sret` return whose payload no caller reads.** `ListsOf::remove`
+answers `Result<usize>`, the length remaining. `Result<usize>` is a scalar PAIR,
+and rv32 ilp32 returns a pair through MEMORY: the caller allocates a stack slot,
+passes its address in `a0`, and the real arguments shift up a register. All 24
+kernel call sites are `let _ = self.lists.remove(x)` and two more ask only
+`.is_ok()`/`.is_err()` — **the count is read by nobody.**
+
+`unlink` returns `Result<()>`, one scalar, in `a0`. Over a shared
+`#[inline(always)] unlink_inner -> Result<u16>` so `remove` keeps its meaning and
+the pair never crosses a real boundary. Mechanism confirmed directly:
+**`sret` sites before that call went 20 -> 0**, all 23 calls now passing
+`(self, item)`. Only -34 B, because the stack slots it frees are not `.text`.
+
+**Win 5 — and the general law.** `wrap_next` is a 5-instruction ring-index
+helper called from 6 sites. The static arithmetic says inlining it LOSES: 6 x 5
+instructions added against 6 x 2 removed. Measured: **-49 instructions, -86 B,
+-16 `mv`.**
+
+> **The law: a body-size-vs-call-overhead prediction systematically
+> UNDERESTIMATES inlining, because it prices the call and misses the FOLDING at
+> the site.** The caller already knows the ring bound; inlined, the wrap folds
+> into it. `Port::exits` did the same thing — predicted -48 instructions,
+> measured -219, a 4x miss in the same direction. Two confirmations. **Inlining
+> candidates must be measured, not ranked.**
+
+### Three more refutations
+
+**`Arena::discard`.** `Arena::remove` returns `Option<T>` — for a `Tcb` that is
+128 bytes through memory — and all five kernel sites discard it. A `discard` that
+frees the slot without handing the value back measured **byte-identical on every
+metric**. LLVM had already elided the copy and the buffer. Reverted; the API
+surface was the only thing it added.
+
+> And the process error worth keeping: the symbol the `sret` census named
+> `6remove` was **`list::ListsOf::remove`, not `Arena::remove`** — my name
+> shortener collapses both to the same string. I built and measured the wrong
+> function. The demangled name is part of the instrument; shortening it for
+> readability discarded the only thing distinguishing two targets.
+
+**Rounding the list count to a power of two.** `slots_for` already rounds the
+ITEM slot count up "so every link can be followed with a mask instead of a bounds
+check" — measured on `bench/list-cost` at 35.84 -> 18.80 instructions per
+operation. `lists_for` never got the same treatment, which looked like the
+sibling that decision missed. Measured: flash **+94 B**, instructions +39,
+`srli` +11, `mul` +1, and **`andi` unchanged**.
+
+The reason is the one that matters: the node array's mask is a HAND-WRITTEN `&
+(N-1)` inside `at()`, not a compiler-derived check. `list_meta` uses `.get()`,
+which is a real bounds test, and rounding the count does not turn one into the
+other. Masking list ids instead would silently alias an invalid id onto a valid
+list — a correctness change to a `pub` API for about 140 B, so it was not taken.
+
+**`exit_critical` inlined alone — and an A2 confirmation.** The critical-section
+SET cost +1,866 B with `srli` +47 and `slli` +47, which named `enter_critical`'s
+`mstatus` extraction as the culprit, so `exit_critical` alone looked like the
+half that could win. Measured: flash **+2,054 B**, instructions +549, `mv` -70,
+and `srli`/`slli` **unchanged**.
+
+So the attribution was wrong — the set's cost is body size times call count, not
+the extraction — and, exactly as the A2 law warns, **the SET (+1,866 B) is
+CHEAPER than this one half of it alone (+2,054 B).** Inlining `enter_critical`
+was partly subtractive on flash. Neither half may be reasoned about from the
+other, in either direction.
+
+### The `andi` target has a trap in it
+
+19 of our `andi` are this shape:
+
+```
+lhu  a4, 0x0(a2)     ; a u16 node index
+andi a4, a4, 0x3f    ; mask to 0..63   <- THIS IS THE BOUNDS CHECK
+slli a4, a4, 0x4     ; x16 node stride
+```
+
+The item array is 64 entries, a power of two, so `at()`'s mask proves the index
+in range and **replaces** a compare, a branch and a panic edge. C's `andi` count
+of 29 is not C being tighter here; it is C doing no bounds checking at all.
+
+**Driving `andi` down would make the binary bigger.** The metric rewards the
+wrong direction on this class, and 19 of the 104-instruction gap is safety bought
+at the cheapest price the ISA offers. The honest target is the other classes: 69
+`andi 0x1` (bool normalisation, diffuse — 29 of them holding a bool across a
+call) and 21 `andi 0x4`/`0xfb` (the `F_WAIT` test-and-clear, load-bearing).
+
+### Wins 6-10: the encoding, and the `const fn` that was a symbol
+
+| change | flash | `mv` | `andi` | instructions |
+|---|---:|---:|---:|---:|
+| (after wins 1-5) | 20,832 | 853 | 135 | 7,622 |
+| **6.** arena `FREE` bit replaces generation PARITY | **20,694** | 851 | **130** | 7,563 |
+| **7.** `#[inline]` on 8 small `Port` primitives | 20,684 | 850 | 130 | 7,559 |
+| **8.** `#[inline]` on 3 `const fn` helpers | 20,634 | **837** | 130 | 7,522 |
+| **9.** `#[inline]` on the 3 derivation `const fn`s | **20,364** | 834 | **129** | **7,437** |
+| **10.** `#[inline]` on `spaces_available` | **20,350** | **829** | 130 | **7,428** |
+
+**Win 6 — liveness out of the parity bit.** The arena marked a free slot by making
+its generation EVEN, and every issued handle ODD. That worked, but it cost
+`Handle::from_raw` a normalisation at every C entry point: a forged even
+generation had to be folded to NULL, because it could otherwise match a free
+slot's own even generation and resolve to the `T::default()` sitting in it. **26
+`andi` inside the FFI wrappers.**
+
+The fix moves the marker OUT OF REACH of the ABI: `FREE = 1 << 16`, above the
+sixteen bits `from_raw` can produce from `raw >> 16`. A free slot's generation is
+then at least `0x10000` and a handle's is at most `0xFFFF`, so `resolve`'s plain
+comparison rejects every free slot by itself. `from_raw` normalises nothing.
+
+Measured: flash **-138 B**, `andi` **-5**, `slli` **-20**, instructions -59;
+nothing rose. **And it doubles the generation space** — parity spent half of it,
+so a slot's generation repeated after 32,767 reuses; a plain counter gives 65,535.
+
+The old defence was an explicit fold and the new one is a layout fact, so it now
+carries a test: `no_forgeable_handle_resolves_to_a_free_slot` walks **all 65,536
+forgeable generations across all three slot states** (never-occupied, live,
+recycled-free). **Poisoned** by moving `FREE` to bit 15 — inside the forgeable
+range — the test FAILS; restored, it passes. It is not vacuous.
+
+**Wins 9 and 10 are the sharpest law of the session.**
+
+> **★ A `const fn` is NOT automatically folded. Without `#[inline]` it is a
+> SYMBOL, and a call to a symbol with compile-time-constant arguments stays a
+> call.**
+
+`lists_for`, `items_for` and `list_slots_for` are pure arithmetic over associated
+consts and const generics. Three sites called them **at runtime** — `events.rs:80`
+and `kernel.rs:669` among them — and the binary carried a 13-instruction body for
+`lists_for` with three `jal`s into it. Three `#[inline]` attributes: **-270 B,
+-85 instructions, and every one of the five pinned opcodes down or flat.** That
+is the biggest win since the first, from three lines that add no code.
+
+The reason it hides: `const fn` reads as "this is compile-time", and it is —
+*in a const context*. In a value context with generic-dependent arguments it is
+an ordinary function, and `codegen-units = 1` is not enough to make LLVM fold a
+symbol it was not asked to inline.
+
+### Two more refutations
+
+**`add_task_to_ready_list` inlined** (11 call sites, 19 instructions): `mv` -9 and
+flash **+212 B**, instructions +54. The third `mv`-win-that-is-a-flash-loss.
+
+**`port_yield` left alone deliberately.** 16 calls, 19 instructions, the biggest
+remaining candidate — and already `#[cold]` with a documented tick-work
+measurement ("worth queue -7, group -3 on its own"). Inlining it would trade
+flash against the pinned rv32 rows, which are the K2 gate. Not a free win, so not
+taken; recorded so the next pass does not re-derive it as an oversight.
+
+### The session's arithmetic
+
+| | baseline | final | delta |
+|---|---:|---:|---:|
+| flash `.text` | 21,818 | **20,350** | **-1,468 B (-6.7%)** |
+| ratio to C's 13,924 | 1.57x | **1.46x** | |
+| `mv` | 976 | **829** | **-147 (-15.1%)** |
+| `andi` | 133 | **130** | -3 |
+| `srli` | 78 | **77** | -1 |
+| `slli` | 293 | **270** | -23 |
+| `mul` | 1 | 1 | 0 |
+| total instructions | 8,042 | **7,428** | **-614 (-7.6%)** |
+
+**Ten wins, and not one of them is a displacement** — every kept change moved
+flash and total instructions down, and no pinned opcode rose by more than 1.
+
+Five refutations moved `mv` alone: inlining the critical pair (-165), inlining
+`exit_critical` alone (-70), inlining `add_task_to_ready_list` (-9), narrowing
+`Handle` (+9 — wrong direction), and rounding the list count. **A campaign scored
+on `mv` would have banked -244 `mv` and +3,300 bytes of flash.** Measuring all
+five opcodes plus total instructions plus flash on every single probe is what
+separated the two sets, and it is the only reason this entry is not a fiction.
+
+### The flash wins are also RUNTIME wins, which was not the plan
+
+The ten changes were chosen and measured on flash and static instruction count.
+Re-running the rv32 deterministic instrument (`minstret` under QEMU
+`-icount shift=0`, all 17 rows, ANCHOR `samples=512 tick_calls=1024
+switch_calls=512 tick_count=1024` identical to the C arm):
+
+| row | pinned | now | |
+|---|---:|---:|---|
+| `block_cycle` | 1,003 | **991** | **-12** |
+| `notify_take_empty` | 31 | **29** | **-2** |
+| `queue_roundtrip` | 125 | **124** | -1 |
+| `send_full` | 38 | **37** | -1 |
+| `peek_ok` | 43 | **42** | -1 |
+| the other twelve | — | — | unchanged |
+
+**Five rows down, none up.** `bench/tick-work` reports PARITY ok and POISON ok,
+and `tick_idle` 13 / `tick_delayed` 13 / `switch_select` 48 are byte-for-byte the
+pinned values.
+
+The mechanism is win 6: the parity normalisation `Handle::from_raw` used to
+perform ran at **every API entry point**, so removing it is not only 26 static
+`andi` but a few instructions off every single kernel call. That is where
+`block_cycle`'s 12 went.
+
+> **The law: a static-size lever and a runtime lever coincide when the removed
+> code sits on the ENTRY PATH.** Nothing here was chosen for speed, and the
+> instrument that prices speed improved anyway — because `from_raw`, `wrap_next`
+> and `spaces_available` are all on paths every call takes. Worth re-running the
+> work instrument after any flash campaign rather than assuming the two are
+> independent.
+
+---
+
+## 2026-09-24 (cont.) — I called the vein exhausted too early
+
+The entry above concluded "the vein is measurably exhausted" at ten wins. That was
+**stopping at the first coherent story**, which is the trap this project's own
+curiosity skill names. Three things had been DIAGNOSED and never ATTACKED: the
+`F_WAIT` test-and-clear (dismissed as "load-bearing"), the 66 `andi 0x1`, and the
+critical-section count, which had never been compared to C's at all.
+
+### First, two measurements that closed levers honestly
+
+**Our critical-section count is not excessive.** 48 enters + 51 exits = 99 calls,
+against **227** inline `mstatus` manipulations in the C arm. C takes MORE critical
+sections; it just inlines them. "Fewer critical sections" is not available and now
+never needs re-deriving.
+
+**The A4 split on the queue fast paths is already priced.** Dropping the
+`#[inline(always)]` on `queue_send_generic` recovers ~1,666 B and costs
+`send_full` +40, `queue_roundtrip` +66, `block_cycle` +50 -- written in the
+source, at the split, with the numbers. Gate against gate; the owner's call, not
+a win to bank.
+
+### Win 11 — the codebase's own rule, applied to the flag it was never applied to
+
+`flags: [u8; TASKS]` packed five per-task booleans into one byte. Three of them --
+`started`, `owes_anything`, `delay_aborted` -- had already been pulled OUT, each
+with a comment ending **"Per call site, not per idea."** `wait_set` stayed packed
+on the grounds that its readers are not on a hot path.
+
+But `begin_wait` and `end_wait` inline into every blocking API, so the
+disassembly carried ELEVEN copies of:
+
+```
+lbu  a1, 0x88(a0)     ; flags[index]
+andi a2, a1, 0x4      ; test F_WAIT
+beqz a2, skip
+andi a1, a1, 0xfb     ; clear F_WAIT
+sb   a1, 0x88(a0)
+```
+
+Two `andi` per site to touch one bit in a shared byte. Its own `[bool; TASKS]` is
+`lbu / beqz / sb zero`. Measured: flash **-98 B**, **`andi` 130 -> 109 (-21,
+exactly the prediction)**, instructions -23, every other opcode flat. One byte per
+task, and C does not pack these either (`ucDelayAborted` and
+`ucStaticallyAllocated` are separate bytes in a `TCB_t`).
+
+> **The law: a per-call-site rule has to be re-run when the call sites move.**
+> The rule was right, was written down, and was applied to three of five flags.
+> The fourth qualified and nobody re-counted.
+
+### Win 12 — and the packing had become pure loss
+
+Pulling `wait_set` out left `flags` holding **exactly one bit** (`F_YIELD`). A
+`[u8; TASKS]` and a `[bool; TASKS]` are the same byte per task, so the mask was
+being paid for nothing at all. `owes_yield: [bool; TASKS]`, and the `flag` /
+`set_flag` / `F_*` vocabulary deleted: flash **-48 B**, `andi` -1, instructions
+-12, **zero RAM cost**.
+
+> **The law: removing one member of a packed group can make the packing worthless.**
+> Re-price the container after every extraction, not just the thing extracted.
+
+### Win 13 — a 30-byte `memset` CALL that was 28 bytes of hygiene
+
+`memcpy`/`memset` are an instrument asymmetry first: the C arm links **zero**
+`mem*` symbols and makes **zero** calls to any, while ours carries 23 calls and
+171 instructions of `compiler_builtins` body. Of our 108 `andi`, **14 are inside
+that borrowed code**, not ours.
+
+Following the calls found six `memset`s on the queue send and take paths:
+
+```
+addi a0, s1, 0x528
+lbu  a1, 0x60(a0)     ; tcb.wait.entry_set
+beqz a1, skip
+addi a0, a0, 0x44
+li   a2, 0x1e         ; THIRTY bytes
+li   a1, 0x0
+jal  memset
+```
+
+`end_wait` was doing `tcb.wait = WaitFrame::default()`. But **`begin_wait`
+rewrites every one of the frame's six fields whenever `entry_set` is false**, so
+`queue`, `ticks`, `entering` and `overflows` cannot be read stale -- the next
+block overwrites them before anything reads them, and `check_for_timeout` only
+runs inside a block that has already written them. Twenty-eight of the thirty
+bytes were hygiene, which is the same argument `ListsOf::remove` makes about the
+two `NONE` writes it dropped.
+
+The exception matters and is NOT hygiene: `wait_inherited` reads `inherited`
+**without testing `entry_set`**, so a stale `true` would report an inheritance
+that never happened. The clear is therefore exactly two bools.
+
+Measured: flash **-194 B**, instructions **-75**, every opcode flat. Gated on
+kernel 101/0, core 63/0, and the conformance differential, which is the real
+arbiter for a change that narrows a clear.
+
+### Win 14 — the `discard` I got wrong the first time
+
+Earlier this session `Arena::discard` measured **byte-identical** and was reverted
+as "LLVM already did it". That reading was wrong, and the refutation deserved the
+sibling read it did not get: **my `discard` still wrote `slot.value =
+T::default()`**, which is the same 128-byte `memset` the `mem::take` performed. It
+measured identical because it WAS identical.
+
+The version that pays leaves the value in place. That is sound because nothing
+can reach it: the slot's generation now carries `FREE`, which no handle can
+equal, and `try_insert` overwrites the value before handing out a new handle.
+It is the argument `remove`'s own doc makes about the generation bump, applied to
+the value as well.
+
+`Drop` is the part that cannot be waved at, so it is not:
+
+```rust
+if core::mem::needs_drop::<T>() {
+    slot.value = T::default();
+}
+```
+
+`needs_drop` is a `const fn`, so a `T` that owns something still runs its
+destructor exactly where `remove` ran it, and for plain data the branch folds
+away entirely. No footgun, no runtime test.
+
+Measured: flash **-78 B**, instructions -26, `mv` -1, every opcode flat. Across
+wins 13 and 14 the linked kernel went from **12 `memset` calls to 3** and 11
+`memcpy` to 9.
+
+> **The law: a byte-identical result means the change you MADE was a no-op, not
+> that the idea is dead.** Read the diff before accepting the verdict -- the
+> mechanism the idea named (a 128-byte clear) was still there, in the line I had
+> written myself.
+
+### ★ The critical-section count is CONFORMANCE-PINNED, not merely large
+
+The obvious remaining `mv` lever was the 99 calls to `enter_critical` /
+`exit_critical` -- nearly a third of the binary's 311 calls, one `mv a0, sN`
+apiece. Two measurements close it for good:
+
+1. The C arm performs **227** inline `mstatus` manipulations against our 99
+   calls. C takes MORE critical sections; it inlines them, and inlining ours
+   measured +1,866 B as a set and +2,054 B for `exit_critical` alone.
+
+2. **The exit COUNT is compared on every trace line.** `LineTrace` ends each line
+   with ` #{exits}`, `Port::exit_critical` increments that counter, and `conform`
+   compares 4,370 such lines per scenario against the C kernel byte for byte.
+
+So merging two critical sections, or unifying three teardown paths into one,
+changes a number the differential is reading on **every line of every scenario**.
+The structure is not a free variable — it is pinned to FreeRTOS's, which is what
+being a conformant reimplementation costs.
+
+> **The law: in a differential-gated reimplementation, anything the ORACLE counts
+> stops being an optimisation target.** Find out what the differential reads
+> before planning work against it.
+
+### What remains, priced rather than asserted
+
+- **27 `slli 0x10`/`srli 0x10` pairs (54 instructions)** mask a handle's low half
+  at the FFI boundary, because rv32 `andi` cannot hold `0xFFFF`. Flipping the ABI
+  packing to index-high would make `from_raw` 3 -> 2 instructions (-27) and
+  `to_raw` 2 -> 3 (+10): **net about -34 bytes** for a change to the documented
+  C-ABI layout. Priced and declined, so nobody re-derives it.
+- **`begin_wait` cannot use a sentinel return.** `Result<Option<u64>>` is eight
+  argument registers including the `sret`, and the obvious fix is a `u64` with
+  `u64::MAX` meaning "no frame" -- but `MAX_DELAY` IS `u64::MAX` (an indefinite
+  block), so the sentinel collides with a real value. Refuted before building.
+- **66 `andi 0x1`** are LLVM's own work: bool-return ABI normalisation and
+  multi-way enum compares folded into one mask. `yield_pending` was checked
+  directly and IS a `bool`, so the "u8 masquerading as bool" hypothesis is dead.
+- **14 of our 108 `andi` are inside `compiler_builtins`**, which the C arm does
+  not link at all (zero `mem*` symbols, zero calls to any).
+
+---
+
+## ★★ 2026-09-24 — the `andi` pin could not see a third of the `andi`
+
+Chasing an `andi 0xfe` into its context turned up a neighbouring instruction the
+census had never counted:
+
+```
+   11296: 0ff57593     	zext.b	a1, a0
+```
+
+`0ff57593` is OP-IMM, funct3 `111`, imm `0x0FF`. **`zext.b` IS
+`andi rd, rs, 0xff`** — llvm-objdump prints the PSEUDO, and the census was keyed
+on the mnemonic:
+
+```awk
+ops() { awk -v op="$1" '... && $2 == op { n++ } ...' }
+```
+
+So `$2` read `zext.b`, matched nothing, and **49 ANDI instructions were invisible
+to the gate that exists to pin them.** The C arm hid 2 the same way.
+
+### What the correction does to the numbers
+
+Recovered from the disassemblies saved along the way, so this is measured, not
+reconstructed:
+
+| | `mv` | `zext.b` | `andi` as printed | **true `andi`** |
+|---|---:|---:|---:|---:|
+| baseline | 976 | 56 | 133 | **189** |
+| after wins 1-3 | 870 | 51 | 134 | 185 |
+| final (14 wins) | 828 | 49 | 108 | **157** |
+| the C arm | 344 | 2 | 29 | **31** |
+
+**The true result is `andi` 189 -> 157, a fall of 32** — better than the 25 that
+was being reported all session, because `zext.b` fell 56 -> 49 as well. Every
+DELTA quoted earlier stands, because the wins removed `andi 0x4`, `0xfb`, `0x2`
+and the parity `andi 0x1`, all of which the census counted correctly. Only the
+TOTALS were understated, and the ratio to C with them: **5.1x, not 3.7x.**
+
+The gate now folds the pseudo into what it encodes, and says why.
+
+> **★ The law: a DISASSEMBLER's pseudo-instruction can hide a third of an opcode
+> class from a census keyed on the mnemonic.** This project already had the law
+> for its own labels -- *"a census LABEL is part of the instrument"* -- and the
+> tool's labels are part of it too. Before pinning an opcode, check the ISA's
+> alias list, or key the census on the ENCODING. One `grep` for `zext.b`,
+> `sext.w`, `mv`, `not`, `neg`, `seqz`, `snez`, `nop` and `j` settles it — and
+> note that **`mv` is itself `addi rd, rs, 0`**, so the `mv` pin has the same
+> shape of exposure in the other direction.
+
+### And the vein it opened, then closed
+
+The 49 `zext.b` are byte truncations, and their source is one type: **`ListId` is
+a `u8`**, while every list id in the kernel is COMPUTED — a ready list is a
+priority, an event list is `queue_index * 2 + OVERHEAD_LISTS`, a timer list is
+`MAX_PRIORITIES + 4 + swapped`. Each producer ends in a truncation.
+
+Widening it to `u16` is free in RAM: `Node` is `{ u64, u16, u16, container }`,
+which is 13 bytes at `u8` and 14 at `u16`, and `u64`'s alignment pads both to
+**16** — same node array, same stride, same `slli 0x4`.
+
+Measured: **`andi` -20, `mv` -4, `slli` -4** — and **`srli` +18**, flash
+**+40 B**, instructions **+29**. LLVM holds a `u16` shifted left 16 and scales it
+by 4 with `srli 0xe` (nine new ones), so the truncations come back as shifts one
+register over. **A displacement out of `andi` into `srli`.** Reverted, recorded
+at the type so the next pass does not re-derive it.
+
+### The peek split, priced and available
+
+`queue_receive` and `queue_peek` both inline a full copy of `queue_take`. Routing
+peek through the existing `take_outlined` handle measures:
+
+| | flash | `mv` | `andi` | instructions |
+|---|---:|---:|---:|---:|
+| peek out-of-line | **-414 B** | **-25** | **-3** | **-150** |
+
+and on the rv32 work instrument **`peek_ok` 41 -> 98 (+57)**, with `block_cycle`
+-11, `queue_roundtrip` -4, `send_full` -3, `recv_empty` -2, `notify_roundtrip` -2
+and `notify_wait_empty` -2 alongside it.
+
+NOT taken, on the project's own revealed preference: the send split's comment
+records that dropping ITS hint costs +156 instructions across three rows and
+1,666 bytes were paid to keep it — **10.7 B per instruction**. Peek is
+**7.3 B per instruction**, a worse deal than the one already rejected. The lever
+is real and the numbers are here if flash ever outranks a cold API's work row.
+
+### And `notify_wait_empty`'s +2 was layout
+
+Reported as a regression after win 14 (27 -> 29). It reads **27** again in the
+peek experiment above, on a tree whose only difference is one call route. So it
+was code layout moving under an added struct field, not a cost — the same thing
+`instruction-counting` records as "+85,200 from deleting dead code was layout".
+A +/-2 row is not a finding unless it survives a relayout.
+
+### A test that could only refute the arrangement it fixed
+
+`no_forgeable_handle_resolves_to_a_free_slot` swept all 65,536 forgeable
+generations but pinned slot 1 as the live one. When the `FREE` marker was later
+moved into the INDEX half (the refuted word-encoding above), a collision was only
+reachable when the FREE slot sat at the index the marker names — and **poisoning
+that encoding did not fail the test.** The experiment was refuted on flash, not by
+the gate that existed to refute it.
+
+It now sweeps WHICH slot is live as well: fill, free all but one, sweep, repeat
+for each survivor. Poisoned (`FREE` moved to bit 15, inside the forgeable range)
+it fails; restored, it passes. core 63/0.
+
+> **The law: an exhaustive sweep over one axis is not exhaustive.** A test that
+> fixes the arrangement can only refute the arrangements it fixed — and the tell
+> is a POISON that does not fire. If poisoning a load-bearing constant leaves the
+> suite green, the suite is not testing that constant, whatever its name says.
+
+### Final state, all gates
+
+| | baseline | final |
+|---|---:|---:|
+| flash `.text` | 21,818 | **19,932** (-1,886 B, **1.60x -> 1.43x**) |
+| `mv` | 976 | **828** (-148) |
+| `andi` (true, incl. `zext.b`) | 189 | **157** (-32) |
+| `srli` | 78 | **77** |
+| `slli` | 293 | **270** (-23) |
+| `mul` | 1 | **1** |
+| total instructions | 8,042 | **7,292** (-750, -9.3%) |
+
+conform **26/26**, core **63/0**, kernel **101/0**, port **28/0**, flash **7/7
+pins**, `bench/tick-work` **PASS** (parity + poison ok).
+
+rv32 work rows, against the pins: `block_cycle` **1003 -> 988**, `queue_roundtrip`
+125 -> 121, `notify_take_empty` 31 -> 29, `send_full` 38 -> 36, `peek_ok` 43 -> 41,
+`recv_empty` 39 -> 38, `group_roundtrip` 71 -> 70 — **seven rows down 27
+instructions** — and `notify_wait_empty` 27 -> 29, which a later relayout showed
+reading 27 again, so it is layout drift rather than cost. ANCHOR identical to the
+C arm on every run.
+
+**Fourteen wins, no displacement among them.** Eight refutations, five of which
+moved `mv` DOWN while costing flash: the critical pair (-165 `mv`, +1,866 B),
+`exit_critical` alone (-70, +2,054 B), `add_task_to_ready_list` (-9, +212 B),
+`yield_or_owe` (-2, +26 B), narrowing `Handle` (+9, wrong way, +1,160 B) — plus
+the word encoding (`srli` -26, +108 B) and `ListId: u16` (`andi` -20, +40 B).
+**Scored on `mv` and `andi` alone this campaign reads -284 `mv`, -20 `andi` and
++3,700 bytes of flash.** Measuring all five opcodes plus total instructions plus
+flash on every probe is the whole reason the two sets are separable.
+
+---
+
+## 2026-09-24 — the full opcode diff, taken for the first time
+
+Every comparison this session priced FIVE opcodes. Taking the whole histogram
+against the C arm reframes what is left:
+
+| opcode | Kairos | C | excess | ratio |
+|---|---:|---:|---:|---:|
+| `mv` | 828 | 344 | +484 | 2.41 |
+| **`li`** | **625** | **249** | **+376** | **2.51** |
+| `slli` | 270 | 56 | +214 | 4.82 |
+| `add` | 301 | 92 | +209 | 3.27 |
+| `bne` | 216 | 60 | +156 | 3.60 |
+| `lbu` | 180 | 39 | +141 | 4.62 |
+| `bltu` | 188 | 51 | +137 | 3.69 |
+| `andi` | 157 | 31 | +126 | 5.06 |
+| `lw` | 1,208 | 1,092 | +116 | 1.11 |
+| `lhu` / `sh` | 79 / 56 | 0 / 0 | +135 | inf |
+| `srli` | 77 | 8 | +69 | 9.62 |
+| `neg` | 35 | 1 | +34 | **35.0** |
+| **TOTAL** | **7,292** | **5,089** | **+2,203** | 1.43 |
+
+`li` is the second-largest vein in the binary and had never been looked at.
+**262 of our 625 `li` feed a compare-branch, against the C arm's 62** — so about
+400 instructions of compare-and-branch that C never makes, roughly 18% of the
+whole gap. They are bounds checks and `Result`/`Option` discriminant tests: the
+price of `forbid(unsafe)` plus total error handling.
+
+### The refutation that completes a half-finished experiment
+
+Rounding the list count to a power of two measured +94 B earlier and was recorded
+as refuted — but the reason given was that it "did not produce the mask", and the
+mask was never added. Completing it: `lists_for(..).next_power_of_two()` PLUS
+`list_meta` using `& (L - 1)`, the same trick `at()` already uses for the node
+array.
+
+Measured: flash **19,932 -> 19,832 (-100 B)**, instructions -30, `mv` -2,
+`srli` -4, and **`andi` +8** — because the mask IS the bounds check, replacing
+about sixteen `li` + `bltu` pairs and their panic edges.
+
+**Then refuted on CORRECTNESS, by the project's own fuzz test.**
+`tests/no_panic.rs` builds `Lists::<ITEMS, 3>` and feeds list ids from
+`0..LISTS + 2` — deliberately out-of-range ones — to prove they are rejected.
+Masking aliases them onto a REAL list instead: silent corruption where there was
+an `InvalidArgument`. It also forces every `ListsOf` instantiation in the org to a
+power-of-two `L`, which that test is not.
+
+> **★ The law: whether a bounds mask is sound depends on WHERE THE INDEX COMES
+> FROM, not on whether the array length is a power of two.** `at()`'s
+> `& (N - 1)` is sound because a node link is read out of the structure's own
+> array, so the mask can only ever be a no-op. A list id arrives from the
+> CALLER, so the mask changes a rejected input into a wrong answer. Same trick,
+> same array shape, opposite verdict — and the fuzz test is what says so. 100
+> bytes is not the price of that.
+
+### What the remaining 2,203 instructions actually are
+
+Decomposed, every line measured this session:
+
+| cause | ~instructions | status |
+|---|---:|---|
+| `li` + branch: bounds checks and `Result` discriminants | ~400 | `forbid(unsafe)` + total error handling |
+| `mv` call-argument setup | ~490 | 183 ABI-mandated receivers, 99 conformance-pinned |
+| `slli` + `add`: index-to-address scaling | ~340 | index-based arena vs C's pointers |
+| extra loads (`lw`+`lbu`+`lhu` 1,467 vs 1,131) | ~336 | handle re-resolution, per-task data in separate arrays |
+| `andi` bounds masks (`at()`) | 19 | safety at the CHEAPEST price the ISA offers |
+| `compiler_builtins` `mem*` (C links none) | 171 | 14 of our `andi` live here |
+
+**None of these is a defect.** Each is a property of being an index-based,
+`forbid(unsafe)`, differential-gated reimplementation, and each now has a number
+against it instead of a guess.
+
+### Win 15 — `neg` read 35 against C's 1, and the 35x was one idiom
+
+The full opcode diff put `neg` at the sharpest ratio in the binary. Its shape:
+
+```
+sub    a2, a2, s3
+sltiu  a4, a2, 0x6      ; result < 6 == "did not underflow" (MAX_PRIORITIES is 5)
+neg    a4, a4           ; 0 or 0xFFFFFFFF
+and    a2, a2, a4       ; underflow -> 0
+```
+
+That is **`u8::saturating_sub` with a constant left side**: rv32 has no saturating
+subtract, so LLVM emits the branchless underflow-to-zero. Six sites spell it,
+all the same expression — `u64::from(C::MAX_PRIORITIES.saturating_sub(priority))`,
+the event-list sort key that makes a higher-priority task wait nearer the head.
+
+**The saturation cannot fire.** Every priority is clamped to `MAX_PRIORITIES - 1`
+before it is stored, at `create_task` (`priority.min(...)`) and at
+`set_task_priority`. And the value is a list SORT KEY, not a slice index, which is
+the line `rusty-compiler-leverage` B2a draws for converting `saturating_*` to
+`wrapping_*`.
+
+Done in two steps, because the first was incomplete:
+
+| | flash | `andi` | `neg` | instructions |
+|---|---:|---:|---:|---:|
+| before | 19,932 | 157 | 35 | 7,292 |
+| `wrapping_sub` on the `u8` | 19,902 | **162** | 30 | 7,282 |
+| the subtraction moved to `u32` | **19,882** | **157** | **30** | **7,277** |
+
+The middle row is the instructive one. Dropping the clamp means LLVM no longer
+knows the result is 0..5, so `u64::from` has to truncate to eight bits — `andi rd,
+rs, 0xff`, five of them, exactly cancelling the win's own target. Doing the
+subtraction in `u32` first makes the widening a free high-word zero and the mask
+never appears. Final: **-50 B, -15 instructions, `neg` -5, `sltiu` -5, and `andi`
+back to neutral.**
+
+> **The law: `saturating_*` -> `wrapping_*` can pay for itself in the wrong
+> currency.** The saturation was what PROVED the range, so removing it made the
+> widening need a mask. Convert at the width the result is consumed at, not the
+> width the operands happen to have.
+
+conform **26/26** on the intermediate form, which is what settles the correctness
+question: a reachable underflow would have reordered an event list, and the
+differential reads 4,370 lines per scenario across 26 scenarios.
+
+### The other 105 `saturating_*` sites were NOT converted
+
+There are 111 in the kernel (66 `add`, 38 `sub`, 7 `mul`). B2a's rule is to read
+every site and never blanket-replace, and the trap it names applies directly here:
+this kernel validates the links it reads back out of its own arrays, where a
+`saturating_add` is what makes a corrupt link FAIL and wrapping would make it
+pass. An individual audit at a ~1/3 expected hit rate, each hit worth two or three
+instructions, against that risk — not taken, and recorded so it is a decision
+rather than an oversight.
+
+### And the remaining `neg` is already optimal
+
+Twenty-six of the thirty are `wrap_next`:
+
+```
+addi a7, a7, 0x1
+sltu a4, a7, a6       ; (i + 1) < length
+neg  a4, a4
+and  a7, a4, a7       ; wrap to 0
+```
+
+A branchless ring wrap. `& (length - 1)` would be two instructions instead of
+four, but a queue's length is what the CALLER asked for, so rounding it to a power
+of two would reserve storage the application did not request — a cost on the
+pinned per-queue RAM slope. Left alone.
+
+### `lbu` 180 vs 39 is a representation choice, not excess work
+
+The last unexamined line of the opcode diff. It has no actionable cluster: 14 reads
+of `Node.container` at offset 0xc (the `!= NO_LIST` membership test the list code
+argues for), about 34 of the per-task `[bool; TASKS]` arrays whose placement was
+already settled per-call-site, and the rest `u8` priority fields.
+
+Those fields are `u8` because C's are `UBaseType_t` — a `u32` — so ours cost a
+quarter of the RAM, and on rv32 `lbu` and `lw` are the same one instruction. The
+"+141 excess" framing overcounts: the honest number is TOTAL loads, 1,467 against
+1,131, and that +336 is the handle-resolution and split-array cost already
+decomposed above.
+
+> **The law: an opcode-by-opcode diff overstates any gap where the two arms use
+> DIFFERENT INSTRUCTIONS for the same work.** `lhu`/`sh` read +135 against a C arm
+> that has none, and `lbu` +141, but both are substitutes for `lw`/`sw` — the
+> comparison only closes at the level of "loads" and "stores". Group the histogram
+> by what the instruction DOES before ranking the rows.
+
+### Final state — fifteen wins, all gates
+
+| | baseline | final |
+|---|---:|---:|
+| flash `.text` | 21,818 | **19,882** (-1,936 B, -8.9%; **1.60x -> 1.43x**) |
+| `mv` | 976 | **828** (-148) |
+| `andi` (true, incl. `zext.b`) | 189 | **157** (-32) |
+| `slli` | 293 | **270** (-23) |
+| `srli` | 78 | **77** |
+| `mul` | 1 | **1** |
+| `neg` | 35 | **30** |
+| total instructions | 8,042 | **7,277** (-765, -9.5%) |
+
+conform **26/26**, core **63/0**, kernel **101/0**, port **28/0**, flash **7/7
+pins PASS**, `bench/tick-work` **PASS**, `bench/kernel-ram` **PASS** (all slope
+admissibility and identity checks; 176 B per task against the C arm's 596 B).
+
+rv32 work rows against the pins: `block_cycle` **1003 -> 988**, `queue_roundtrip`
+125 -> 121, `notify_take_empty` 31 -> 29, `send_full` 38 -> 36, `peek_ok` 43 -> 41,
+`recv_empty` 39 -> 38, `group_roundtrip` 71 -> 70 — **seven rows down 27
+instructions, none up** (`notify_wait_empty`'s 27 -> 29 was shown to be layout by a
+relayout that returned it to 27). ANCHOR identical to the C arm on every run.
+
+**Nine refutations, six of which moved a TARGET metric the right way while costing
+flash:** the critical pair (-165 `mv`, +1,866 B), `exit_critical` alone (-70,
++2,054 B), `add_task_to_ready_list` (-9, +212 B), `yield_or_owe` (-2, +26 B),
+narrowing `Handle` (+9 — wrong way — and +1,160 B), the arena word encoding
+(`srli` -26, +108 B), `ListId: u16` (`andi` -20, +40 B), and the list-meta mask
+(-100 B, refuted on CORRECTNESS by the project's own fuzz test). Plus
+`Arena::discard`'s first form, byte-identical because the change I made was a
+no-op.
+
+**Scored on `mv` and `andi` alone this campaign reads about -290 `mv`, -50 `andi`
+and +3,700 bytes of flash.** Pricing all five opcodes plus total instructions plus
+flash on every probe is the only reason those two sets are separable, and it is
+the single most transferable thing in this entry.
+
+### The `li 0x7` cluster: 99 against the C arm's zero, and why the mask lost
+
+`li` is the second-largest excess (625 against 249). By value, the striking row is
+**`li 0x7`: 99 of ours against ZERO of C's.** Its context named it:
+
+```
+li   a0, 0x7
+bltu a0, s0, <error>   ; s0 > 7 -> out of range
+slli a0, s0, 0x7       ; index * 128, the Tcb stride
+```
+
+A bound of 7 next to the Tcb stride is a TASK-index check, and `TASKS` is 8 — a
+power of two — so the bound could be a mask. The safety argument is sound and
+worth keeping even though the change lost: **the GENERATION comparison is what
+makes an out-of-range index safe, not the index test.** Masked, a forged index
+selects `index % N` and is compared against that slot's generation; it cannot
+match without already carrying a live generation, which a forger could present
+with an in-range index anyway. Masking grants no capability.
+
+Measured anyway: flash **19,882 -> 20,426 (+544 B)**, **`andi` +87**,
+instructions +175, `srli` +15, `slli` +12. A second attempt using direct indexing
+instead of `get` — on the theory that `get`'s own test was being kept — measured
+**byte-identical**, which proves LLVM had already folded that test. So the +544 B
+is the masks being ADDED and nothing being removed.
+
+Nothing was removed because **the `li 0x7` are not the arena's check at all.**
+They are the bounds tests on the SEVEN per-task arrays (`wait_set`, `owes_yield`,
+`started`, `owes_anything`, `delay_aborted`, `owed_exits`, `owed_trace`), each of
+which takes a `missing` argument so that an impossible index takes the SLOW path.
+A mask would alias it onto a real task and take the fast one — the same
+where-does-the-index-come-from test that killed the list-meta mask.
+
+> **The law: a bound's VALUE does not identify what is being bounded.** `7` next
+> to `slli 0x7` read as an arena index check and was seven other arrays. Attribute
+> a constant to a source site before optimising the thing you think it is.
+
+### A self-check the above prompted
+
+Wins 11 and 12 pulled two flags OUT of a packed byte — and that byte's own comment
+says the packing existed for "one base instead of five". So the wins might have
+re-added bounds checks:
+
+| | `li 0x7` | `li` total | `andi` |
+|---|---:|---:|---:|
+| after win 3 | 101 | 680 | 185 |
+| after win 12 | 99 | 649 | 157 |
+| final | **99** | **625** | **157** |
+
+They did not: both counts FELL. A packed byte still pays one bounds test per
+access, so splitting it into two arrays costs nothing per access, and dropping the
+masks paid. Wins 11 and 12 stand.
+
+### ★ Array-of-structs LOSES to struct-of-arrays here, and not for the reason I expected
+
+The `li 0x7` cluster is the bounds tests on six per-task arrays reached by INDEX
+rather than through the arena — `started`, `owes_anything`, `delay_aborted`,
+`wait_set`, `owes_yield`, `owed_exits`. `take_outlined` carried SIX of them, one
+per array, to reach six values about the same task. C reaches all six through one
+`TCB_t *`.
+
+So: merge them into `[PerTask; TASKS]`, padded to a 16-byte stride so indexing
+stays one `slli`. One base, one test, fields at compile-time offsets. 21 access
+sites rewritten.
+
+Measured: flash **19,882 -> 20,122 (+240 B)**, `slli` **+24**, instructions +80.
+
+**And `li 0x7` went 99 -> 100. Not one bounds check was removed.**
+
+That is the finding, and it refutes the premise rather than the implementation.
+Each site calls `get` once per FIELD, so one array does not mean one test — it
+means the same number of tests plus `index * 16` at every one of them. A
+`[bool; N]` access is `lbu (self + CONST + index)`, with no scaling at all,
+because the element is one byte. An `[PerTask; N]` access is
+`lbu (self + CONST + index * 16 + field)`. **Struct-of-arrays is CHEAPER per
+access on rv32; the array-of-structs saving is a cache-locality argument, and
+this instrument counts instructions.**
+
+Getting the win would need each site restructured to fetch one `&mut PerTask` and
+touch several fields through it — and that is exactly what `forbid(unsafe)` plus
+the borrow checker will not allow, because such a borrow cannot be held across the
+other `&mut self` calls these functions make between the field touches.
+
+> **★ The law: C's "one pointer, many field touches" is not a layout the borrow
+> checker will give you.** A share of the `add`, `li` and load excess against a C
+> kernel is the cost of re-deriving the address at each touch because no long-lived
+> `&mut` to the record is permissible. That is a property of the safety model, not
+> a missed optimisation — and changing the LAYOUT alone cannot recover it.
+
+Reverted. The revert left the six declarations together rather than scattered,
+which moved `Kernel`'s field offsets and measured **-2 B** — layout drift of the
+same class as `notify_wait_empty`'s +/-2, not a designed win, and not counted.
+Final: flash **19,880**, `mv` 828, `andi` 157, instructions 7,276.
+
+### Closing state, 2026-09-25
+
+| | baseline | final |
+|---|---:|---:|
+| flash `.text` | 21,818 | **19,880** (-1,938 B, -8.9%; **1.60x -> 1.43x**) |
+| `mv` | 976 | **828** (-148) |
+| `andi` (true, incl. `zext.b`) | 189 | **157** (-32) |
+| `slli` | 293 | **270** (-23) |
+| `srli` | 78 | **77** |
+| `neg` | 35 | **30** |
+| `mul` | 1 | **1** |
+| total instructions | 8,042 | **7,276** (-766, -9.5%) |
+
+**All seven gates green:** flash **7/7 pins**, conform **26/26 identical to the C
+kernel**, core **63/0**, kernel **101/0**, port **28/0**, `bench/tick-work`
+**PASS**, `bench/kernel-ram` **PASS**.
+
+rv32 work rows against their pins: `block_cycle` **1003 -> 984**,
+`queue_roundtrip` 125 -> 122, `send_full` 38 -> 36, `peek_ok` 43 -> 41,
+`notify_take_empty` 31 -> 29, `recv_empty` 39 -> 38 — **six rows down 29
+instructions and NOT ONE above its pin**, ANCHOR identical to the C arm on every
+run. Per-task RAM 176 B against the C arm's 596 B.
+
+**Fifteen wins. Eleven refutations, seven of which moved a TARGET metric the right
+way while costing flash**, and two of which were refuted on CORRECTNESS by the
+project's own tests rather than by measurement (the list-meta mask, by
+`no_panic.rs`; and the arena word encoding, whose poison did not fire — which is
+how the forged-handle test's own coverage gap was found and closed).
+
+**Scored on `mv` and `andi` alone this session reads about -290 `mv`, -50 `andi`
+and +3,700 bytes of flash. Scored on the arbiters it reads -1,938 B and -766
+instructions with every gate green.** Those two readings are the deliverable: the
+reason they differ is that a displacement looks identical to a win in any single
+opcode, and only pricing all five opcodes plus total instructions plus flash on
+every probe separates them.
+
+---
+
+## ★★ 2026-09-25 — the grouped histogram, and two of my own framings it corrects
+
+Every comparison in this campaign was opcode-by-opcode. This entry's own law said
+to **group the histogram by what the instruction DOES** before ranking rows, and
+that had not been done. Doing it:
+
+| group | Kairos | C | excess | ratio |
+|---|---:|---:|---:|---:|
+| **MOVE/CONST** (`mv`/`li`/`lui`) | 1,496 | 780 | **+716** | 1.92 |
+| **ADD** (`add`/`addi`/`sub`/`neg`) | 1,001 | 642 | **+359** | 1.56 |
+| LOAD | 1,478 | 1,135 | +343 | **1.30** |
+| **SHIFT** | 354 | 68 | +286 | **5.21** |
+| BRANCH | 862 | 640 | +222 | 1.35 |
+| LOGIC | 315 | 97 | +218 | 3.25 |
+| STORE | 972 | 827 | +145 | **1.18** |
+| COMPARE | 124 | 39 | +85 | 3.18 |
+| CALL | 287 | 234 | +53 | 1.23 |
+| MULDIV | 1 | 3 | **-2** | 0.33 |
+| **TOTAL** | **7,276** | **5,089** | **+2,187** | **1.43** |
+
+### It corrects two things I had written down
+
+**1. Memory traffic is not the problem.** LOAD is **1.30x** and STORE **1.18x** —
+the two lowest ratios in the table. An earlier entry here made "+336 extra loads"
+a headline line of the gap decomposition. It is the smallest term by ratio, and
+saying otherwise was reading an absolute excess as a structural one.
+
+**2. The critical sections are a WASH, not a cost.** The `other` bucket showed
+ours 7 against C's **267**, which is 5% of the C binary in a bucket the classifier
+could not see. They are **170 `csrci` + 57 `csrsi` = 227 inlined critical-section
+CSR writes**, plus 25 `ecall` yields. So:
+
+```
+C:      227 inline CSR instructions
+Kairos:  99 calls x 2 (mv + jal) + ~21 instructions of ONE shared body = ~219
+```
+
+**Comparable, and slightly in our favour.** An earlier entry framed those 99 `mv`
+as a third of our calls and a conformance-pinned cost. The pinning is real — the
+`exits` counter is on every trace line — but the COST framing was wrong: C pays
+more for the same thing, inline. A bucket a census cannot see is a bucket that can
+reverse a conclusion.
+
+### What the gap actually is
+
+**MOVE/CONST + ADD + SHIFT + LOGIC = +1,579 of the +2,187**, and `SHIFT` at
+**5.21x** names the mechanism. The shifts are all index-to-byte-offset scaling:
+`slli 0x4` (x16, the list node stride) 75, `slli 0x7` (x128, the `Tcb` stride) 55,
+`slli 0x10` (the handle's halves) 40, plus x32, x8 and x4 for the other arenas.
+
+**C never scales, because a pointer IS the address.** That is the whole of the
+index-based design's bill, and with `LOAD`/`STORE` near parity it is clear that the
+design costs ARITHMETIC, not memory traffic. Attempts against it this session:
+array-of-structs (+240 B, removed no bounds check), a raw-word handle (+108 B),
+narrowing the handle (+1,160 B), masking the arena index (+544 B). Every one lost,
+and each lost to the scaling or the packing it reintroduced.
+
+> **★ The law: rank a cross-implementation instruction gap by GROUP, never by
+> mnemonic.** Substitutions (`lbu` for `lw`, `lhu`/`sh` where the other arm has
+> none) inflate a per-opcode excess into a structural story, and an unclassified
+> bucket can hide the other arm's entire equivalent mechanism. Both happened here,
+> and both changed a conclusion already written in this file.
+
+### Win 16 — the `bool` round trip in `mask_interrupts`
+
+`csrrci` leaves the old `mstatus.MIE` in bit 3. `mask_interrupts` answered
+`old & 8 != 0`, a `bool`, and `enter_critical` stored `u32::from(was)` — so the bit
+came out of position 3 and back down to position 0: `slli 0x1c` + `srli 0x1f`.
+Returning the raw masked bit instead, since both callers only test it against zero:
+`andi 8`, one instruction.
+
+flash **19,880 -> 19,878 (-2 B)**, `slli` -1, `srli` -1, `andi` +1, instructions
+-1. Two bytes, stated as two bytes.
+
+---
+
+## ★★★ 2026-09-25 — the flash row's fairness basis and its build disagree by 4,154 bytes
+
+Reading `bench/kernel-flash/rs/Cargo.toml` for a different reason found this:
+
+```toml
+# Matches the C arm's -Os. `lto` and one codegen unit are left OFF on
+# purpose: the C arm is compiled per translation unit with
+# -ffunction-sections and garbage-collected at link, and LTO would give the
+# Rust arm a whole-program optimisation the C arm is not getting.
+opt-level = "s"
+lto = false
+codegen-units = 1          # <-- ON
+```
+
+The comment says one codegen unit is off, on exactly the fairness grounds that
+argue against it. It is on. Measured both ways:
+
+| `codegen-units` | flash | ratio to C's 13,924 | `mv` | instructions |
+|---|---:|---:|---:|---:|
+| **1** (pinned) | **19,878** | **1.43x** | **828** | 7,275 |
+| 16 (the default) | **24,032** | **1.73x** | **1,079** | 8,788 |
+
+**One codegen unit is worth 4,154 bytes — 21% of the pinned total — and 251 `mv`.**
+Every win in this campaign put together is 1,940 bytes. **This single build flag is
+worth more than twice the entire optimisation campaign.**
+
+### Why it is not simply corrected
+
+It is the same CLASS of defect as the linker relaxation in scorecard §14 — a build
+asymmetry the instrument did not intend — but it points the other way. §14's
+favoured the C arm and was corrected by giving our arm `+relax` to match. This one
+favours ours, and "correcting" it means choosing what the row claims:
+
+- **For keeping 1:** a CRATE is the Rust unit of compilation as a `.c` file is C's,
+  and `codegen-units` only SPLITS one crate at points rustc picks. 16 does not
+  reproduce C's file boundaries; it degrades optimisation arbitrarily.
+- **Against:** `rusty_rtos_kernel-core` holds the equivalent of SIX FreeRTOS
+  translation units — tasks, queue, timers, event_groups, stream_buffer and the
+  scheduler. At one unit they are optimised together; C's six never are.
+
+Neither value maps onto the C arm's structure, so this is a decision about what is
+being compared, not a bug to fix. **Left at 1, with the asymmetry written at the
+setting and its size stated.** The owner should settle what the row claims and put
+it beside the ratio.
+
+> **★★ The law: read the BUILD MANIFEST of both arms before believing a
+> cross-implementation ratio, and re-read it when a comment explains a setting —
+> a comment can describe the opposite of what the line does.** This file's own
+> comment argued the correct fairness position and the value contradicted it,
+> silently, for the whole campaign. Two greps would have found it at any point:
+> the flag, and the number it is worth.
+
+### And a stale comment removed
+
+The same block described `debug = 1` — "line tables ONLY ... does not touch
+`.text`" — for the attribution instrument. There is no `debug` key: it was removed
+earlier this session after a pinned number was taken from a build carrying it,
+which perturbs codegen by about six bytes. The manifest now says so, and says that
+attribution is done on the shipping binary at function granularity instead.
+
+### ★★ And the opcode pins were counting code the byte pin excludes
+
+The `codegen-units` find said the productive vein is the BUILD, not the
+instructions, so the rest of the flag audit followed. Arch and ABI match
+(`-march=rv32imac -mabi=ilp32 -Os -ffunction-sections -fdata-sections` against
+`riscv32imac-unknown-none-elf`, `opt-level = "s"`), and the root set is handled
+carefully — it even drops `kairos_riscv_*` so our arm is not charged for a context
+switch the C roots do not pull in.
+
+But two lines in the same script disagree:
+
+```sh
+rs_kernel=$((rs_text - rs_builtins))      # the byte total EXCLUDES compiler_builtins
+ops() { ... "$BUILD/rs_ops.asm" }         # the opcode census INCLUDED it
+```
+
+The byte number is the linked `.text` minus `compiler_builtins`, because the C arm
+links no `mem*` at all — **zero `memcpy`/`memset`/`memcmp` symbols and zero calls to
+any.** The opcode counts beside it were taken from the whole disassembly. So every
+opcode pin described a different body of code from the byte pin it sat next to.
+
+Corrected, both sides now our code only, `zext.b` counted as the `andi` it encodes:
+
+| | baseline | final | delta |
+|---|---:|---:|---:|
+| `mv` | 967 | **819** | **-148** |
+| `andi` | 174 | **143** | **-31** |
+| `slli` | 289 | **265** | -24 |
+| `srli` | 78 | **76** | -2 |
+| **`mul`** | **0** | **0** | — |
+| total instructions | 7,871 | **7,104** | **-767** |
+
+**`mul` was ALWAYS zero in our code.** The pin read 1 for the whole campaign and
+that one multiply is inside `compiler_builtins`. So the `Tcb` stride pad achieved
+its aim completely — **no multiply anywhere in the kernel, against the C arm's
+three** — and the ledger's "mul 32 -> 1" history is a count that included borrowed
+code.
+
+> **★★ The law: an instrument's SUBSIDIARY counters must cover the same code as its
+> headline number.** This one subtracted `compiler_builtins` from the bytes, with a
+> comment explaining exactly why the C arm makes that necessary, and then counted
+> opcodes over the whole disassembly anyway. Both halves were written deliberately
+> and neither knew about the other. When a number is corrected for an asymmetry,
+> grep for every other number derived from the same artifact.
+
+All five opcode pins and the byte pin now describe one body of code:
+`Kairos 19878 / mv 819 / mul 0 / srli 76 / slli 265 / andi 143`, RESULT PASS.
+
+### ★ The `Tcb` stride pad was a CEILING PROBE nobody priced, and it is flash-for-RAM
+
+`mul` reading 0 raised the question the pad's own comment invited: it was labelled
+**"CEILING PROBE"** and had sat that way since it was added. It pads
+`size_of::<Slot<Tcb>>()` from 92 to 128 so `index * stride` is one `slli 7` rather
+than `li` + `mul`. The flash side had been measured. The RAM side never had.
+
+| | flash | RAM/task | `mul` | `slli` |
+|---|---:|---:|---:|---:|
+| pad **on** (pinned) | **19,878** | 176 B | **0** | 265 |
+| pad **off** | 20,132 (+254 B) | **144 B** (-32) | 55 | 211 |
+
+**It buys 254 bytes of flash for 32 bytes of RAM per task.** The flash saving is
+FIXED — it is code — and the RAM cost is LINEAR in `TASKS`, so break-even is about
+**eight tasks**, and past that the pad is a net loss. On the parts this kernel
+targets RAM is scarcer than flash by an order of magnitude, so it is arguably a
+loss well before break-even by bytes.
+
+Removing it takes the K3 RAM row from 176 B against C's 596 (**3.39x**) to 144
+(**4.14x**), and the flash row from 1.43x to 1.45x. `bench/kernel-ram` reads PASS
+either way, and kernel tests are 101/0 either way.
+
+**KEPT**, because flash is the row currently failing its target and RAM is not, and
+because "no multiply anywhere in the kernel, against the C arm's three" is worth
+being able to say. The trade is now written at the field with both columns, so it
+is a choice between two K3 gates rather than an unexamined default — and it is the
+first thing to give back if the RAM row ever comes under pressure.
+
+> **The law: a padding constant is a trade between two instruments, and the one it
+> is NOT pinned against will not report it.** This pad was introduced against the
+> flash/`mul` instrument, passed its gate, and quietly charged a second instrument
+> that had no pin on it. Anything labelled "PROBE" in a shipped tree is an unpaid
+> debt; price it on every instrument it touches or delete it.
+
+### ⚠ UNRESOLVED — the per-task RAM slope reads 184 B, and I recorded 176 earlier today
+
+`bench/kernel-ram` reads **PASS** with every slope-admissibility and identity check
+green, and the per-task figure reads **184 B**. The entry above this one records
+**176 B** from the run taken at fourteen wins, and the pad-off measurement in the
+same session read **144 B**.
+
+Three numbers that do not reconcile: 184 − 144 = 40, 176 − 144 = 32, and the pad is
+36 bytes.
+
+What has been ruled out:
+
+- **Not a duplicated or dropped field.** `Tcb` has 15 fields and no duplicates;
+  `Kernel` has none either. Checked after this round's mechanical edits, which is
+  where a duplicate would have come from.
+- **Not `Slot<Tcb>` changing size.** The flash arm is byte-identical to the
+  sixteen-win state — 19,878 with `slli 0x7` unchanged and `mul` still 0 — so the
+  stride is still 128, and `Tcb` carries no const-generic fields that could differ
+  between the two benches' configurations.
+- **Not the declaration regrouping.** `repr(Rust)` orders fields by alignment
+  independently of declaration order, so moving the six per-task arrays together
+  cannot change the struct's size.
+
+The likeliest remaining explanation is that the per-task figure is a SLOPE — a
+difference between two measured geometries — and is quantised by arena and list
+rounding, so it can shift by a few bytes when something unrelated moves. The
+bench's `slope_guard` checks only that a slope does not straddle a granularity step
+(64 slots both sides, which it does not), never that the slope is STABLE.
+
+**That is an instrument gap, and it is the real finding here: the RAM row's headline
+number is not pinned.** `FOOTPRINT_TCBS` and `STRIDE_TCB` are exact sizes the probe
+already computes and neither is checked. A `check` on those would have said
+immediately whether these 8 bytes are real.
+
+Left explicitly unresolved rather than explained away. The gate passes and the
+structural claims (176 or 184 against the C arm's 596; 3.4x or 3.2x) survive either
+way, but **do not quote the per-task figure to the byte until it is pinned.**
+
+> **The law: a number that only a `grep` reports is a number nobody is checking.**
+> Five pins guard the flash row's opcodes and none guards the RAM row's slope, so a
+> flash change of zero bytes and a RAM change of eight went through the same gate
+> with the same PASS.
+
+### The RAM row's sizes are now pinned, which is what should have caught this
+
+`STRIDE_TCB`, `STRIDE_QUEUE` and the two TCB-footprint probes were computed by the
+probe crate and **read by nothing**. Read directly:
+
+```
+STRIDE_TCB          128     <- power of two, intact
+STRIDE_QUEUE         48
+KAIROS_TB_TCBS    1,028     (8 tasks)
+KAIROS_TP_TCBS    1,156     (9 tasks)   difference exactly 128 = one slot
+KAIROS_RAM_BASE   6,248
+KAIROS_RAM_TASKS_9 6,432    per_task = 184
+```
+
+So the structural claim survives: **the stride is still 128, and one more task costs
+exactly one more slot.** `Tcb::_stride_pad` is doing its job, `mul` stays 0, and the
+8-byte question is about what else the slope contains, not about the arena.
+
+Four checks added, and `bench/kernel-ram` now reads 11 of 11:
+
+```
+ok    the TCB slot stride is a power of two (128)
+ok    the queue slot stride (48)
+ok    one more task costs one more slot (128)      <- an IDENTITY, not a threshold
+ok    per-task RAM, the row's headline (184)
+```
+
+The third is the one worth copying: `KAIROS_TP_TCBS - KAIROS_TB_TCBS == STRIDE_TCB`
+is true by construction, so it cannot be satisfied by luck — exactly the shape
+`footprint-decomposition` §1 asks for. The fourth is the one that was missing: the
+row's headline number now fails loudly in BOTH directions, which is what did not
+happen when it moved 176 -> 184 under a PASS.
+
+The 176 -> 184 drift itself stays recorded as unresolved. It cannot recur silently.
+
+### Win 17 — an infallible function returning `Result`, and the dead `Err` arm it forced
+
+The grouped diff put BRANCH at +222 and MOVE/CONST at +716, much of it `Result`
+discriminant handling. So: which functions return `Result` and cannot fail?
+
+`Kernel::begin_wait` has exactly three returns — `Ok(None)`, `Ok(Some(0))`,
+`Ok(Some(remaining))` — no `Err`, no `?`, no propagation. Its `Result` was dead,
+and it had been noted in passing earlier in this session and not acted on.
+
+The cost was not only the discriminant. Both call sites read:
+
+```rust
+let remaining = match self.begin_wait(caller, queue, ticks) {
+    Ok(remaining) => remaining,
+    Err(e) => {
+        self.exit_critical();     // <-- a CALL, in an unreachable block
+        return Err(e);
+    }
+};
+```
+
+**An unreachable basic block containing a call**, emitted at every site
+`queue_send_blocking` and `queue_take_blocking` inline into.
+
+`-> Option<u64>`, and the two matches become one line each:
+
+flash **19,878 -> 19,784 (-94 B)**, instructions **7,104 -> 7,079 (-25)**, and
+**every one of the five pinned opcodes unchanged** — no displacement at all. The
+rv32 rows are byte-identical (`block_cycle` 984, `queue_roundtrip` 122), which is
+the proof the removed arm was dead: nothing at runtime moved. kernel 101/0.
+
+> **The law: an infallible function that returns `Result` makes its CALLERS emit
+> unreachable error handling, and the compiler will not remove it** — the `Err`
+> arm here held a real call, so it was a basic block with a frame cost, replicated
+> per inline site. Grep for functions whose every `return` is `Ok`: no `Err`, no
+> `?`, and no call whose `Result` is returned onward.
+
+The same sweep over the rest of the kernel found no second case. The other
+candidates it flagged — `timer_is_active`, `queue_spaces_available`,
+`event_group_clear_bits`, `task_state_get` — all propagate an `Err` through
+`.resolve(x).map(..)`, which carries the error without an `Err(` literal or a `?`.
+**That is the false-positive shape to filter for** if this sweep is repeated.
+
+### The remaining `saturating_*` vein is EMPTY, and LLVM is why
+
+B2a's advice is to audit `saturating_*` sites individually at an expected ~1/3 hit
+rate. 38 `saturating_sub` sites remained after win 15. Of those, exactly two are
+counter decrements with an explicit local guard that makes the clamp unreachable
+and a value that never reaches a slice index — `queue_resumes` under
+`if resume != QueueResume::No`, and `event_resumes` under `if tcb.event_blocked`,
+each paired with the flag that incremented it.
+
+Converting both to `wrapping_sub` measured **byte-identical on every metric.**
+
+So LLVM had already elided both clamps. And that explains why win 15 DID pay 50
+bytes while these pay nothing — the distinction is where the bound comes from:
+
+- **`counter.saturating_sub(1)` under a local guard**: the guard and the subtraction
+  are in the same block chain, LLVM proves `counter >= 1`, the clamp folds. **Free
+  already; converting is pure risk.**
+- **`CONST.saturating_sub(field)`** (win 15): the operand is a struct field whose
+  range is established three functions away at every write site. LLVM cannot see
+  it, so it emits the full branchless underflow-to-zero — `sub`/`sltiu`/`neg`/`and`.
+  **That is the shape that pays.**
+
+Reverted, with the measurement written at both sites so the next audit does not
+repeat it. The other 36 are counters of the same guarded shape, indices that must
+stay clamped (`free_slot_count` indexes `free_slots`), or values read back out of
+the arena — none of them the win-15 shape.
+
+> **The law: `saturating_*` -> `wrapping_*` pays only where the RANGE PROOF crosses
+> a function boundary.** Inside one function LLVM has already done it, and the
+> conversion buys nothing while giving up the defence. Look for a constant left-hand
+> side and an operand whose bound is enforced somewhere else entirely.
+
+---
+
+## ★★ 2026-09-25 — hunting MOVE/CONST: `Ok` was living at 255
+
+The grouped diff named MOVE/CONST (+716), ADD (+359) and SHIFT (+286) as the
+residual gap. Taking `li` by VALUE, our code against the C arm's:
+
+```
+ours:  li 0x0 124   li 0x1 119   li 0x7 99   li 0x2 53   li 0xff 48   ...
+C:     li 0x0  88   li 0x1  71   li 0x2 17   li -0x1 16  li 0xff  7   ...
+```
+
+**`li 0xff`: 48 against 7, and no prediction had been made about it.** That is the
+curiosity trigger, so: descend.
+
+```
+jal  add_task_to_ready_list
+zext.b a1, a0
+li   a2, 0xff
+beq  a1, a2, <...>
+```
+
+`add_task_to_ready_list` returns `Result<(), Error>`, which is ONE byte. `Error` is
+a fieldless enum with implicit discriminants `0..=13`, so the niche the layout had
+available for `Ok` was above the range — and it picked **255**. Every test of "did
+this succeed?" therefore cost `zext.b` + `li 0xff` + a compare: **three
+instructions**, at 48 sites, where the C arm returns `BaseType_t` and tests it with
+one `bnez`.
+
+Giving `Error` explicit discriminants starting at **1** leaves `0` as a niche BELOW
+the valid range, and the layout puts `Ok` there instead:
+
+| | flash | `mv` | `andi` | `li 0xff` | instructions |
+|---|---:|---:|---:|---:|---:|
+| before | 19,784 | 819 | 143 | 48 | 7,079 |
+| after | **19,628** | **810** | **141** | **18** | **7,059** |
+
+**-156 B, -9 `mv`, -2 `andi`, -20 instructions**, `slli` +3. `li 0xff` fell 48 -> 18;
+the remaining 18 are other uses of 255 (`NO_LIST`, `u8::MAX`).
+
+Safe because nothing observes the values: `Error` carries no `repr`, and no path in
+either repo converts one to a number — checked before touching it. core 63/0,
+kernel 101/0.
+
+> **★★ The law: where a `Result`'s `Ok` niche LANDS is decided by the error enum's
+> discriminant RANGE, and a range starting at zero pushes it to the top of the
+> byte.** `Ok` at 255 costs `li` + compare at every call site; `Ok` at 0 is a
+> `beqz`. Start a fieldless error enum's discriminants at 1 and the niche falls to
+> zero for free. This is invisible in the source — nothing about
+> `Result<(), Error>` suggests the success test is three instructions — and it is
+> priced per CALL SITE, so it scales with how often the type is returned.
+
+### And the two neighbours, refuted by counting first
+
+**`li 0x2` (53 sites)** is dominated by a `u8` enum field at `Kernel+0x588` tested
+against 2 — `NotifyState::Received`. Putting the hottest variant at 0 would make
+those `beqz`. But the comparisons are **`Received` 6, `NotWaiting` 6, `Waiting` 5**:
+evenly spread, so reordering moves the cost rather than removing it. And
+`NotWaiting` is `#[default]` at 0, which a zeroed TCB relies on. Refuted by the
+census, with no build spent.
+
+**SHIFT has no lever at all.** All 265 `slli` are power-of-two stride scalings,
+already one instruction each: `0x4` (x16 list node) 75, `0x7` (x128 `Tcb`) 55,
+`0x10` (handle halves) 39, `0x5` (x32) 30, then x8 and x4. The x32 group is spread
+across ~25 functions at one or two apiece — no concentration to attack. Removing
+these means not addressing memory by index, which is the design. ADD (+359) is the
+same fact: `base + scaled index` where C holds a pointer.
+
+### Two neighbours of win 18, both refuted before or at the first build
+
+**`end_wait`'s two bounds-checked accesses collapsed into one** — `wait_set(at,
+true)` then `set_wait(at, false)` reaches the same array twice, and each `.get`
+carries its own `li 0x7` + `bltu`, at the eleven sites this inlines into.
+Measured **byte-identical**: LLVM already merges the bounds test of two accesses to
+the same array at the same index. It also lost the `missing = true` behaviour the
+site's comment depends on. Reverted, measurement written at the site.
+
+> The distinction from win 11, which DID pay: that collapsed two `andi` MASKS —
+> genuinely separate operations on a shared byte. This collapses two BOUNDS TESTS,
+> which CSE already handles. "Two accesses become one" is only a win when the two
+> were doing different work.
+
+**`Option<TaskHandle>` in nine public signatures.** `Handle { index: u32,
+generation: u32 }` has no niche — both fields are full-range — so `Option<Handle>`
+is 12 bytes and three argument registers where a bare handle is 8 and two. Nine
+`pub fn` take one, mirroring FreeRTOS's "NULL means the calling task". Passing
+`TaskHandle` and reading `NULL` as current would save roughly 54 bytes.
+
+**NOT taken, and not measured.** This kernel's stated purpose is replacing C's
+sentinels with types; spending `Option` to buy 54 bytes inverts that. Recorded as a
+design refusal rather than a measurement so nobody re-derives it as an oversight.
+
+### The re-census after win 18, and what each group is now made of
+
+| group | Kairos | C | excess | ratio |
+|---|---:|---:|---:|---:|
+| MOVE/CONST | 1,432 | 780 | **+652** | 1.84 |
+| LOAD | 1,461 | 1,135 | +326 | 1.29 |
+| ADD | 957 | 642 | +315 | 1.49 |
+| SHIFT | 348 | 68 | +280 | **5.12** |
+| LOGIC | 288 | 97 | +191 | 2.97 |
+| BRANCH | 824 | 637 | +187 | 1.29 |
+| STORE | 958 | 827 | +131 | 1.16 |
+| COMPARE | 127 | 39 | +88 | 3.26 |
+| **MULDIV** | **0** | **3** | **-3** | **0.00** |
+| TOTAL | 7,059 | 5,089 | +1,970 | 1.39 |
+
+Win 18 took 64 off MOVE/CONST. Every group has now been opened:
+
+- **MOVE/CONST** — `li` by value: `li 0x7` 99 (the seven per-task arrays' bounds,
+  masking refuted on the `missing` contract), `li 0xff` now 18 (was 48, win 18),
+  `li 0x2` 53 (`NotifyState`, refuted on an even 6/6/5 comparison split), `li 0x0`
+  and `li 0x1` ~250 (bool and small constants). `mv` 810, of which 183 are the
+  `mv a0, sN` receiver the rv32 ABI requires and 99 are the critical-section pair
+  whose count the differential pins.
+- **SHIFT** — all 265 `slli` are power-of-two stride scalings, ONE instruction each:
+  x16 list node 75, x128 `Tcb` 55, x16-bit handle halves 39, x32 30, then x8 and
+  x4. The x32 group is one or two per function across ~25 functions. Nothing to
+  collapse; the only way out is not addressing memory by index.
+- **ADD** — `base + scaled index`, the same fact as SHIFT from the other side.
+- **LOGIC** — `andi` 141 (19 of them `at()`'s bounds mask, the cheapest form the ISA
+  offers), `or` 65 (LLVM's own store-merging and branchless selects — an
+  optimisation, not waste), `not` 35 spread at most two per function.
+- **LOAD/STORE at 1.29x and 1.16x** — the lowest ratios in the table. Memory traffic
+  is not the gap and never was.
+
+**MULDIV is now zero against the C arm's three.** The `Tcb` stride pad's whole
+purpose, achieved and pinned.
+
+### Two more refused, with the reasons
+
+**`prime_mutex`'s resume fallback.** It opens with
+`if self.take_queue_resume(caller) != QueueResume::No { self.queue_send_blocking(..)?; return }`
+— unreachable for a freshly created mutex, which is the whole premise of the
+specialisation. But `take_queue_resume` reads a PER-TASK flag, so a task carrying a
+stale resume from a different queue reaches it. Removing it is about 8 bytes against
+a correctness risk on a rare interleaving. Refused.
+
+**`Option<TaskHandle>` in nine public signatures** (~54 bytes) — refused on design
+grounds, not measured: replacing `Option` with a `NULL` sentinel inverts the reason
+this kernel exists.
+
+### Five more hypotheses in MOVE/CONST, SHIFT and ADD — all refuted, each with its mechanism
+
+**SHIFT: store PRE-SCALED byte offsets in the list links.** `at(link)` costs
+`andi 0x3f` + `slli 0x4` + `add`; if `prev`/`next` held `index * 16` instead, the
+mask becomes `andi 0x3f0` (1008 fits a 12-bit immediate) and the shift disappears —
+up to 75 instructions. **Blocked by `forbid(unsafe)`:** it needs byte-addressing
+into a `[Node; N]`, and safe Rust cannot index an array of structs by byte offset.
+The SoA alternative only removes the shift for the 1-byte `container` field (14
+sites) while costing a separate base for every walk that touches prev/next/value
+together. Dead end, and the reason is the safety model rather than the idea.
+
+**MOVE/CONST: hoist the bound so the seven per-task arrays share one test.**
+`clear_owe_if_settled` reaches four of them, each through a `.get()` carrying its
+own `li 0x7` + `bltu`. Replacing them with one `if index >= TASKS { return }` plus
+direct indexing — provably the same behaviour, since out of range was already a
+no-op — measured **byte-identical**.
+
+> **The refutation is the finding.** LLVM already merges bounds tests within a
+> function. `take_outlined` carries SIX `li 0x7` because they sit in six different
+> BASIC BLOCKS, and the constant is being rematerialised per block instead of held
+> in a register across the function — which is the correct call under that
+> pressure, not a missed CSE. **The 99 `li 0x7` are already minimal.**
+
+**LOAD: functions resolving the same handle repeatedly.** `copy_data_to_queue` has
+three `resolve_mut(queue)`, `unlock_queue` four. The three in
+`copy_data_to_queue` are MUTUALLY EXCLUSIVE arms — one runs per call — and the
+mutex arm must resolve after `priority_disinherit`, which needs `&mut self`. Merging
+the two non-mutex arms saves one inlined resolve (~14 bytes) but fights a comment
+that records the arm structure as measured: *"Decided once, up here, so that each
+arm below can fold the count into the resolve it is already making."* Refused.
+
+> **A static resolve count is not a dynamic one.** Three arms, one execution. For
+> FLASH the static count is the cost — but so is the source's legibility, and a
+> documented measurement outranks 14 bytes.
+
+**LOGIC: the 65 `or` and 35 `not`.** The `or` are LLVM's own store-merging
+(`lui 0x2000` + `addi 1` + `or` builds a word from adjacent small fields) and
+branchless selects — optimisations, not waste. The `not` are at most two per
+function across ~25 functions; the single `u8::from(!b)` in source
+(`overflow_timer_list`) is worth one instruction. No vein.
+
+**COMPARE, BRANCH, STORE** are bounds tests, `Result` discriminants and field
+writes — already traced, nothing new.
+
+### And the axes that were never tried: the trace layer, and size-by-function
+
+The goal asked where else flash had not been looked for. Two places, both now
+checked and both clean.
+
+**The trace layer.** Only SIX `T::EMITS` gates exist in the kernel, one of them
+win 3's, so most trace sites rely on LLVM deleting the no-op sink's body — which is
+exactly where win 3 found a survivor. Checked: `trace_task` has **0 calls and 0
+symbols**, so it folds entirely; the `Event` constructions are simple enough to fold
+(`Event::EventGroupCreate { group }`, `Event::StartingScheduler`); the name lookup
+and its UTF-8 validation are already behind `T::WANTS_NAMES`. `note_stall` survives
+and should: it is a documented observability feature with public `stalls()` and
+`first_stall()` accessors. **Win 3 was the only non-deletable argument in the
+kernel.**
+
+> Worth noting how narrow win 3's class turned out to be: of ~24 trace sites, one
+> had an argument LLVM could not delete, and it was an ATOMIC load. Plain field
+> reads, enum constructions and gated name lookups all fold. The class is
+> "non-deletable operation in an argument", not "argument to a no-op sink".
+
+**Size by function, hunting a body inlined into more than one wrapper.** The
+wrappers rank `stream_buffer_receive` 236, `queue_send` 231,
+`event_group_wait_bits` 230, `queue_receive` 199, `queue_peek` 172. The suspicious
+pair — `event_group_wait_bits` 230 against `event_group_sync` 95 — is not a
+duplicate: `sync` DELEGATES to `event_group_set_bits`, while `wait_bits` carries the
+stackless resumption structure (three critical sections, two unwind loops, two drain
+walks, two yields, for the first-call and resumption paths). Every large piece inside
+it is ALREADY outlined and called twice, not inlined twice. `stream_buffer_receive`
+is the same shape: `notify`, `notify_wait`, `after_stream_wait`, `resume_all` and
+`blind_call` are all calls.
+
+**The only genuine duplicate in the binary is `queue_take`, inlined into both
+`kairos_queue_receive` and `kairos_queue_peek`** — already priced at -414 B against
+`peek_ok` 41 -> 98 and left as the owner's call.
+
+So: this hunt produced **one** win in MOVE/CONST (win 18, -156 B) and nothing in ADD
+or SHIFT, with a named mechanism for every instruction that remains — a safety-model
+block, an LLVM choice that is already optimal, a conformance-pinned count, or a
+documented prior measurement. That is the honest yield.
+
+---
+
+## ★★ 2026-09-25 — the READ-ONLY API is not being measured, and C's is
+
+New vein, found by reconciling `.text` against the sum of its function bodies —
+the `footprint-decomposition` 9b move, never applied to this row:
+
+| | text symbols | bodies sum | `.text` | remainder |
+|---|---:|---:|---:|---:|
+| C | 104 | 13,630 | 13,924 | **+294** |
+| ours | 112 | 20,208 | 20,152 | **-56** |
+
+**A negative remainder is impossible**, which is the trigger. Bodies cannot exceed
+the section unless symbols OVERLAP — and three do:
+
+```
+00083302  40  kairos_queue_messages_waiting
+00083302  40  kairos_task_priority_get
+00083302  40  kairos_timer_is_active
+```
+
+Three different operations at ONE address, and the disassembly prints only the
+first name — the other two appear ZERO times as symbols. The shared body is:
+
+```
+addi s0, a0, 0x74      ; &self.port
+jal  <enter_critical>
+mv   a0, s0
+j    <exit_critical>    ; tail call
+```
+
+**`enter_critical(); exit_critical();` and nothing else.** The reads are gone.
+`op!` ends `let _ = $body`, so a pure-read operation has no side effect beyond its
+critical section and LLVM deletes the rest. `kairos_tick_count` is **2 bytes** — a
+bare `ret`.
+
+### Why it is an asymmetry and not just an oddity
+
+The C arm's equivalents are real functions, rooted whole and fully counted:
+
+| operation | C | ours |
+|---|---:|---:|
+| `uxQueueMessagesWaiting` | 28 B | folded into a shared 40 B |
+| `uxTaskPriorityGet` | 54 B | the same 40 B |
+| `xTaskGetTickCount` | 10 B | **2 B** |
+
+**C counts its read-only API; our probe deletes ours.** 25 of our 54 wrappers are
+under 44 bytes, 514 bytes between them, and the folded body proves the logic is
+absent rather than moved — there is no resolve and no field read in it.
+
+Scope is on the order of **200-500 bytes**, so the row's 1.41x is honestly nearer
+1.44x. That is the same magnitude as several wins in this campaign, and it is the
+THIRD instrument asymmetry found in our favour after `codegen-units` (4,154 B) and
+the opcode census counting code the byte pin excludes.
+
+### The fix, and why it is not applied here
+
+`core::hint::black_box($body)` was tried and measured **byte-identical** —
+`kairos_tick_count` stayed at 2 bytes, so the hint does not force the read. The
+working fix is to make the wrapper RETURN the value, as C's functions do, which
+needs a reduction over the fifteen-odd result types the operations produce
+(`bool`, `u32`, `u64`, `Result<Wait<T>>`, handles...).
+
+Not applied, for the reason `codegen-units` was not: **it makes the pinned number
+LARGER**, and that is a decision about what the row claims rather than a bug to
+fix quietly. It is also the same shape as the constant-folding defect found earlier
+this session, which moved the number the same direction for the same reason — a
+probe that discards a result measures the discarding, not the operation.
+
+> **★★ The law: reconcile a section's SIZE against the sum of its symbols, and treat
+> a negative remainder as an overlap to explain rather than rounding.** Two symbols
+> at one address means the linker folded two things it was asked to measure
+> separately — and in a benchmark, folding is the instrument losing a row, not the
+> compiler winning.
+
+### The same reconciliation shows C paying 294 bytes of padding we do not
+
+The remainder table above has a second reading. C's `.text` is 13,924 and its
+function bodies sum to 13,630 — **+294 bytes of inter-function alignment padding**,
+about 2.8 bytes across 104 symbols, consistent with 4-byte function alignment. Ours
+reconciles to roughly zero once the folded trio's double-count is removed, because
+RVC lets our functions sit on 2-byte boundaries.
+
+So the pinned ratio divides our code by C's code PLUS 294 bytes of C's padding:
+
+| | code | padding | `.text` |
+|---|---:|---:|---:|
+| C | 13,630 | +294 | 13,924 |
+| ours (less `compiler_builtins`) | ~19,628 | ~0 | 19,628 |
+
+**1.41x on `.text` against roughly 1.44x on code alone.** Alignment convention, not
+kernel size — and it points the same way as the read-only API defect above, so the
+two compound: the honest figure is nearer **1.45x** than 1.41x.
+
+Neither is a bug in the bench's reasoning; both are consequences of comparing two
+toolchains' output byte-for-byte. But they belong beside the ratio, and with
+`codegen-units` (4,154 B) that is now THREE asymmetries found in our favour against
+one (`+relax`, scorecard 14) found against us and corrected.
+
+> **The law: a cross-toolchain size ratio carries the other arm's PADDING in its
+> denominator.** Reconcile both arms' symbol sums before quoting a ratio to two
+> decimal places, and say which number the ratio divides.
+
+### And the prologue census, which came back clean
+
+`rusty-compiler-leverage` A1/A2 applied to the largest functions: `send_generic_outlined`
+and `take_outlined` each save **13** callee-saved registers, `kairos_stream_buffer_receive`
+and `kairos_queue_send` 12. That is 26 instructions of save/restore apiece, and A2's
+lever is outlining the cold arms that claim them.
+
+They are already outlined. `queue_send_blocking` (122 instructions) and
+`queue_take_blocking` (227) are separate symbols, as are `resume_all`,
+`drain_pending_ready_walk`, `unwind_pended_ticks_loop` and `port_yield`. The 13
+registers belong to the HOT path: `let snapshot = *q` copies the 48-byte `Queue` so
+the send does not re-resolve, and `copy_data_to_queue` takes `&snapshot` and reads
+seven of its fields. Narrowing the send's read the way `queue_take`'s was narrowed to
+five fields would force back the resolve that snapshot exists to avoid.
+
+**A sibling-parity audit between the send and take paths therefore finds a real
+difference that is not a defect** — take needs five fields and reads five; send needs
+eleven through its callee and reads eleven.
+
+---
+
+## ★★★ 2026-09-25 — the A3 vein: seventeen single-caller functions, never swept
+
+Every inline sweep this campaign ranked callees by BODY SIZE. None ranked them by
+CALLER COUNT, which is what `rusty-compiler-leverage` A3 is about: *a single-caller
+function that is not inlined is paying a frame for nothing.* Inlining one is
+body-size NEUTRAL — the body moves rather than duplicating — so the prologue and
+epilogue are pure saving.
+
+There were **seventeen** of them.
+
+| # | change | flash | `mv` | `andi` | instructions |
+|---|---|---:|---:|---:|---:|
+| | before | 19,628 | 810 | 141 | 7,059 |
+| **19** | `#[inline]` on 4 single-caller fns | **19,586** | 802 | 140 | 7,033 |
+| **20** | `#[inline]` on 4 LARGER single-caller fns | **19,520** | 797 | 137 | 7,008 |
+| **21** | `#[inline(always)]` on `send_completed` | **19,426** | 792 | 135 | 6,971 |
+| **22** | `#[inline(always)]` on 2 more | **19,370** | **788** | **135** | **6,945** |
+| | **total** | **-258 B** | **-22** | **-6** | **-114** |
+
+**Flash is 1.39x — under 1.40 for the first time.**
+
+### Three laws, two of them backwards from intuition
+
+**1. The LARGER single-caller functions win; the SMALLER ones lose.** Seven were
+annotated in one batch and it measured **+4 B**, so it had to be bisected. The four
+larger (`task_state_get` 72, `after_stream_wait` 48, `send_completed` 47,
+`increment_tick` 46) gave **-66 B**; the three smaller
+(`check_for_valid_list_and_queue` 38, `link_between` 36, `Name::matches` 14) cost
+**+68 B**. A large single-caller has a big frame to delete. A small one inlined into
+a caller that is already saving twelve registers just forces more spilling.
+
+> This is A2's non-additivity in a new place: the SET was flat and each half was
+> large in opposite directions. Bisect any inline batch that measures near zero.
+
+**2. `#[inline]` is a hint LLVM DECLINES; `#[inline(always)]` is what A3 needs.**
+`send_completed` kept its symbol and its single call right through win 20's
+`#[inline]`. Forcing it: **-94 B with every metric down** — the largest single win in
+this vein, from a function that had already been annotated and had silently ignored
+it. The weak hint had been under-measuring the whole vein.
+
+**3. Verify the hint took, per annotation.** Of ten annotated, six inlined (zero
+symbols, zero calls); of the four that did not, two had gained a second caller
+through an earlier cascade and two were declined hints — and those two, forced,
+became win 22 at **-56 B**.
+
+### The vein is exhausted, and the remainder is documented
+
+Four single-caller functions remain and each carries a reason:
+`send_generic_outlined` (277) is the A4 out-of-line handle worth 1,666 B;
+`wake_due_tasks` (106) is `#[inline(never)]` on A2 grounds its own comment states —
+*"runs only when a tick reaches the next unblock time, but `increment_tick` runs on
+EVERY tick"*; `priority_inherit` (69) and `priority_disinherit_after_timeout` (58)
+are `#[cold]`.
+
+The two-caller tier (`Name::new` 57, `notify` 42, `place_on_event_list` 36,
+`is_queue_empty` 36, `link_between` 36, `lock_queue` 36) is a predicted loss WITH
+evidence: `link_between` has two callers and was in the batch that cost +68 B.
+
+> **★★ The law: rank inline candidates by CALLER COUNT, not by body size.** A
+> single-caller inline is free of duplication by construction, so the usual
+> body-size-versus-call-overhead arithmetic does not apply to it at all — and that
+> arithmetic is exactly what had been used to dismiss this vein five times.
+
+### Wins 23-24: the TWO-caller tier also pays, and the prediction was wrong twice
+
+The two-caller tier was written off above as "a predicted loss WITH evidence"
+because `link_between` has two callers and sat in the batch that cost +68 B. That
+reasoning was wrong, and measuring it found two more wins.
+
+| # | change | flash | `mv` | instructions |
+|---|---|---:|---:|---:|
+| | after win 22 | 19,370 | 788 | 6,945 |
+| **23** | `#[inline(always)]` on `lock_queue`, `is_queue_empty`, `place_on_event_list` | **19,322** | **771** | 6,905 |
+| **24** | `#[inline(always)]` on `Name::new` | **19,302** | **763** | **6,892** |
+
+**-68 B and -25 `mv` from a tier I had dismissed on reasoning rather than a
+measurement.** Flash is **1.386x**.
+
+And the second batch inverted twice. Three more two-caller functions
+(`Name::new` 57, `notify` 42, `link_between` 36) together measured **+128 B**. The
+obvious suspect was the largest, `Name::new`, so it was reverted first — and that
+made it **WORSE still, +148 B**. `Name::new` was the one HELPING; `notify` and
+`link_between` were the losers. Keeping only `Name::new`: **-20 B**.
+
+> **★ The law: in an inline batch, the largest member is not the likeliest loser.**
+> Two bisections in this vein both inverted the intuitive guess -- the four LARGER
+> single-caller functions won while three smaller ones cost +68 B, and here the
+> largest of three was the only winner. Bisect on measurement, never on size.
+
+### What the A3 vein produced in total
+
+| | flash | `mv` | `andi` | instructions |
+|---|---:|---:|---:|---:|
+| before the vein | 19,628 | 810 | 141 | 7,059 |
+| after six wins (19-24) | **19,302** | **763** | 136 | **6,892** |
+| | **-326 B** | **-47** | -5 | **-167** |
+
+Six wins from one idea nobody had applied: rank callees by CALLER COUNT, not body
+size. The vein had been dismissed five times by the body-size-versus-call-overhead
+arithmetic, which does not apply to a single-caller inline at all and applies only
+weakly at two callers.
+
+Remaining and left alone with reasons: `send_generic_outlined` (A4 handle, 1,666 B),
+`wake_due_tasks` (`#[inline(never)]`, A2 cold-arm, its own comment), `priority_inherit`
+and `priority_disinherit_after_timeout` (`#[cold]`), and `notify` + `link_between`
+(measured losers at two callers).
+
+---
+
+## ★★★ 2026-09-25 — the caller census was blind to TAIL CALLS, and 266 of them
+
+Working on queue SEND, `send_generic_outlined` looked like a single-caller function
+— which would make the whole A4 split pointless, since its purpose is serving the
+four colder wrappers. Checking the call form explained it:
+
+```
+callers of send_generic_outlined:   17 x `j`   +   1 x `jal`   =  18
+tail calls (`j <symbol>`) in the binary:                         266
+```
+
+**A tail call is `j <symbol>`, not `jal`, and every caller census in this campaign
+counted only `jal`/`jalr`.** Corrected, the picture changes substantially:
+
+| callee | counted | actual | missed |
+|---|---:|---:|---:|
+| `Port::exit_critical` | 51 | **73** | 22 |
+| `Port::enter_critical` | 48 | **52** | 4 |
+| `resume_all` | 18 | **24** | 6 |
+| `port_yield` | 16 | **20** | 4 |
+| `remove_from_event_list` | 7 | **9** | 2 |
+| `send_generic_outlined` | **1** | **18** | 17 |
+
+### What this does and does not invalidate
+
+**The A3 wins (19-24, -326 B) STAND.** Every one was measured on the pinned
+instrument, gated on conform 26/26 and both suites, and the bytes came off. A
+measurement does not care why it moved.
+
+**The EXPLANATION was wrong.** It was written as *"a single-caller inline duplicates
+nothing, so the body moves rather than copying"* — and the list those wins were
+drawn from was built by counting `jal` only. Several of them had tail-call callers
+and therefore DID duplicate. The mechanism was most likely that `#[inline(always)]`
+let LLVM SPECIALISE each site to its constant arguments, which is the same mechanism
+that made `copy_data_to_queue`'s four inline copies cheaper than one out-of-line
+body (measured twice this session: +72 B for three callers, +6 B for one).
+
+So the law as written in the entry above is withdrawn and replaced:
+
+> **★★ The law: count a caller by every form of call the ISA has.** On rv32 that is
+> `jal`, `jalr` AND `j <symbol>` — a tail call is a call, and an out-of-line handle
+> that exists to be shared will be reached mostly by tail call, so a `jal`-only
+> census reports its whole reason for existing as "one caller". 266 of them were
+> invisible here, and the miss produced a plausible, wrong explanation for six real
+> wins.
+
+And the check that would have caught it: **a function whose purpose is to be shared
+reading "1 caller" is an impossible value** — trigger #2 in the curiosity skill,
+noticed only because the A4 split's rationale contradicted the number.
+
+---
+
+## 2026-09-25 — win 25: the mutex give, −316 B (19,302 → 18,986, 1.386× → 1.360×)
+
+`bench/kernel-flash`, all seven pins, plus `conform --all` 26/26, kernel 101/0,
+core 63/0, port 28/0, rv32 PASS, RAM PASS.
+
+**The primitive.** Scorecard §18 put *mutex create* at **9.7×** — C's
+`xQueueCreateMutex` 48 B against our `new_mutex` 464 B — the worst single ratio in
+the whole flash row. C is 48 bytes because `prvInitialiseMutex` **calls**
+`xQueueGenericSend`. Ours *contained* the send: a private `prime_mutex` holding a
+hand-written copy specialised on the four constants its one call site supplied. It
+emitted zero symbols, so it was fully inlined and its ~424 B **was** the 464.
+
+**The refutation was inside its own justification.** `prime_mutex` carried a 27-line
+doc block whose argument was: inlining the general body here costs **534 bytes**,
+therefore carry a cheaper specialised copy. Both facts are true. The conclusion is
+not, because the alternatives were never "specialise or inline" —
+
+> **the question is which SYMBOL to call**, and `send_generic_outlined` — the A4
+> out-of-line handle that already existed for the cold callers — costs a
+> five-argument frame, not a body.
+
+| pin | before | after | Δ |
+|---|---:|---:|---:|
+| flash bytes | 19,302 | **18,986** | **−316** |
+| `mv` | 763 | 755 | −8 |
+| `slli` | 259 | 254 | −5 |
+| `andi` (incl. `zext.b`) | 136 | 134 | −2 |
+| rv32 instructions | 6,892 | 6,793 | −99 |
+
+Every pin down and none up, so this is a win and not a displacement.
+
+`conform --all` is the gate that decides this one, not flash: `prime_mutex` was
+hand-crafted to emit the same trace as the general send — one critical section,
+`note_exits` sampled inside it, `QueueSend` at the same point, `end_wait` on the way
+out — so trace equality is exactly the property that had to survive. 26/26.
+
+Deleting the now-dead 52 lines measured **byte-identical**: LLVM had already dropped
+the uncalled private fn, so the source shrank for nothing. (The A5 law says measure
+it anyway, and it was measured.)
+
+### ★★ The law
+
+> **A specialisation written to escape an unwanted INLINE is only worth its bytes if
+> no out-of-line handle on the general body exists. Check for the handle first.**
+
+This is not a one-off, and the reason it recurs is structural: **an A4 split creates
+exactly such a handle, for its own callers, and does not advertise itself.** The next
+engineer to meet the same inlining cost at a different call site writes a
+specialisation — with a correct measurement of the inline cost attached, which is
+what makes it survive review. 316 bytes and 52 lines of wrong argument.
+
+The tell to grep for: a private helper that emits **zero symbols**, carries a doc
+block justifying itself against a *general* version of the same work, and sits in a
+module where an `_outlined`/handle form of that general version already exists.
+
+### And the A4 re-test it forced — one caller held the whole verdict
+
+Losing `prime_mutex` took `copy_data_to_queue` from four callers to three, so the
+`+72 B` refutation of its A4 split was now evidence about a shape that no longer
+existed (`instruction-counting` §9). Re-tested at three callers: **+6 B.**
+
+**~66 of the original 72 bytes were `prime_mutex`'s own call site.** The verdict
+does not change — still a loss, still reverted — but it went from a comfortable
+refutation to a near-tie held by six bytes, and that is the law worth carrying:
+
+> **An A4 verdict can be carried almost entirely by ONE caller.** "Split is a loss
+> across N sites" is not a property of the function; re-measure it whenever N moves.
+
+---
+
+## 2026-09-25 — win 26: an A3 change that had been dead since the day it was written
+
+`switch_delayed_lists` (the `taskSWITCH_DELAYED_LISTS()` overflow swap) carried
+**two contradictory attributes at once**:
+
+```rust
+    // Out of line for the same reason: the overflow swap happens when the
+    // tick count wraps, which is once in a very long while.
+    #[inline(never)]
+    // A3: ONE caller, so the out-of-line body pays a prologue and epilogue for
+    // a single call. Inlining moves the body rather than duplicating it.
+    #[inline]
+    fn switch_delayed_lists(&mut self) {
+```
+
+`#[inline(never)]` wins that fight. **The A3 change never took effect at all** —
+and `#[inline]` is a hint LLVM declines at this size anyway, so even alone it would
+have done nothing. A3 needs `always`.
+
+Replacing the pair with `#[inline(always)]`:
+
+| pin | before | after | Δ |
+|---|---:|---:|---:|
+| flash bytes | 18,986 | **18,982** | **−4** |
+| total rv32 instructions | 6,793 | **6,785** | **−8** |
+| `mv` | 755 | 747 | −8 |
+| `slli` | 254 | 256 | **+2** |
+| `andi` | 134 | 136 | **+2** |
+
+Both arbiters fall, so this is a win rather than a displacement, and the two
+diagnostic opcodes that rise are more than paid for. The `never` rationale (it is
+cold, once per tick-count wrap) is true and loses to having exactly one caller.
+`bench/tick-work` **PASS** with its PARITY anchors identical, so nothing hot paid
+for pulling the cold body in. Gates: flash 7/7, kernel 101/0, RAM PASS.
+
+### ★ The law — the compiler had been reporting this on every single build
+
+```
+warning: unused attribute ... help: remove this attribute
+note: attribute also specified here
+```
+
+> **A contradictory attribute pair is a silently reverted change, and `rustc` names
+> it on every build. Read the warnings you have been scrolling past.**
+
+The same sweep found a **second** defect in the same warning class: a doc block and
+an `#[inline(always)]` belonging to `trace_failure_or_owe` had been spliced above
+`note_exits`, which already had its own. So `note_exits` carried a duplicate
+attribute while `trace_failure_or_owe` — documented as "in line on purpose, at all
+seven call sites, reached 46,671 times" — carried **none**. Restoring it measured
+byte-identical, because LLVM inlines it at that size regardless; the defect was
+documentation, not code. But the next size change would have made it real, silently.
+
+Both defects were invisible to every instrument in this repo. Neither changed a
+number, so no pin could fail; the only evidence was a warning.
+
+---
+
+## 2026-09-25 — ★★ method: a one-shot `replace` on a NON-UNIQUE anchor lands in the wrong function, and it COMPILES
+
+Cost four measurements and nearly cost a phantom hunt. Worth writing down because
+every scripted edit in this campaign has this failure mode.
+
+Reverting a probe, the restore was scripted as `s.replace(anchor, restored, 1)` with
+
+```
+        self.suspend_all();
+        self.lock_queue(queue);
+        let left = self.check_for_timeout(caller);
+```
+
+as the anchor. `queue_send_blocking` and `queue_take_blocking` **both** open that
+way, and the send path came first, so the restored `let kind = …resolve(queue)?.kind;`
+landed in the wrong function. `queue_take_blocking` then failed to compile, which
+looked like an unrelated slip and got "fixed" separately — leaving **both**
+functions with the line.
+
+Why it survived: `kind` is unused in the send path, so that is a *warning*, not an
+error; and `?` makes the resolve an error check, so LLVM must keep it. The result
+was a clean build carrying a silent **+12 B**, and the next measurement read
+18,998 against a pinned 18,986 with no edit that could explain it.
+
+**What found it** was not inspection — three readings of the diff said the reverts
+were exact. It was:
+
+1. **A null arm on the instrument first.** Eight pure comment lines inserted into
+   the file measured **flat**, which proved `.text` does not move with line numbers
+   and the +12 was real code. Without that the suspect list still included the
+   instrument.
+2. **`git diff` in the right repository.** The first diff came back empty because
+   `rusty_rtos_kernel` is its own repo nested under the umbrella, and the umbrella's
+   `git diff` cannot see it. An empty diff was not evidence of no change.
+
+Laws:
+
+> **A scripted anchor must be asserted unique, not just replaced once.** `count == 1`
+> before every edit, on the revert as much as on the probe — a revert is an edit.
+
+> **An empty `git diff` proves nothing until you have confirmed which repository you
+> are in.** In a multi-repo tree, verify the file is tracked by the repo you asked.
+
+> **When a number moves with no edit that explains it, run the null arm before
+> re-reading the diff a third time.** Reading found nothing three times; the null
+> arm plus the right `git diff` found it in two steps.
+
+And the verdict that survived: the probe this revert belonged to — sinking
+`queue_take_blocking`'s `kind` resolve below the timed-out branch that never reads
+it — measured **+2 B** and stays refuted. That measurement was taken *before* the
+botched revert, so it was never contaminated.
+
+---
+
+## 2026-09-25 — win 27: a loop that mirrored C's `vListInitialise` and could not iterate, −84 B (18,982 → 18,898)
+
+Event groups were item 4 on the flash-primitive list at **2.33×** (778 → 1,810). The
+symbol pairing put the gap in two places and `create` was the worst ratio:
+
+| primitive | C | Kairos | ratio |
+|---|---:|---:|---:|
+| **create** | 38 | **168** | **4.4×** |
+| clear_bits | 64 | 86 | 1.34× |
+| set_bits | 162 | 590 | 3.64× |
+| sync | 234 | 264 | 1.13× |
+| wait_bits | 280 | 702 | 2.51× |
+
+`event_group_create` carried this:
+
+```rust
+let list = Self::event_group_list(group);
+while let Ok(Some(item)) = self.lists.head(list) {
+    let _ = self.lists.unlink(item);
+}
+```
+
+a faithful port of `vListInitialise( &( pxEventBits->xTasksWaitingForBits ) )`.
+
+**The port is faithful and the reason for it does not carry over.** C's list is a
+field of memory `pvPortMalloc` has just handed over, so it holds garbage and *must*
+be initialised. Ours is a slot in a shared list array indexed by the group's arena
+index, and `event_group_delete` unblocks every waiter — draining that list — before
+it discards the slot. So the loop was walking a list that is always already empty.
+
+Removing it: **flash 18,982 → 18,898 (−84 B)**, `mv` 747 → 744, `srli` 74 → 73,
+`slli` 256 → 255, `andi` unchanged. Ratio **1.357×**.
+
+### What licenses it — and the two steps that were NOT optional
+
+An unreachable-defence claim is worth nothing on inspection, so it was proved twice:
+
+1. **Poisoned the claim, not the code.** `create` temporarily returned
+   `Err(Error::Gone)` instead of draining if the list was non-empty. 101/0 — but
+   that is **not proof**, because no existing test blocked a waiter before deleting
+   the group. The nearest test (`a_new_group_is_empty_and_a_deleted_one_is_gone`)
+   never blocks anyone, so an empty list proved nothing. **A coverage gap, stated as
+   one.**
+2. **Wrote the test that closes it**, and made it state its own premises:
+   `a_reused_group_slot_does_not_inherit_the_last_groups_waiters` blocks a real
+   waiter on the CPU, asserts the list is genuinely **non-empty**, deletes the group
+   under the waiter, asserts the list came back empty, asserts **the arena reused the
+   same slot** (so both groups name the same list), and asserts the fresh group
+   inherited nothing.
+3. **Poison-verified the test.** With `delete`'s drain disabled it is the **one**
+   test in 102 that fails. A test justifying the removal of a defence that cannot be
+   shown to fail is not evidence.
+
+Gates: flash 7/7, kernel **102/0**, rv32 **PASS** (PARITY anchors identical),
+RAM **PASS**.
+
+### ★★ The law
+
+> **A primitive ported faithfully from C can carry a step whose REASON does not port.**
+> `vListInitialise` exists because `pvPortMalloc` returns garbage. Static arenas do
+> not return garbage, so every "initialise the thing we just allocated" the C does is
+> a candidate — the allocator we removed took its justification with it.
+
+This is the second win of the day from the same shape: win 25 was a specialised copy
+of a send written to escape an inline, and this is a copy of an initialisation written
+to escape garbage that no longer exists. Both were faithful. Both were free.
+
+The place to hunt it: every site whose comment cites a `pvPortMalloc`/`vPortFree`
+neighbour. `heap_4.c` is 646 B in the C arm and **0** in ours — and that zero has
+consequences further up than the heap row.
+
+---
+
+## 2026-09-25 — refuted, then recovered: `finish_sync` was a twin worth its bytes until forced inline
+
+`event_group_sync`'s tail was a 20-line near-copy of `finish_wait` with two flags
+frozen (`wait_condition_met(b, w, true)` **is** `b & w == w`, so the bodies are
+identical). Deleting the twin and calling the general form measured **+34 B**.
+
+The cause is A4, from the other side: at **two** callers LLVM stopped inlining
+`finish_wait` and emitted a shared symbol, and one shared body is worse than two
+specialised copies here because each caller freezes different constants. Adding
+`#[inline(always)]` restores both copies and the result is **byte-identical to the
+pinned baseline** — 20 duplicated lines gone for nothing.
+
+> **A twin is not automatically redundancy: check whether folding it changes the
+> inlining decision.** "Delete the duplicate" and "share one body" are different
+> changes, and only the first is free. `#[inline(always)]` is what separates them.
+
+---
+
+## 2026-09-25 — win 28: stream buffers, −184 B (18,898 → 18,714) — and an instrument defect that faked a win
+
+Goal for this stretch: make stream buffers a win against C. **It is not one.** The group
+went **2,138 → 1,954 against C's 1,474 — 1.45× → 1.326×** and the honest floor is
+about 1.21×. The numbers and why are below, because two of them were wrong first.
+
+### ★★ The instrument defect — a symbol filter that could not see its own subject
+
+Group totals were taken with `llvm-nm --demangle | grep -i stream`. **Three of the
+seven stream.rs symbols do not contain the string "stream" anywhere in their demangled
+name**, because the `impl` block is on the `Kernel` type, so they demangle as
+`kernel::Kernel<…>::write_message`, not `stream::…`. Missing:
+
+| symbol | bytes |
+|---|---:|
+| `write_message` | 212 |
+| `write_bytes` | 160 |
+| `blind_call` | 40 |
+
+So the filter reported **1,418 B / 0.96× — "stream buffers are now a win"** when the
+true figure was 1,790 / 1.21×, and an instruction count of **528 vs C's 573** when the
+truth was **686 vs 573**. Both were quoted before being caught. The tell was an
+arithmetic failure that had been visible for several measurements and was rationalised
+each time: **the group fell 182 B while the whole binary fell 28.** A group cannot
+outrun its own binary; the missing 154 B was `read_bytes` becoming a symbol the filter
+also could not see.
+
+> **A census filter is part of the instrument, and a filter keyed on a MODULE name
+> cannot see an `impl` block, because Rust mangles by the TYPE's path, not the file's.**
+> Attribute by the file's function-name list, never by a substring of the symbol.
+
+The `grep -i stream` idiom passed review because it looks obviously correct. What
+caught it was reading the unfiltered symbol table once, for another reason.
+
+### The wins, each measured on the whole-binary pin
+
+| change | Δ bytes |
+|---|---:|
+| two unreachable byte-at-a-time fallbacks removed (`read_bytes`, `write_bytes`) | **−124** |
+| `read_bytes` takes `&self`, not `&mut self` | **−40** |
+| `read_length_prefix` delegates to `read_bytes`, with `#[inline(always)]` | **−16** |
+| read- and write-side helpers take scalars rather than `&StreamBuffer` | −4 |
+| **total** | **−184** |
+
+Both arbiters fall: bytes −184 and **total rv32 instructions 6,785 → 6,699 (−86)**.
+`mv` +6 is the only diagnostic that rises. Gates: flash 7/7, conform **26/26**, kernel
+**102/0**, rv32 **PASS** (PARITY anchors identical), RAM **PASS**.
+
+**The `&mut self` that cost 56 bytes.** `read_bytes` only ever READS `self.bytes` — it
+writes through the caller's `out` — but it asked for `&mut self`. That one word is why
+`read_length_prefix` carried its own complete copy of the ring walk: it has `&self` and
+so could not call `read_bytes`, and its own comment said exactly that ("`read_bytes`
+would do this, but it needs `&mut self` and this does not have it"). The write side had
+already been fixed — `write_length_prefix` delegates to `write_bytes` — so this was a
+sibling-parity defect, one side's fix missing on the other. Changing the word and
+deleting the duplicate: **−56 B together.**
+
+Two unreachable fallbacks: each helper had a two-`memcpy` fast path guarded by
+`len <= ring`, plus a byte-at-a-time loop with a **per-byte wrap check** for when it
+does not hold. On the read side `read_message` clamps `count` to `available`, which the
+ring's spare byte holds below `ring`, so the guard is always true; the send side refuses
+an oversized payload earlier. Stubbing them is **its own poison** — returning the tail
+unadvanced makes the caller re-read the same bytes, which `conform` would catch. 26/26.
+
+### Refuted, with numbers
+
+| probe | result |
+|---|---|
+| `#[inline(never)]` on `after_stream_wait` (3 inlined copies in ONE function) | **+100 B** — each copy folds to ~15 B against the surrounding control flow; a standalone body pays a frame and two real resolves |
+| delegation without `#[inline(always)]` on `read_bytes` | **+12 B** — receive −142 but a 154 B symbol appears. A displacement, and the one that exposed the filter |
+| `#[inline(always)]` on `write_bytes` | **+56 B** (`mv` −7, bytes up: displacement) |
+| `#[inline(never)]` on `write_message` | **0** — LLVM had already outlined it, so that was its own choice |
+
+`after_stream_wait` also carried a comment reading "A3: ONE caller in the linked
+kernel" when the census says **three**. The decision survives the correction; the
+reason did not. Third contradictory-or-wrong inline rationale found today.
+
+### Why it cannot be a byte win — the decomposition
+
+| | bytes | C's equivalent |
+|---|---:|---|
+| our byte-arena allocator, inlined into `create` | **136** | `pvPortMalloc`, **646 B in heap_4.c** — not in C's 174 |
+| `blind_call` | **40** | `vPortKairosApiReturn`, in **port.c** — not in C's 1,474 |
+| like-for-like remainder | **1,778** | **1,474** → **1.206×** |
+
+Priced by outlining `take_bytes` (a measurement, reverted): `create` is **140 B** and
+the allocator **150 B**. So on C's own accounting rules —
+
+> **`stream_buffer_create` is 140 B against `xStreamBufferGenericCreate`'s 174. Create
+> IS a win against C, by 34 bytes, and we carry no allocator at all where C carries
+> 646.**
+
+The remaining ~300 B is the two costs §14 named: a handle resolve where C dereferences
+a pointer, and stackless resume where C blocks inside the call. `write_message` is the
+sharpest case — 84 instructions against `prvWriteMessageToBuffer`'s 39, of which
+**`mv` 16 and `sw` 14** are argument marshalling and spills around two outlined calls,
+not work. Removing that means giving up handle resolution, which is the product.
+
+### Win 28, final piece: the disjoint field borrow — `forbid(unsafe)`'s answer to C's pointer
+
+`write_message` copied the whole nine-field descriptor out and then resolved a **second**
+time to store the new head. The reason was not laziness: `write_bytes` took `&mut self`,
+so nothing borrowed from `self` could be alive across the call, and a `&StreamBuffer`
+borrowed from `self.buffers` is exactly that. C has no such problem — it holds one
+pointer and writes through it.
+
+The safe equivalent is to split the borrow by FIELD:
+
+```rust
+let Self { buffers, bytes, .. } = self;   // two disjoint &mut
+let b = buffers.resolve_mut(buffer)?;     // ONE resolve, written through in place
+... Self::write_bytes_into(bytes, base, ring, chunk, next_head) ...
+b.head = ...;
+```
+
+`write_bytes` becomes `write_bytes_into(bytes: &mut [u8], ..)`, and the one-caller
+`write_length_prefix` folds into its caller. **−18 B** (18,714 → 18,696): `write_message`
+214 → 204, `write_bytes` 156 → 148, `mv` −1. Group **1,954 → 1,936 = 1.314×**.
+
+Smaller than hoped, and the reason is worth recording: the copy was never the cost. The
+cost is `mv` 16 and `sw` 14 of argument marshalling and spills around a five-argument
+call to an outlined body, and that survives the borrow fix. **Removing a redundant copy
+does not help when the compiler was already passing a pointer to it.**
+
+> **`let Self { a, b, .. } = self;` is how `forbid(unsafe)` buys what C gets from one
+> pointer: two disjoint `&mut` field borrows alive at once.** Reach for it whenever a
+> helper wants `&mut self` and its caller wants to hold a reference into another field.
+
+### Where stream buffers finished, and the floor
+
+| | bytes | ratio |
+|---|---:|---:|
+| C `stream_buffer.c` | 1,474 | 1.00× |
+| Kairos at the start of this stretch | 2,138 | 1.450× |
+| **Kairos now** | **1,936** | **1.314×** |
+| minus our inlined byte arena (C's is 646 B in `heap_4.c`) | 1,800 | 1.221× |
+| minus `blind_call` (C's equivalent is in `port.c`) | **1,760** | **1.194×** |
+
+**Not a win.** `create` alone is (140 B vs C's 174, with no allocator against C's 646).
+The residual ~286 B is the two costs §14 named — a handle resolve where C dereferences a
+pointer, and stackless resume where C blocks inside the call — and both are the product,
+not slack. Going under 1,474 means giving one of them up; that is a design decision, not
+a byte hunt.
+
+Whole-kernel effect of this stretch: **18,898 → 18,696, −202 B**, total rv32
+instructions 6,785 → 6,699. Gates: flash 7/7, conform 26/26, kernel 102/0, rv32 PASS
+(PARITY anchors identical), RAM PASS.
+
+### Win 28 continued — two more instrument defects, and the floor re-measured
+
+Pushed further on the goal. **18,696 → 18,668**, stream group **1,936 → 1,908 = 1.294×**.
+Total for the stretch: **18,898 → 18,668, −230 B**, instructions 6,785 → 6,684. Gates:
+flash 7/7, conform **26/26**, kernel **102/0**, rv32 PASS, RAM PASS.
+
+#### ★★ The contract-v2 bracket was on our arm only — −24 B
+
+`stream_buffer_send`/`_receive` sampled `port.exits()` on entry and called `blind_call`
+on exit, unconditionally. In the C that bracket is `traceRETURN_xStreamBufferSend`, which
+`FreeRTOS.h` defines as **empty** unless a config wires it — and only
+`oracle/harness/FreeRTOSConfig.h` (the *sim*) wires it to `vPortKairosApiReturn`, which
+lives in the **Posix** port. `bench/kernel-ram/c/FreeRTOSConfig.h`, which the rv32 flash
+arm compiles against, contains **zero** `traceRETURN_*` definitions.
+
+> **So C paid nothing for the bracket in the arm we measure, and we paid for it on every
+> send and receive.** Same defect class as relaxation being off on our arm only (§14) and
+> `codegen-units` (§17): a comparison where one side carries instrumentation.
+
+Gating it on `T::EMITS` — exactly as `note_exits` is gated, and for the same reason
+(`Port::exits()` is an atomic load nothing reads under a silent sink) — deletes the
+`blind_call` symbol outright. Under an emitting sink the gate is true and behaviour is
+identical, which is why conform is unmoved at 26/26.
+
+#### ★★ The flash probe used the ORACLE HOST's `size_t` — an unmatched arm
+
+`MatchedConfig::MESSAGE_LENGTH_BYTES` read
+`<PosixDemoConfig as Config>::MESSAGE_LENGTH_BYTES` = **8**, whose own comment says "the
+oracle host is x86-64, so `size_t` is eight bytes wide". The probe links **rv32**, where
+`size_t` is **4**, and the C arm has `configMESSAGE_BUFFER_LENGTH_TYPE size_t`. So the
+Rust arm was reading and writing an **eight-byte** length prefix against C's four.
+
+`Config`'s own doc block had predicted it: *"four on a 32-bit chip. It is in the
+arithmetic of every message send, so a configuration that claims to match a given kernel
+has to say which."* This one did not say. It sat in the block of values inherited from
+`PosixDemoConfig` — **the one block in that file with no `FreeRTOSConfig.h` line cited
+beside it.** The others there are arena sizes, which live in `.bss`; this one is code.
+
+Fixing it is **byte-neutral** (the helpers went through `[u8; 8]` and `u64` either way),
+so it changes no ratio — but the arms are now matched, and it exposed the next item.
+
+#### The prefix conversion was 64-bit on a 32-bit target — −4 B
+
+With the width matched, `read_length_prefix_from` still built `[0_u8; 8]` and did
+`u64::from_le_bytes(..) as usize` — eight bytes read as two words with the top one thrown
+away — and `write_message` did `(length as u64).to_le_bytes()`. Both now use `usize`, the
+width the C's type actually has on whichever target this is. Small, and the exact shape
+[[kairos-pointer-width-blindness]] warns about.
+
+#### Re-tests and refutations
+
+| probe | result |
+|---|---|
+| read side onto disjoint field borrows (mirror of the write fix) | **0 B** — the read chain is INLINED, so LLVM had already folded both resolves; only the outlined write chain paid for real. Kept for symmetry, since that asymmetry is what cost 56 B |
+| `#[inline(always)]` on `write_bytes_into`, **re-tested** after two shape changes | **+46 B** (was +56). `mv` −20, bytes up: displacement. Verdict holds |
+
+And the warning sweep caught **my own slip** within minutes: the read-side edit left a
+duplicate `#[inline(always)]`, which is precisely the defect win 26 was about. Byte-neutral,
+removed. `unused attribute` count is 0 again — the number is worth watching.
+
+### Stream buffers: final position, and why it is not a win
+
+| | bytes | ratio |
+|---|---:|---:|
+| C `stream_buffer.c` | 1,474 | 1.00× |
+| Kairos at the start of this stretch | 2,138 | 1.450× |
+| **Kairos now** | **1,908** | **1.294×** |
+| minus our byte arena, inlined into `create` (C's is 646 B in `heap_4.c`) | **1,772** | **1.202×** |
+
+**Not a win, and the floor is ~1.20×.** Where it goes:
+
+| pair | C | ours | probes tried |
+|---|---:|---:|---|
+| `write_message` + `write_bytes_into` | 214 | 350 | scalars −2, disjoint borrows −18, `inline(always)` +46, `inline(never)` 0. The residue is `mv` 16/`sw` 14 of marshalling and spills around outlined helpers |
+| receive + read helpers | 508 | 616 | outlining `after_stream_wait` +100, disjoint borrows 0. Four-arm stackless-resume chain |
+| send + `send_from_isr` | 578 | 668 | same resume machinery; near parity |
+| **create** | **174** | **140** | **a win by 34 B, with no allocator against C's 646** |
+
+The residual is the two costs §14 named — **a handle resolve where C dereferences a
+pointer, and stackless resume where C blocks inside the call.** Both are the product.
+Going under 1,474 requires giving one of them up, which is a design decision and is not
+mine to make.
+
+---
+
+## 2026-09-25 — win 29: an A3 rationale with the wrong caller count, −8 B (18,668 → 18,660)
+
+`check_for_valid_list_and_queue` carried:
+
+```rust
+// A3: ONE caller in the linked kernel, so this pays a prologue and epilogue
+// for a single call. Inlining moves the body rather than duplicating it.
+#[inline(always)]
+```
+
+**It has two callers** — `timer.rs:301` and `kernel.rs:1601` — so A3 never applied, and
+at two callers `always` DUPLICATES an 86-byte body instead of moving it. `#[inline(never)]`:
+**−8 B and 2 fewer rv32 instructions**, against `andi` +1. Both arbiters fall.
+
+Gates: flash 7/7, conform **26/26**, kernel **102/0**, rv32 PASS, RAM PASS.
+
+### ★ The method that found it — audit every inline RATIONALE against the census
+
+Mechanical, and it is now three-for-three on 2026-09-25 (win 26's contradictory pair,
+`after_stream_wait`'s "ONE caller" that is three, and this). For each `#[inline*]` in the
+kernel, parse the caller count the comment CLAIMS and diff it against the actual call
+sites. The mismatches are the leads.
+
+> **An inline attribute's comment is an unverified assertion about the call graph, and the
+> call graph moves underneath it.** Nothing re-checks the claim when a caller is added, so
+> a correct A3 decision silently becomes a wrong one.
+
+### ★★ The inline-probe trap — it bit three times today, so it gets a law
+
+**Adding `#[inline(never)]` beside an existing `#[inline(always)]` does nothing.** The
+first attribute wins, the second is silently ignored, and the probe reads
+**byte-identical** — indistinguishable from "outlining does not help". It cost a false
+refutation on `after_stream_wait`, a wasted measurement here, and it is exactly what made
+win 26's A3 change dead from the day it was written.
+
+> **When probing an inline decision, REPLACE the attribute. Never add one.** And read the
+> `unused attribute` warning: it is the only thing that tells you the probe did not run.
+> `cargo build 2>&1 | grep -c 'unused attribute'` should be 0 before you trust any inline
+> measurement.
+
+---
+
+## 2026-09-25 — LISTS and event groups: probed, and the walls are documented
+
+Redirected here after stream buffers. **Both are structural, and one carries a 272 B
+attribution asymmetry.**
+
+### Event groups — 1,726 vs C's 778 (2.22×)
+
+| probe | result |
+|---|---|
+| `wait_bits`: merge the read and the clear into ONE `resolve_mut` (the borrow checker allows it — `wait_condition_met` is a `const fn` over locals) | **+20 B**, `slli` −1. The resolve really went; branch shape cost more. The same wall `list.rs` hit |
+| outline `place_on_unordered_event_list` + `remove_from_unordered_event_list` (2 callers each) | **+64 B** of real flash while making the events GROUP look **272 B** better — a displacement |
+| `configUSE_SB_COMPLETED_CALLBACK 0`: is our hook unconditional? | no — `Hook::send_completed` defaults to `false` and folds. Already symmetric |
+| `configUSE_TICKLESS_IDLE 0`: do we carry the step C gates? | no — already aligned |
+
+**★ The attribution finding.** C has `vTaskPlaceOnUnorderedEventList` (92 B) and
+`vTaskRemoveFromUnorderedEventList` (176 B) as symbols in **tasks.c**, outside
+`event_groups.c`'s 778. Ours are inlined into the event-group bodies, so **our events
+total carries ~272 B that C accounts to another file.** Like-for-like that is
+**1,454 vs 778 = 1.87×**, not 2.22×. Not fixed, because fixing it costs 64 B of real
+flash — the pin is the arbiter, not the attribution.
+
+> **A group ratio improved by OUTLINING is fake until the whole-binary pin agrees.**
+> Outlining always improves per-module attribution and usually worsens the binary,
+> because the inlined copies were specialised. This is the second time today
+> (stream buffers' `read_bytes` delegation was the first, +12 B for a 182 B group gain).
+
+### LISTS — 374 vs C's 126 (2.97×), and why the ratio is misleading
+
+C's list functions are 6–46 bytes of pointer manipulation with **zero validation**; ours
+are 108–134 bytes with handle validation. `unlink` 132 vs `uxListRemove` 32 is the purest
+instance of §14's index-vs-pointer cost in the kernel, precisely because the functions are
+too small to amortise a check.
+
+`list.rs` has had **five passes, nine wins against twenty-two refutations**, and its own
+conclusion is that "LLVM has already done every local optimisation here, so only a
+REPRESENTATION or an ALGORITHMIC change moves this file."
+
+**But every one of those 22 refutations is an INSTRUCTION count on x86-64/i686 hosts**
+(`core-ir`, `ksched-ir`, `kdelay-ir`) — the file has never been measured on rv32 flash
+bytes, and the two instruments disagree systematically. So it was re-examined on bytes:
+
+* `unlink_inner` is `#[inline(always)]` at 2 call sites, justified on Ir. Only **one**
+  (`unlink`) is linked — `remove`'s sole caller is `proofs.rs` — so there is one copy and
+  the attribute is right after all.
+* The file prices `list_meta`'s bounds check at **100 bytes across seventeen sites** and
+  keeps it because a caller-supplied list id must be rejected (`tests/no_panic.rs` proves
+  it). Splitting it by PROVENANCE — checked for caller ids, masked for ids read out of a
+  node, which the code already argues "names a real list" — sounded like the lever.
+  **A census of all fifteen call sites found exactly ONE internally-derived** (line 790,
+  in `unlink_inner`). Worth ~6 bytes, not 100. Recorded so nobody re-derives it.
+
+**Absolute size matters more than ratio here:** LISTS' whole excess is 248 B. Event
+groups' is 948 B, and the queue subsystem's is larger still. **A 2.97× on a 126-byte file
+is a smaller prize than a 1.2× on a 6,000-byte one** — the ratio column invites the wrong
+target.
+
+---
+
+## 2026-09-25 — ★★★ THE INSTRUMENT WAS FOLDING OUR BLOCKING PATH: +830 B, and the K3 row is 1.400× not 1.34×
+
+The largest instrument defect of this campaign, and it **flattered us**, which is why it
+survived: nobody audits a number that is in their favour.
+
+`bench/kernel-flash/rs/src/lib.rs` drives each primitive through an `op!` shim. Two of
+them passed a **literal `0`** where the rest pass the runtime tick:
+
+```rust
+op!(kairos_stream_buffer_send,    |k, h| { … k.stream_buffer_send(…,    0) });
+op!(kairos_stream_buffer_receive, |k, h| { … k.stream_buffer_receive(…, 0) });
+```
+
+`ticks = 0` is a compile-time constant, so LLVM constant-folded `else if ticks > 0` — the
+whole blocking arm, the `notify_wait` calls, the resume chain — **out of our arm**. The C
+arm's `xStreamBufferSend`/`Receive` are forced with `ld -u` and have **no caller at all**,
+so `if( xTicksToWait != ( TickType_t ) 0 )` cannot fold there. **The comparison placed a
+partly-deleted Rust function beside a complete C one.**
+
+Every other blocking op in the file passes `t`: `queue_send`, `queue_receive`,
+`queue_peek`, `semaphore_take`, `mutex_take_recursive`, `task_delay`, `notify_wait`,
+`notify_take`, `timer_start`/`stop`/`reset`/`change_period`, `event_group_wait_bits`,
+`event_group_sync`. **Exactly the two functions this goal was about were the exception.**
+
+| | as measured | honest |
+|---|---:|---:|
+| Kairos kernel + port | 18,660 B (**1.34×**) | **19,490 B (1.400×)** |
+| total rv32 instructions | 6,684 | **6,963** |
+| stream.rs group | 1,908 (1.294×) | **2,678 (1.817×)** |
+
+**+830 B, of which 770 is the stream group.** The `mv` pin moves 742 → 782, `slli`
+255 → 259, `andi` 136 → 137.
+
+### What it changes about the answer
+
+`after_stream_wait` — which does not exist in C in any form, because C blocks *inside*
+the call on the task's own stack — is now a visible **146 B symbol**. The newly-revealed
+770 B is stackless-resume machinery:
+
+| pair | C | ours | excess |
+|---|---:|---:|---:|
+| receive + read helpers | 508 | **876** | +368 |
+| send + `send_from_isr` | 578 | **1,030** | +452 |
+| `write_message` + `write_bytes_into` | 214 | 350 | +136 |
+| `after_stream_wait` (resume machinery) | **0** | **146** | +146 |
+| create | 174 | 276 | +102 |
+
+So the verdict reached by argument now has a number behind it: **stream buffers are 1.82×
+and the majority of the excess is code C does not have**, because it does not need to
+return from a blocked call and re-enter.
+
+### The laws
+
+> **★★ An instrument asymmetry that flatters you is the hardest kind to find, and the only
+> defence is to audit the arms for CONSISTENCY rather than for plausibility.** The tell
+> here was internal: eleven ops passed a runtime tick and two passed a constant. Nothing
+> about the number looked wrong — 1.294× was the best ratio in the table, which is exactly
+> why it should have been checked first.
+
+> **A constant argument at the only call site deletes code from a comparison.** When one
+> arm is entered through a wrapper and the other is forced by the linker with no caller,
+> the wrapper must not supply constants the other side cannot see.
+
+> **Re-test the shape-dependent verdicts after an instrument fix, not just after a code
+> change.** Both re-tested here (`#[inline(always)]` on `read_bytes_from`, and on
+> `write_bytes_into`) held at **+42 B** each on the honest arm — but they were verdicts
+> about a function whose blocking half had been deleted.
+
+### What still stands
+
+Wins 25–29 removed real code and their gates are unaffected (the defect is in the probe
+crate, which `conform`, the unit suites, `tick-work` and `kernel-ram` do not use). Their
+measured deltas were taken on the folded arm, so the stream-buffer ones are lower bounds.
+
+### Closing the stream-buffer goal: the arithmetic, on the honest arm
+
+For stream buffers to beat C, **1,205 of our 2,678 bytes would have to go — 45% of the
+implementation.** What those bytes are:
+
+| | bytes | can it go? |
+|---|---:|---|
+| `after_stream_wait` | 146 | **no** — it exists because a blocked call RETURNS and re-enters. C blocks inside the call on the task's own stack, so it has no counterpart in any form |
+| the blocking arms of send/receive (the 770 B the instrument was folding) | ~620 | **no** — same reason: the resume chain is the state machine that replaces C's stack |
+| the byte arena inlined into `create` | 136 | not without an allocator; C's is 646 B in `heap_4.c` |
+| handle resolves throughout | ~150 | not without giving up handle validation |
+| argument marshalling around outlined helpers | ~130 | probed six ways (see above); every arrangement measured worse |
+
+That is **>1,000 B of the 1,204 B gap in code C structurally does not contain.** The claim
+stopped being an argument the moment the instrument was fixed: the 770 B appeared exactly
+when the blocking path stopped being constant-folded away, and `after_stream_wait` became a
+symbol with no C counterpart.
+
+**Stream buffers cannot be a byte win against `stream_buffer.c`.** What can be said
+truthfully, and is: `stream_buffer_create` is **140 B against C's 174**; the write helpers
+are **350 against 428**; and the whole kernel carries **136 B of allocator against C's
+646**. The primitive loses on the sum and wins on three of its parts.
+
+Last refutation on the newly-visible path: merging `after_stream_wait`'s two adjacent TCB
+flag resolves into one accessor measured **0 B** — `&mut self` is `noalias` and LLVM had
+already shared the resolve. `list.rs`'s fourth pass states this law; it holds for TCB
+accessors too, and it means merging adjacent accessors only pays when an `&mut self` call
+stands BETWEEN them.
+
+---
+
+## 2026-09-25 — ★★ CORRECTION: "code C does not contain" was wrong, and it was load-bearing
+
+The previous entry concluded stream buffers were unreachable on the grounds that "over
+1,000 B of the 1,204 B gap is code C structurally does not contain." **That is false, and
+the owner caught it.**
+
+**C contains blocking code.** `xStreamBufferReceive`'s 294 bytes include its own blocking
+path — `xTaskNotifyWait`, `xTaskWaitingToReceive`, `vTaskSetTimeOutState`,
+`xTaskCheckForTimeOut`. What C lacks is only the **resume re-entry** machinery: the state
+that lets a blocked call RETURN and be re-entered. That is `after_stream_wait`, and it is
+**146 bytes, not 1,000.**
+
+The honest split of the +1,204:
+
+| | bytes | |
+|---|---:|---|
+| `after_stream_wait` | **146** | no C counterpart — C blocks on the task's own stack |
+| everything else | **1,058** | **our versions of functions C also has**, 1.7–2.7× bigger |
+
+And the reasoning error behind it: **the 770 B's APPEARANCE was treated as evidence that it
+is architectural.** It is evidence of one thing only — that it had never been measured,
+because the instrument was folding it away. Those are different claims and the second does
+not imply the first.
+
+> **A number that arrives with a correction is not thereby explained.** Finding out that
+> 770 bytes were hidden says nothing about whether they are necessary. The temptation to
+> treat "newly revealed" as "newly justified" is strong precisely because the discovery
+> feels like understanding.
+
+**The impossibility claim is withdrawn.** 1,058 B sits in functions C also has, so it is
+not irreducible by definition — it is reducible in principle by changing the
+REPRESENTATION (handle resolution, error discipline), and not by rearranging code.
+
+### The honest-arm probes that followed the withdrawal — five more, all ≥ 0
+
+| probe | result |
+|---|---|
+| `#[inline(always)]` on `read_bytes_from`, re-tested on the honest arm | keep: dropping it is **+42 B** |
+| `#[inline(always)]` on `write_bytes_into`, re-tested | **+42 B**, stays out |
+| mirror the queue path's `queue_resumes == 0` counter guard onto the three stream flags | **+214 B**. The queue guard is an INSTRUCTION-count win (it fires on all 48,000 `kernel-ir` queue calls); on bytes the counter maintenance at six sites costs far more than the arena resolve it elides. **Not a sibling defect — a deliberate Ir trade the stream path did not need** |
+| factor `send_inner`'s repeated wait tail into a helper, as the receive side has | **+28 B** |
+| ...the same, forced `#[inline(never)]` | **+28 B, identical** — LLVM outlines it either way, so one shared body plus three calls loses to three copies that each fold against their own arm |
+| merge `after_stream_wait`'s two adjacent TCB flag resolves | **0 B** — `&mut self` is `noalias`; LLVM had already shared it |
+
+### What ~20 probes across two days actually establish
+
+> **★★ This kernel sits at a local optimum for LLVM's inlining decisions, and the optimum
+> is "specialised copies".** Every restructure either DUPLICATES a body (costing bytes) or
+> SHARES one (costing a frame, argument setup and a general `Result` path). Measured both
+> directions on `after_stream_wait`, `write_bytes_into`, `read_bytes_from`,
+> `copy_data_to_queue`, `finish_wait`, `write_message`, the unordered-event-list pair and
+> `send_inner`'s tail: **every single one is ≥ 0 except where the change removed code
+> outright.**
+
+So the wins that DID land all removed code rather than moving it: unreachable fallbacks
+(−124), a duplicated ring walk unlocked by one `&mut` → `&` (−56), an instrumentation
+bracket C does not carry (−24), a dead specialisation (−316), a drain loop that cannot
+iterate (−84), a contradictory attribute (−4), a wrong caller count (−8).
+
+**The rule that falls out: on this codebase, only DELETION pays. Rearrangement does not.**
+
+---
+
+## 2026-09-25 — ★★★ the stream-buffer gap, bounded by ELIMINATION instead of argument
+
+Having withdrawn the impossibility claim, the remaining hypothesis was the one the
+withdrawal pointed at: the 1,058 B is **representation** — handle resolution where C
+dereferences a pointer. That is testable with a ceiling probe, so it was tested rather
+than asserted. Two probes, both deliberately unsafe, both reverted.
+
+| what was removed from ALL 41 stream-path accesses | flash | stream group | ratio |
+|---|---:|---:|---:|
+| nothing (shipped) | 19,490 | 2,678 | **1.817×** |
+| every **generation check** (no stale-handle detection at all) | 19,360 | 2,548 | 1.729× |
+| generation check **and** bounds check (mask-indexed, `list.rs`'s trick) | **19,306** | **2,494** | **1.692×** |
+
+> **★★ The ENTIRE handle-access mechanism — the whole memory-safety story for stream
+> buffers — is worth 184 bytes of a 1,204 byte gap. Fifteen per cent.**
+
+That refutes the representation hypothesis outright. With zero handle validation, zero
+generation checks and zero bounds checks, stream buffers are still **1.69×** C.
+
+### What the gap therefore IS, by elimination
+
+| candidate | priced at | method |
+|---|---:|---|
+| resume re-entry machinery (`after_stream_wait`) | 146 B | it is a symbol with no C counterpart |
+| the whole handle-access mechanism | 184 B | the two ceiling probes above |
+| argument marshalling / inlining arrangement | **≤ 0** | ~20 probes, every one ≥ 0 |
+| the byte arena inlined into `create` | 136 B | outlining `take_bytes` (measured, reverted) |
+| **the SHAPE of the code — a four-arm re-entrant state machine per blocking primitive** | **~740 B** | **what is left when the others are subtracted** |
+
+**That last row is the answer, and it is architectural in the true sense** — not "code C
+does not contain" (the error corrected above; C blocks too), but **the same behaviour
+written as a re-entrant state machine instead of a straight-line block-and-continue.** C's
+`xStreamBufferReceive` blocks in the middle of one function and resumes on its own stack.
+Ours must return `Blocked`, record where it was, and re-enter through a four-arm dispatch —
+three of whose arms carry a wait-and-recheck. Each arm is cheap; there are four of them, in
+each of send and receive, and they are the majority of the excess.
+
+**So the goal is out of reach for a reason now measured rather than argued:** every
+mechanism that could be optimised away has been priced, and together they are 466 B of a
+1,204 B gap. The remaining ~740 B is the stackless resume protocol's shape, and changing it
+means giving the kernel per-call stacks — which is the design, not a byte.
+
+### The method note
+
+> **When a hypothesis survives because it sounds structural, price it with a probe that
+> is allowed to be WRONG.** Both probes here break the safety model deliberately and were
+> never going to ship; their only job was to bound a prize. 184 bytes is a far more useful
+> fact than three more paragraphs about pointers versus handles — and it is the second time
+> today a ceiling probe settled something argument could not (the first priced the byte
+> arena inside `create` at 136 B).
+
+---
+
+## 2026-09-25 — ★★★ THE ARMS WERE COMPARING 54 OPERATIONS AGAINST 46: −358 B, and the ratio is 1.374×
+
+Run under `rusty-curiosity` on the owner's premise that the loss was an undiscovered
+instrument defect rather than a real one. **It was.** The expectation was stated first, with
+a number:
+
+> The C arm's forced symbol list and our arm's exported `op!` list describe the same
+> operation set, 1:1, same count.
+
+**Refuted in one command: 46 against 54.** Every C symbol pairs with one of ours, and ours
+has **eight** entry points the C arm links no symbol for:
+
+| ours | what C does instead |
+|---|---|
+| `timer_stop`, `timer_reset`, `timer_change_period` | **`xTimerGenericCommandFromTask` is ONE symbol** — we exported four spellings of it |
+| `semaphore_give` | a MACRO over the already-forced `xQueueGenericSend` |
+| `semaphore_create_binary` | a MACRO over `xQueueGenericCreate` |
+| `queue_overwrite` | a MACRO over `xQueueGenericSend` |
+| `mutex_create_recursive` | a MACRO over `xQueueCreateMutex` |
+| `check_terminated` | **`prvCheckTasksWaitingTermination` (102 B) + `prvDeleteTCB` (58) + `prvIdleTask` (32)** — reached transitively from the forced set, so C DOES pay for it |
+
+Removing the seven genuinely-unmatched ones: **19,490 → 19,132, −358 B. Ratio 1.400× →
+1.374×.** Their seven wrapper bodies and seven shims vanish entirely from the symbol table;
+C provides the same seven operations as macros, at **zero** additional bytes.
+
+### ★ The 502 B I nearly took, and why I did not
+
+Removing all **eight** reads **−502 B**, which is the tempting number. But `check_terminated`
+is correctly matched: the C arm links 192 B of termination-check code via `prvIdleTask`, and
+with our op gone our arm links **nothing** equivalent. Taking it would have been an
+asymmetry in our own favour — the same class of defect as the constant-`0` tick, pointing the
+other way. Checked before crediting, and kept.
+
+> **When a correction moves the number in the direction you want, check it twice as hard as
+> one that does not.** Today produced both: a tick constant that flattered us by 830 B and an
+> operation set that penalised us by 358. The second was found in ten minutes by counting two
+> lists; the first survived the whole campaign because nobody audits a flattering number.
+
+### What the same pass RULED OUT, each with its number
+
+| hypothesis | verdict |
+|---|---|
+| hidden `core::` panic / fmt / slice bloat in our `.text` | **refuted** — 492 B builtins (already excluded) and 430 B core lib; no `core::` panic or formatting code at all |
+| unmatched optimisation level | **refuted** — `opt-level = "s"` against `-Os`, `lto = false` both sides, `panic = "abort"`, relax on both |
+| unintended link roots keeping dead code alive | **refuted** — 49 global text symbols: 47 ops plus exactly `enter_critical` and `exit_critical` |
+| the trace-only `exits` counter costing every critical section | **8 B** — out of line, the body costs ONCE, not per call site |
+| C carrying features we lack, inflating its number | **true, and it flatters US**: `pvPortMalloc` 400 + `vPortFree` 246 = **646 B** of allocator we structurally do not need |
+
+### ★★ The critical-section asymmetry — real, large, and correctly left alone
+
+The root census found the only two non-`op!` roots: `enter_critical` (20 B) and
+`exit_critical` (36 B), GLOBAL symbols in a separate crate with `lto = false`. **Our arm
+makes 111 calls to them. The C arm has no `vTaskEnterCritical` symbol at all and 237 INLINE
+`csr` operations**, because `portENTER_CRITICAL()` is `csrc mstatus, 8` plus a plain
+non-atomic `xCriticalNesting++`.
+
+Ours also does strictly more: it saves the previous interrupt state and restores it
+conditionally, where C unconditionally re-enables.
+
+Both directions priced:
+
+| | flash | `mv` |
+|---|---:|---:|
+| out of line (shipped) | 19,132 | 751 |
+| `#[inline]` as written | **+1,406** | 592 |
+| `#[inline]`, cut down to C's exact semantics | **+2,164** | 566 |
+
+`mv` falls by 159 and 185, so the call really is costing register pressure — and the
+duplicated body costs far more than it saves. **One body plus 111 `jal` beats 111 copies.**
+C can afford to inline because its primitive is four instructions and ours is nine. Left out
+of line, with both numbers written at the site so nobody re-derives it.
+
+### The same pass, second defect: constant ARGUMENTS in the shims, +236 B against us
+
+The operation-set fix was the easy half. Standing at the shim table, the sibling question is
+what the shims PASS — and the file already knew the answer for two of them:
+
+```rust
+// The action gates a five-arm match in both kernels. A constant here let LLVM
+// fold four of them away while `-u xTaskGenericNotify` pulls in all five on the
+// C side.
+match v & 3 { 0 => NotifyAction::SetBits, ... }
+```
+
+`kairos_notify` and `kairos_event_group_wait_bits` derive their branch-gating arguments from
+the runtime `v` for exactly this reason. **The audit that produced those two missed the rest.**
+A C symbol forced with `ld -u` has NO CALLER, so every one of its parameters is runtime; any
+literal our shim supplies deletes code from our side of the comparison.
+
+| fixed | what a constant was folding |
+|---|---|
+| `notify_from_isr` | the **same five-arm action match** its sibling already guards — **+66 B** |
+| `timer_create` | `auto_reload: true`, a branch `uxAutoReload` gates at runtime in C |
+| `task_delete`, `task_suspend`, `task_priority_set`, `task_priority_get`, `notify_state_clear` | `None` means "the caller", and C tests its handle for NULL at runtime |
+| `queue_create`, `semaphore_create_counting`, `stream_buffer_create`, `task_delay_until` | sizes and counts C takes as parameters |
+
+**+236 B once all ten are runtime.** With the operation-set fix the two nearly cancel:
+
+| | flash | ratio |
+|---|---:|---:|
+| as published before this pass | 19,490 | 1.400× |
+| operation set matched, 54 → 46 + `check_terminated` | 19,132 | 1.374× |
+| **constant arguments made runtime** | **19,368** | **1.391×** |
+
+### What the whole curiosity pass says
+
+The owner's premise was that the loss hid a defect rather than being real. **Three defects
+were found in one session, and they do not agree on a direction:**
+
+| defect | signed effect on OUR number |
+|---|---:|
+| stream-buffer shims passed a constant `0` tick, folding the blocking path away | **+830 B** (flattered us) |
+| shims exported 54 operations against the C arm's 46 | **−358 B** (penalised us) |
+| shims passed constants where C's forced symbols take runtime parameters | **+236 B** (flattered us) |
+
+> **★★ An instrument does not have "a" bias; it has one per asymmetry, and they do not
+> cancel by construction.** Two of the three here flattered us and the larger ones did.
+> Auditing only in the direction you fear is how a number stays wrong for a whole campaign —
+> and the check that found all three is the same one: **compare the two arms for internal
+> CONSISTENCY, not for plausibility.** Eleven shims passed a runtime tick and two passed a
+> constant; forty-six symbols were forced and fifty-four exported; two shims derived their
+> action from `v` and one did not.
+
+Net of everything found today the row moves **1.34× (as reported) → 1.391× (honest)**, and
+the campaign's wins 25–29 stand unchanged beneath it.
+
+---
+
+## 2026-09-25 — ★★★ WHY WE LOSE TO C, priced at last: handle validation is 27% of the gap
+
+The remaining question was mechanism, and the answer came from a whole-kernel ceiling probe
+rather than an argument. Baseline 19,368 B against C's 13,924 — a **5,444 B** gap.
+
+**Probe: strip the entire handle-validation mechanism at all 184 `resolve`/`resolve_mut`
+sites** — no bounds check, no generation check, and therefore none of the `?` propagation
+they force.
+
+| | flash | instructions | ratio |
+|---|---:|---:|---:|
+| shipped | 19,368 | ~6,900 | **1.391×** |
+| **no handle validation anywhere** | **17,904** | **6,443** | **1.286×** |
+
+> **★★ The safety model costs 1,464 bytes across the kernel — 27% of the entire gap to C.
+> And without it we would be at 1.286×, INSIDE the K3 target of ≤ 1.30×.**
+
+That is the single largest mechanism ever isolated in this campaign, and it is the first time
+the checked-handle story has had a kernel-wide price rather than a per-primitive guess (stream
+buffers alone were 184 B, so it does not scale linearly — the TCB, queue and timer arenas are
+where the resolves concentrate: tcbs 44, buffers 43, queues 39, groups 15, timers 12).
+
+### Can the safety be kept and the bytes recovered? Two probes say mostly no
+
+| probe | result |
+|---|---|
+| mask (`index & (N-1)`) instead of a bounds check, **generation check retained** — `list.rs` proves the mask makes LLVM fold the check | **+434 B.** `andi` 143 → 216. The mask ADDS an instruction at 184 sites while `.get()`'s branch was nearly free, because LLVM merges it with the generation branch. **The bounds check is not the cost** |
+| `Self::why(handle)` (a null test + select, to choose `InvalidHandle` vs `Gone`) replaced by a constant | **−48 B.** Declined: it trades the distinction between "you passed a null handle" (a caller bug) and "the object was deleted" (a race) for 48 bytes, which is the wrong trade in a kernel whose selling point is checked handles |
+
+So of the 1,464 B, the bounds check is **negative** (masking is worse) and the error
+discrimination is 48 B. **The remainder — ~1,400 B — is the generation compare and the `Result`
+propagation it forces through every caller.** That is the price of turning C's undefined
+behaviour into a typed error, and it is not recoverable by rearrangement.
+
+### What C gets for free that we do not
+
+`llvm-nm --undefined-only` on both arms: **ours has ZERO undefined symbols; the C arm has
+four** — `memcpy`, `memset`, `strlen`, `vApplicationStackOverflowHook`. The C arm links with
+`--unresolved-symbols=ignore-all`, so those bodies are **called but never counted**.
+
+* `memcpy`/`memset` are symmetric: `run.sh` subtracts our `compiler_builtins` (492 B), and C
+  links none.
+* `strlen` is referenced by `tasks.o` from a `configASSERT` in `xTaskGetHandle`; we inline our
+  own name handling and pay for it.
+* `vApplicationStackOverflowHook` is C's, unlinked — but the **check** that calls it is in
+  `tasks.o` and counted, and we implement no stack-overflow checking at all, so that one
+  flatters us.
+
+And `configASSERT` is **not** a no-op here — it is `if(x==0){taskDISABLE_INTERRUPTS(); for(;;);}`,
+with **275 of them** across the linked files. So both arms validate; what differs is the
+failure mechanism. **C branches to a hang; we construct and propagate a typed error.** That is
+the same 1,400 B, seen from the other side, and it is why our branch count is 827 against
+C's 629.
+
+---
+
+## 2026-09-25 — ★★★ THE HIDDEN PROBLEM: row 2 is the PRICE TAG of rows 1, 5b, 7, 8 and 9
+
+The owner's premise was "we always win against C, we just haven't found the hidden problem."
+**The premise is correct and the whole campaign had been reading one row in isolation.**
+
+Every scorecard row that HAS a C arm:
+
+| row | C | Kairos | ratio | |
+|---|---:|---:|---:|---|
+| 1 static RAM | 1,704 B | 1,640 B | **0.96×** | win |
+| **2 flash** | 13,924 B | 19,368 B | **1.39×** | **the only loss** |
+| 3 tick ISR, Ir | 15 | 13 | **0.87×** | win |
+| 4 preemptive switch, Ir | 110 | 129 | 1.17× | pass |
+| 5 per timer, RAM | 40 B | 40 B | 1.00× | parity |
+| 5b per queue, RAM | 72 B | 56 B | **0.78×** | win |
+| 6 cooperative switch, Ir | 110 | 85 | **0.77×** | win |
+| 7 per task, RAM | 596 B | **184 B** | **0.31×** | win |
+| 8 per event group, RAM | 28 B | 8 B | **0.29×** | win |
+| 9 register half, yield | 83 | 30 | **0.36×** | win |
+
+**Nine of ten win or match.** So the question was never "why do we lose to C" — it was "why
+does ONE row behave unlike the other nine", and the answer is that row 2 is what pays for them.
+
+### The arithmetic, and it closes
+
+| | |
+|---|---:|
+| flash excess, one-time | **+5,444 B** |
+| RAM saved per task (596 − 184) | **412 B** |
+| **crossover** | **13.2 tasks** |
+
+**At fourteen tasks the RAM saved exceeds the entire flash excess** — and on an rv32 part flash
+is typically 4–16× more plentiful than RAM, so the trade pays far earlier in the resource that
+actually binds.
+
+Both halves of the 5,444 B are now measured, not argued:
+
+* **1,464 B (27%) is handle validation.** Stripping the generation check and its `Result`
+  propagation at all 184 `resolve` sites reads **17,904 B = 1.286×, INSIDE the K3 target.** That
+  is the price of turning C's undefined behaviour into a typed error — and the same
+  index-not-pointer representation is *why* rows 5b, 7 and 8 win.
+* **The remainder is stackless resume** — the four-arm re-entrant state machines whose ~740 B I
+  had priced in stream buffers and called an unexplained architectural cost. It is not
+  unexplained: it is what deletes C's **512 B per-task stack**.
+
+### ★★ The evidence was in the instrument's own output, for months
+
+`bench/kernel-ram` prints, unprompted:
+
+```
+C FreeRTOS   per task 84 B TCB + 512 B stack + a heap header = 596 B minimum
+             per task 184 B, and that is the WHOLE cost
+  The gap is the stack. A blocking Kairos call keeps its locals in the
+  TCB rather than a stack of its own
+```
+
+**"The gap is the stack."** The RAM bench had already named the mechanism that row 2 pays for,
+and row 2's own section never cited it. Same law as the dead-tables case: *the codebase prints
+the evidence long before anyone reads it* — and re-reading an instrument's FULL output, not the
+column you came for, is what finds it.
+
+### And a stale row found on the way
+
+Row 7 read **136 B** per task against a bench that pins **184**. It overstated our biggest RAM
+win (0.23× where the truth is 0.31×) and predates the drift pinned earlier today. Corrected.
+
+> **★★★ A per-row target is a trap when the rows are coupled.** K3's ≤ 1.30× on flash was set
+> without pricing the trade, so the campaign spent itself hunting bytes that were buying wins on
+> five other rows. Two of the three ways to reach 1.30× — drop checked handles, or give tasks
+> their own stacks — are the product. **Read row 2 as the cost column, and quote the crossover
+> beside it.**
+
+---
+
+## 2026-09-25 — the 15-win hunt: ONE clean win, a priced trade curve, and two methodology failures of mine
+
+Asked for fifteen more deterministic wins. **There are not fifteen.** What this codebase has
+left is a single lever — the inline/outline boundary — and every move on it **trades flash
+bytes against dynamic instructions**. The deliverable is a trade curve, not a pile of wins.
+
+### The one clean win
+
+`after_stream_wait`: `#[inline]` → `#[inline(always)]`. The plain hint had been DECLINED (it
+still emitted a symbol), which is the case `always` exists for.
+
+| | |
+|---|---:|
+| flash | **19,368 → 19,244, −124 B** |
+| dynamic Ir (`bench/sb-ir`) | **+8,782 of 125.9M = +0.01%** |
+| tick rows | unchanged, 14/26 (0.93×) |
+
+Gates: flash 7/7, tick PASS, RAM PASS, conform 26/26.
+
+### The trade curve — everything else, priced on BOTH axes against a FIXED baseline
+
+| change | flash | dynamic Ir |
+|---|---:|---|
+| `bytes_in_buffer` → outline | −84 B | +0.08% (stream) |
+| `end_wait` → outline | −170 B | +0.35% (kernel) |
+| `copy_data_to_queue` → outline | −68 B | } |
+| `insert_end` → outline | −266 B | } together **+1.33%** |
+| `resume_all_inline` → outline | −354 B | } |
+| **drop the `queue_take` A4 hint** | **−890 B** | **+0.62%** |
+
+**~1,832 B of flash is available for ~2.4% of dynamic work.** That is an owner's call, and it
+is the same shape as the trade the scorecard now records for row 2: flash is the currency this
+kernel spends to win elsewhere.
+
+### ★★ Failure 1: I used the WRONG second arbiter
+
+The house rule is "flash AND instructions both arbitrate", and I read *instructions* off the
+**flash bench's static asm count**. That is the number of instructions in the BINARY, not the
+number RETIRED. Outlining reduces the static count (one body instead of N copies) while
+raising the dynamic count (N calls that were not there). So:
+
+> **A static instruction count and a retired instruction count move in OPPOSITE directions for
+> every inline/outline change. Only callgrind Ir answers the work question.**
+
+It turned a claimed "win 43: −890 B and −335 instructions" into a measured **+0.62% trade**,
+and five other claimed wins into a **+1.33%** trade. `bench/kernel-ir` and `bench/sb-ir` exist
+for exactly this and I had not run them.
+
+### ★★ Failure 2: twelve candidates measured against a MOVING baseline
+
+I applied each candidate on top of the last and recorded its delta. That is A2
+non-additivity ignored in the most direct way possible, and it collapsed when I reverted five
+of them: **two cold arms I had "won" by inlining (`unwind_pended_ticks_loop`,
+`drain_pending_ready_walk`) then cost +1,768 B**, because their value depended on
+`resume_all_inline` and `copy_data_to_queue` being outlined at the time. Three `priority_*`
+functions were `#[cold]` already and my `#[inline(always)]` made them contradictory.
+
+> **Price every candidate against ONE fixed baseline, and price a set as a set.** A sequence of
+> deltas measured against each other is not a sum; it is a path, and reverting any step
+> invalidates the rest.
+
+Two reverts also silently missed (`end_wait`, `insert_timer_in_active_list`) because the anchor
+did not match the real signature — the same non-unique/mismatched-anchor trap recorded earlier
+today, which is why the state read 170 B below its own pin until audited attribute by
+attribute.
+
+### What genuinely has no more to give
+
+| vein | verdict |
+|---|---|
+| declined `#[inline]` hints | **exhausted** — `after_stream_wait` was the only one |
+| single-caller out-of-line symbols | 3 found, all `#[cold]` or context-dependent |
+| inlining 2-caller bodies | **arithmetic says no**: pays only under ~32 B, every candidate is ≥64 B |
+| `Arena::resolve`/`resolve_mut` outlined (148 inlined copies) | **+2,426 B, +1,171 instr** — inlining lets LLVM share the address computation; that is why validation is only ~8 B/site |
+| `#[cold]` on cold paths, as a set and bisected | +142 B, +68 B |
+| `is_sorted`, `as_str`, `trace_task` | test-only or already folded under `NoTrace` |
+
+---
+
+## 2026-09-28 — ⚠ INCIDENT: a non-atomic write truncated `kernel.rs` to zero bytes
+
+**What happened.** A scripted edit did `io.open(path, "w")` and the write raised
+`PermissionError` (Windows file lock — most likely a scanner or an editor holding the
+handle). `open(..., "w")` **truncates before it writes**, so the failure left
+`rusty_rtos_kernel-core/src/kernel.rs` at **0 bytes**, destroying every uncommitted change
+this session had made to that file.
+
+**Recovery attempted, all of it exhausted:**
+
+| source | result |
+|---|---|
+| `/tmp/SB_k.rs` (newest on-disk copy, 188,693 B, 2026-09-24) | restored, but **does not compile** — its impl blocks predate the current `events.rs`/`queue.rs`, which call `note_exits`/`resume_all_inline` it does not expose |
+| git HEAD in the nested repo (163,553 B) | far older still, and mismatched against the other files' current state |
+| `git fsck --lost-found` | four dangling commits, newest 2026-09-21, `kernel.rs` ≤ 160,835 B |
+| `git stash` | empty |
+
+**Lost from `kernel.rs` (everything else survived and is backed up):** win 26
+(`switch_delayed_lists`), the `trace_failure_or_owe` doc/attribute restoration, the stale
+`A3 PROBE` marker rewrites, and this sitting's candidates D (5 guarded
+`saturating`→`wrapping`), G (`account_for_allocation` outlined) and H's four `is_empty_of`
+call sites.
+
+### ★★★ The method law, and it is absolute
+
+> **Never write a source file with a truncating open. Write a temp file beside it and
+> `os.replace()`, which is atomic — a failure then leaves the original intact.**
+
+```python
+import os, io
+tmp = path + ".tmp"
+io.open(tmp, "w", encoding="utf-8", newline="\n").write(new_text)
+os.replace(tmp, path)          # atomic; the original survives any failure
+```
+
+Every scripted edit in this campaign used the unsafe form. It worked dozens of times and
+then destroyed a file — which is exactly the shape of a latent defect, and the reason the
+rule is unconditional rather than a judgement call.
+
+> **And back the working tree up BEFORE a long uncommitted campaign, not after the
+> accident.** Nine files carrying this session's wins were one unlucky lock away from the
+> same fate; they are now copied to the scratchpad. The real fix is a commit.
+
+### The reconstruction — `kernel.rs` is back, and it conforms
+
+The IDE could not help, and the reason is worth recording: **VS Code's Local History and
+Timeline only snapshot a file when the EDITOR saves it.** Every edit in this campaign went
+through Python/Bash straight to disk, so no snapshot was ever taken. Verified rather than
+assumed — `%APPDATA%\Code\User\History` (262 entries) and `Cursor\User\History` (122) contain
+**no rusty_RTOS file at all**, `Code\Backups` (hot-exit buffers) is empty, and there are no
+editor swap files or shadow copies.
+
+So it was rebuilt from `/tmp/SB_k.rs` (2026-09-24) plus the session record. The old file was
+only **three API generations** behind, which the compiler enumerated exactly:
+
+| gap | repair |
+|---|---|
+| `note_exits` missing | re-added, gated on `T::EMITS`, and the 17 direct `trace.note_exits(..)` calls routed through it |
+| `resume_all_inline` missing | `resume_all` re-split: `#[inline(never)]` wrapper over an `#[inline(always)]` body |
+| `begin_wait` returned `Result<Option<u64>>` | made infallible: `-> Option<u64>` |
+| `Handle::index()` widened `u16 -> u32` | 18 `usize::from(x.index())` -> `x.index() as usize`, 2 `ItemId` sites -> `as u16` |
+| `Tcb::_stride_pad` missing | re-added as `[u32; 9]`, which restored **`mul` 0** and the **128-byte power-of-two stride** |
+
+Then the documented wins were re-applied: win 26 (`switch_delayed_lists`), candidate G
+(`account_for_allocation` outlined), candidate D (5 guarded counters), candidate H (4
+`is_empty_of` sites).
+
+**Result: compiles clean (0 warnings), kernel 102/0, `conform --all` 26/26, rv32 PASS, RAM
+PASS.** Flash **19,790 B (1.42×)** against 19,244 before the incident — about **546 bytes**,
+plus **8 bytes of per-task RAM**, of earlier `kernel.rs` work has no surviving record. All
+instruments re-pinned to the post-incident baseline with the reason written at the pin.
+
+### ★★ Two defects I introduced during the repair, and both were caught by instruments
+
+1. **A blanket replace rewrote the body inside its own definition.** Replacing
+   `self.trace.note_exits(self.port.exits())` with `self.note_exits()` hit the line *inside*
+   `note_exits`, producing `fn note_exits { if T::EMITS { self.note_exits() } }` —
+   **infinite recursion**. Under `NoTrace` it folds to nothing, so the flash build was clean
+   and green; it would have stack-overflowed in every conform scenario. Found because the
+   duplicate-attribute warning sent me to read those lines.
+
+   > **A blanket replacement must exclude the definition site.** A pattern that appears in
+   > both the callers and the callee will eat the callee.
+
+2. **The insertion orphaned `resume_all`'s doc and `#[inline(always)]`** onto the new
+   function — *recreating the exact defect found earlier this session* on
+   `trace_failure_or_owe`. Caught by `unused attribute`, which is now at 0 again.
+
+That warning count has now caught four separate defects in this campaign. It belongs in the
+gate, not in the scrollback.
