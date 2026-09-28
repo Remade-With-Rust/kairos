@@ -295,7 +295,14 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # `current`'s generation word; either alone leaves it live, which is why the
 # index compare measured 0 on its own (A2: price the set). rv32
 # `switch_select` 48 -> 47 and `block_cycle` 993 -> 989.
-check "Kairos kernel + port"   "$rs_kernel" 19778
+#
+# 19,752 (2026-09-28, -26 B): `check_for_timeout` returns `Option<NonZeroU64>`
+# instead of `Option<u64>`. `Option<u64>` has no niche -- sixteen bytes, two
+# registers -- and `Some(0)` is unreachable on every arm, so the niche is free.
+# Worth -270,175 Ir on the host, -4 on rv32 `block_cycle`, and these 26 bytes.
+# `rusty-compiler-leverage` B5: change the REPRESENTATION, do not out-compute
+# LLVM.
+check "Kairos kernel + port"   "$rs_kernel" 19752
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -363,7 +370,7 @@ ops() {
 }
 echo
 echo "opcode counts -- the four the 1.6x investigation named:"
-check "mv   (call-argument setup)" "$(ops mv)"   779
+check "mv   (call-argument setup)" "$(ops mv)"   785
 check "mul  (non-p2 indexing)"     "$(ops mul)"    0
 check "srli (u16 extraction)"      "$(ops srli)"  76
 check "slli (u16 extraction)"      "$(ops slli)" 257
