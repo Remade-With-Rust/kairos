@@ -15134,3 +15134,138 @@ unaffected, because neither `increment_tick` nor `switch_context` takes a critic
 
 Gated on conform 26/26 with the death scenario's `exits=3890` unchanged, which is the check
 that matters when the thing being changed is the clock itself.
+
+## ★★ 2026-09-28 — `queue_take_blocking`, round two: reading the function instead of reasoning about it
+
+Pushed a second time on the ten-win goal after four wins and thirteen measured attempts.
+The round produced **two more wins, three refutations and one instrument defect**, and every
+one of them came from the same move: read what the function actually executes, then price the
+change on all four instruments rather than the one that first shows a number.
+
+### Win 5 — `queue_take_timed_out`'s `caller` argument was `self.current`
+
+`peek` is the seventh argument word of `queue_take_blocking(&mut self, caller, queue, peek)`:
+`rdi` is the sret pointer, `rsi` is `self`, `caller` takes (rdx, rcx) and `queue` takes
+(r8, r9). So x86-64's six argument registers were full and the listing showed
+`movzbl 0x80(%rsp),%r15d` — every call STORED `peek` to the stack and the callee loaded it
+back into a callee-saved register it then had to push and pop.
+
+`caller` is redundant. Two call sites read it from `self.current` a few lines above; the
+other two are reached only past `if self.current != caller`. Reading it in the callee is the
+same value.
+
+| | `bench/kernel-ir` | `bench/kernel-flash` | rv32 rows |
+|---|---:|---:|---|
+| **both** functions drop `caller` | **−136,107** | **19,752 → 19,730**, `mv` 785 → 767 | `block_cycle` −2, **`recv_empty` +1, `send_full` +1, `peek_ok` +1, `queue_roundtrip` +4** |
+| only `queue_take_timed_out` | −27,967 | 19,752 → 19,740, `mv` 785 → 775 | **every row IDENTICAL** |
+
+**The bigger number is the one that was refused**, and the reason is the second instance today
+of one source change wanting opposite code on the two architectures:
+
+> **rv32 has EIGHT argument registers where x86-64 has six.** `peek` was never in a seventh
+> slot there, so dropping `caller` removes no spill and only adds two loads of `self.current`.
+> The −136,107 is x86-64's calling convention, and the +7 is four rv32 rows that are *firmware*
+> paths — not SimPort bookkeeping, which is what excused the rv32 regression in the
+> `exit_critical` win earlier today. So this one does not get a `cfg` split; it gets scoped to
+> the function where it is free.
+>
+> **An argument-count win is only a win where the arguments were actually spilling.** The first
+> instance of this law today was about instruction SELECTION (no conditional move on rv32);
+> this one is about the ABI.
+
+### Win 6 — the event item's bound, proved where LLVM can use it: −96,574 Ir, −3 on `block_cycle`
+
+The listing of the sorted insert, immediately before its walk:
+
+```
+610d5  movzwl 0x28(%r14),%eax    ; self.current.index(), u16
+610da  add    $0x18,%ax          ; + TASKS
+610de  mov    $0xffff,%ecx
+610e3  cmovae %eax,%ecx          ; a saturating_add that CANNOT saturate
+610e8  cmp    $0x56,%cx          ; a node-array bound check that CANNOT fail
+610f6  ja     611c3
+```
+
+`event_item` is `TASKS.saturating_add(index)`, which tells LLVM the result fits a `u16` and
+nothing more — so `insert_keeping_value` still checks that the item names a real node, and the
+saturate costs a `mov` and a `cmov` besides. A `TASKS`-sized index proof in
+`place_on_event_list` makes the sum provably below `2 * TASKS` and folds both.
+
+It has to be proved *there* rather than relied on: `self.current` is a live task on every path
+that reaches the function, but the calls in between take `&mut self`, so LLVM cannot carry the
+fact across them. **This is B1 exactly — a bound proof pays only across a boundary LLVM cannot
+see through** — and it is the third confirmation of that refinement today.
+
+| | measured |
+|---|---|
+| `bench/kernel-ir` | **−96,574**: `queue_take_blocking` −24,898, `queue_send_blocking` −71,676, nothing positive |
+| rv32 `block_cycle` | **977 → 974**, every other rv32 row identical |
+| rv32 flash | **19,740 → 19,762, +22 B** |
+
+**★ And the attribute is load-bearing, which is the part worth carrying.** The proof grew the
+function past LLVM's own inlining threshold. Outlined, the row win was *larger* — 
+`queue_take_blocking` −668,718, `queue_send_blocking` −549,516 — and the PROGRAM was
+**+154,439**, because a new `place_on_event_list` symbol appeared carrying 1,372,673 Ir of
+frame and marshalling. `#[inline]` puts it back to −96,574.
+
+> A row can win by two thirds of a million while the program loses. `price.sh` prints the
+> program total next to the rows for exactly this case, and this is the first time the two
+> have disagreed in SIGN rather than in size.
+
+`#[inline]` and `#[inline(always)]` measured identically on both axes, so the 22 bytes are the
+check duplicated at each site rather than the attribute's doing. **Taken as a trade**: 22 bytes
+for 3 instructions on the blocking queue path, a host win, and a corrupt `self.current` now
+reporting a stall instead of relying on a downstream range check. Compare the trade declined
+earlier at −192,102 Ir for +204 B on `unlock_queue` — the RATE decides these, not the sign.
+
+### Refuted — `exit_critical` tests the dead arm first, and making it cold costs 1.4M
+
+The counting arm is reached only past `cmp $0x5` (TALLIES) and `cmp $0x1` (COUNTS), and the
+TALLIES arm reads DEAD in all three scenarios inside `queue_take_blocking`. Since
+`exit_critical` inlines four times into that one function, reordering looked worth two
+instructions per exit across every critical section in the kernel.
+
+| form | program |
+|---|---:|
+| `if flags == COUNTS { … } else { self.tally_unwound() }` | **+763,447** |
+| `if flags == COUNTS { … } else if flags == TALLIES { self.tally_unwound() }` | **+1,411,062** |
+
+The first was my own error — the `else` swallowed the original `_ => {}` arm, so every exit
+whose flags are neither value paid a call. The second is the real refutation, and the new
+`tally_unwound` symbol carrying **473,442 Ir** is the mechanism:
+
+> **A DEAD-ALL column in a per-instruction census is per-INLINED-COPY, and outlining is a
+> per-FUNCTION decision.** The tally arm is dead in the copy inside `queue_take_blocking` and
+> very much alive in the other copies — `resume_all`, `check_for_timeout`, `task_priority_get`.
+> A2 says price a cold arm as a SET; this adds that the set is every site the arm is inlined
+> into, not every site you happened to census.
+
+`exit_critical`'s own row went 1,018,517 → 2,438,911 in the process.
+
+### ★ The instrument defect, and it had already produced a wrong finding
+
+`cold3.py` took its disassembly window from the lowest and highest SAMPLED address. That is
+wrong in both directions: it stops at the last *executed* instruction, so a cold tail is
+invisible, and it runs on into the next symbol, whose instructions are reported as this one's
+and counted dead.
+
+On `unlock_queue` — 0x5fac0..0x5fd6f, with `take_outlined` starting at 0x5fd70 — it read
+**"146 of 173 instructions dead in all three scenarios"**, 84%, which read as a large A2
+opportunity. Most of those 146 were `take_outlined`'s. Fixed to take the boundaries from
+objdump's own headers.
+
+**And the fixed tool is still not trustworthy for one thing, which is now written at the top
+of it.** It reports `unlock_queue` as 173 of 188 dead with a 106-instruction dead run AT THE
+ENTRY, while an instruction inside that run is the target of a `jmp` that executes 21,490
+times. Both cannot be true, so the per-address attribution is losing cost recorded under a
+nested `fn=` for inlined code. Function totals agree with `callgrind_annotate` and any
+non-zero count is sound; **a zero is not yet evidence of dead code.** No conclusion is drawn
+from it until that is fixed.
+
+### Priced and not retried
+
+`const PEEK: bool` would specialise the whole cold take chain and remove the runtime flag from
+ten sites. It is already recorded as a deliberate FLASH win in the other direction — 2,778
+bytes of duplication across four instantiations, taken out for −28 B — so the instruction win
+is bought and paid for. The doc comment on `queue_take` still argues for the const it no longer
+is; that is a stale comment of the class this session has been correcting all day.

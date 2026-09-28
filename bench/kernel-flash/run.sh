@@ -314,7 +314,21 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # registers, so `peek` was never in the seventh slot there and dropping `caller`
 # only adds two loads -- the win is x86-64's six-register convention, and those
 # four rows are firmware paths, not SimPort bookkeeping.
-check "Kairos kernel + port"   "$rs_kernel" 19740
+# 19,762 (2026-09-28, +22 B): a TRADE, taken deliberately and priced on all
+# four instruments. `place_on_event_list` proves `self.current.index() < TASKS`
+# before building the event item, which folds BOTH the `saturating_add` in
+# `event_item` and the node-array bound check inside `insert_keeping_value`.
+# Worth -96,574 Ir (`queue_take_blocking` -24,898, `queue_send_blocking`
+# -71,676, nothing positive) and rv32 `block_cycle` 977 -> 974, with every other
+# rv32 row identical. These 22 bytes are that check duplicated at each inline
+# site -- `#[inline]` and `#[inline(always)]` measure the same, and WITHOUT the
+# hint LLVM outlines the function and the whole thing becomes +154,439.
+#
+# 22 bytes for 3 instructions on the blocking queue path, a host win, and a
+# corrupt `self.current` reporting a stall instead of relying on a downstream
+# range check. Compare the trade DECLINED at -192,102 Ir for +204 B on
+# `unlock_queue`: the rate is what decides these, not the sign.
+check "Kairos kernel + port"   "$rs_kernel" 19762
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -385,11 +399,14 @@ echo "opcode counts -- the four the 1.6x investigation named:"
 # 775 (2026-09-28, -10): the `caller` argument removed from
 # `queue_take_timed_out`, above. This is the count the 1.6x investigation named
 # as the tell for argument marshalling, so a signature change should move it.
-check "mv   (call-argument setup)" "$(ops mv)"   775
+# 770 (2026-09-28, -5), 78 srli / 259 slli / 166 andi (+2 / +2 / +1): the
+# event-item bound proof above. The u16 extraction counts rise because the
+# folded check leaves the index arithmetic in narrower registers.
+check "mv   (call-argument setup)" "$(ops mv)"   770
 check "mul  (non-p2 indexing)"     "$(ops mul)"    0
-check "srli (u16 extraction)"      "$(ops srli)"  76
-check "slli (u16 extraction)"      "$(ops slli)" 257
-check "andi (incl. zext.b)"        "$(ops andi)" 165
+check "srli (u16 extraction)"      "$(ops srli)"  78
+check "slli (u16 extraction)"      "$(ops slli)" 259
+check "andi (incl. zext.b)"        "$(ops andi)" 166
 
 echo
 if [ "$fail" -eq 0 ]; then

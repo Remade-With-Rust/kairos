@@ -58,7 +58,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 21 | **queue receive refused** (empty, 0 ticks), Ir | *no C arm* | **39** | — | — | ⬜ −59.6% (§6), then −21 (§10) |
 | 22 | **event-group wait refused** (0 ticks), Ir | *no C arm* | **39** | — | — | ⬜ −31.7% (§6) |
 | 23 | **owe filter** (`resume_pending`, nothing owed), Ir | *no C arm* | **7** | — | — | ⬜ §8 |
-| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **977** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
+| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **974** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
 | 29 | **queue peek** (item present), Ir | *no C arm* | **42** | — | — | ⬜ the `PEEK` twin, §8; −35 (§10) |
 | 30 | **queue messages-waiting**, Ir | *no C arm* | **17** | — | — | ⬜ the FLOOR, = `scaffolding` |
 | 25 | **notify round-trip** (give+take), Ir | *no C arm* | **59** | — | — | ⬜ −28.7% (§6) |
