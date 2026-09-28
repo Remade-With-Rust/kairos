@@ -48,8 +48,8 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 1 | **static RAM**, a blinker's geometry | 1,704 B | **1,640 B** | **0.96×** | ≤ 1.20× (K4) | ✅ **PASS** — §1 |
 | 1b | the same, at the hand-picked 8/8/16 | 1,704 B | 5,984 B | 3.51× | — | see §1 on geometry |
 | 2 | **flash** `.text`, kernel + RISC-V port | 13,924 B | **19,788 B** | **1.42×** | ≤ 1.30× (K3) | ❌ **FAIL** — §12, §13, §16; relaxation was off on our arm only, §14; **and the ratio depends on `codegen-units = 1`, worth 4,154 B — §17** |
-| 3 | **tick ISR**, retired instructions | 15 | **13** | **0.87×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
-| 4 | **whole preemptive switch**, Ir | 110 | **129** | **1.17×** | ≤ 1.25× (K3) | ✅ **PASS** |
+| 3 | **tick ISR**, retired instructions | 15 | **14** | **0.93×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
+| 4 | **whole preemptive switch**, Ir | 110 | **122** | **1.11×** | ≤ 1.25× (K3) | ✅ **PASS** |
 | 5 | **per timer**, RAM | 40 B | **40 B** | **1.00×** | — | ✅ **PARITY** — and the BENCH now says 40 too, §11 |
 | 5b | **per queue**, RAM | 72 B | **56 B** | **0.78×** | — | ✅ **WIN** — new row, §11 |
 | 18 | **queue round-trip** (send+receive), Ir | *no C arm* | **131** | — | — | ⬜ −17.6% (§6), then −27 (§10) |
@@ -65,8 +65,8 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 26 | **notify take refused** (0 pending, 0 ticks), Ir | *no C arm* | **31** | — | — | ⬜ −43.5% (§6) |
 | 27 | **notify wait refused** (0 ticks), Ir | *no C arm* | **29** | — | — | ⬜ new instrument |
 | 28 | **one lookup + critical section** (`task_priority_get`), Ir | *no C arm* | **17** | — | — | ⬜ the FLOOR every row sits on |
-| 6 | **whole cooperative switch**, Ir | 110 | **85** | **0.77×** | ≤ 1.25× (K3) | ✅ **PASS — 23 % faster** |
-| 7 | **per task**, RAM | 596 B | **184 B** | **0.31×** | — | ✅ **WIN** — 136 was stale; the bench pins 184 (§11). C is 84 B TCB + 512 B stack + a heap header; **the gap is the stack** |
+| 6 | **whole cooperative switch**, Ir | 110 | **78** | **0.71×** | ≤ 1.25× (K3) | ✅ **PASS — 29 % faster** |
+| 7 | **per task**, RAM | 596 B | **176 B** | **0.30×** | — | ✅ **WIN** — 136 was stale; the bench pins 184 (§11). C is 84 B TCB + 512 B stack + a heap header; **the gap is the stack** |
 | 8 | **per event group**, RAM | 28 B | **8 B** | **0.29×** | — | ✅ **WIN** — 16 was step-inflated, §11 |
 | 9 | **register half**, cooperative yield | 83 | 30 | 0.36× | — | ✅ **WIN** |
 | 10 | **register half**, preemption | 83 | 74 | 0.89× | — | ✅ **WIN** |
@@ -76,9 +76,42 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 14 | **ISR-to-task latency** | *no C arm* | 430 cyc (S3) | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 15 | **queue send/receive**, 16 B item | *never built* | — | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 16 | **API coverage** | 341 rows mapped | **0 marked done** | — | 100 %, CI-checked | ⬜ **UNMEASURED** |
-| 17 | **scheduler selection**, Ir | 27 | **49** | 1.81× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
+| 17 | **scheduler selection**, Ir | 27 | **48** | 1.78× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
 
-**One** hard failure: flash, at **1.78×** against a ≤ 1.30× target (§12). It was never
+### Re-measured 2026-09-28 â€” six figures in this table had gone stale
+
+Every row above with a C arm was re-run from the pinned oracle on that date
+(`bench/tick-work`, `bench/switch-cost`, `bench/kernel-flash`, `bench/kernel-ram`), and six
+of them disagreed with what this file said. Five moved in OUR favour and one against:
+
+| row | this file said | measured | direction |
+|---|---|---|---|
+| 4 whole preemptive switch | 129 / 1.17x | **122 / 1.11x** | better |
+| 6 whole cooperative switch | 85 / 0.77x | **78 / 0.71x** | better |
+| 7 per-task RAM | 184 B | **176 B** | better |
+| 17 scheduler selection | 49 / 1.81x | **48 / 1.78x** | better |
+| the prose below | flash 1.78x | **1.42x** | better |
+| 3 tick ISR | 13 / 0.87x | **14 / 0.93x** | **WORSE by one instruction** |
+
+Both work benches passed their own gates while producing these: PARITY (both arms report
+identical anchors, so they did the same work) and POISON (doubling the measured call moved
+every row on both arms, so the bracket encloses the callee and not the loop).
+
+**The tick's +1 is the one to chase.** It cannot be from that day's kernel work: the two
+changes that touched rv32 codegen moved flash by two bytes in `switch_context`, which is not
+on the `tick_idle` path, and the third was `cfg`'d to a 64-bit host with the flash pins
+proving rv32 byte-identical. The likely origin is the truncation incident's rebuild, which
+`docs/LEDGER.md` records as having lost roughly 546 bytes of `kernel.rs` work with no
+surviving description. One instruction on the tick is a small, findable thing and this is
+the row that says where to look.
+
+**A number in a document has nothing that fails when it drifts** â€” which is the same defect
+that, one level down in a source comment, cost this kernel 10% of its instructions for weeks
+(`docs/LEDGER.md`, the `as_str` alignment entry). The benches fail loudly; the documents that
+quote them do not. Treat every figure here as provisional until the bench that owns it has
+been re-run.
+
+**One** hard failure: flash, at **1.42×** against a ≤ 1.30× target (§12). It was never
 passing — the probe passed compile-time-constant handles, and `Arena::resolve` folds to
 `Err` for a generation of 0, so LLVM deleted 23 of the operations the root set was
 pulling in. Every figure this row published, 2.21× through 0.96×, was measured that way,
