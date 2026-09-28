@@ -14790,7 +14790,41 @@ So the two rows say one thing together, and it is not "we lose the preemptive ro
 
 That is the honest shape of the comparison and it is better than the row reads alone.
 
-### Priced and DECLINED: the unified trap entry, −4
+### ★★ CORRECTION, same day: the unified trap entry is NOT −4. The floor is 121.
+
+The paragraph below priced a Kairos-owned unified trap entry at −4 and declined it on risk.
+Costed properly it is not −4, and the row is already at its floor. **I had counted what the
+change REMOVES and not what it ADDS.**
+
+| | split (today) | unified |
+|---|---|---|
+| reaching the save area | `addi sp,-0x40`, `add a0,sp,zero`, `addi sp,0x40` — **3** | `csrw mscratch`, `lw` the ctx pointer, `csrr mscratch` for the original `t0`, `mv t0,a0` — **4** |
+| control | `jal`, `mret`, `ret` — 3 | `jal`, `mret` — 2 |
+| **overhead** | **6** | **6** |
+
+**A stack frame gets its pointer for free.** `sp` already holds one, and `addi sp, -0x40` both
+allocates the area and addresses it. Saving into a TCB instead has to materialise a pointer
+from memory and stash the scratch register it used to do so — which costs exactly what the
+frame cost. The overhead is a wash.
+
+The one scheme that does better is `csrrw t0, mscratch, t0`, which fetches the context pointer
+and stashes `t0` in a single instruction and reaches about 72. It requires `mscratch` to hold
+the current context pointer at all times, which means writing it on **every** switch including
+the cooperative one — spending an instruction on row 6 (77, our best row against the C) to buy
+two on row 4. That is a compromise, not a win, and it was excluded by the brief.
+
+> **So the whole preemptive switch is 121 and 121 is the floor.** Not "121 with 4 available":
+> the 64 data instructions each move a word that must move, the 4 CSR accesses are minimal for
+> two CSRs, and the 6 control instructions cannot be reduced without moving the cost onto the
+> cooperative path. The earlier figure of 117 in this file and in the scorecard was wrong and
+> both are corrected.
+
+And the lesson is the one this session keeps paying for: **price what a change ADDS, not only
+what it removes.** Four of the five sign errors today were the same shape — the peel that
+duplicated an inlined body, the guard whose compare paid for itself, the index compare whose
+word another consumer held alive, and now a frame whose pointer was free.
+
+### Superseded: the original pricing of the unified trap entry as −4
 
 The one available win is precisely identified and not taken. It requires replacing
 `riscv-rt`'s trap entry with a Kairos-owned one that saves the caller-saved set straight into
