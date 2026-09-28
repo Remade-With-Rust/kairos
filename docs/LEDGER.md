@@ -15269,3 +15269,94 @@ ten sites. It is already recorded as a deliberate FLASH win in the other directi
 bytes of duplication across four instantiations, taken out for −28 B — so the instruction win
 is bought and paid for. The doc comment on `queue_take` still argues for the const it no longer
 is; that is a stale comment of the class this session has been correcting all day.
+
+## ★★★ 2026-09-28 — round three: the bound-proof law, and what it predicts
+
+The seventh win on this goal, and the first time the day's B1 refinement was sharp enough to
+PREDICT which sites would pay before measuring them.
+
+### Win 7 — `add_current_task_to_delayed_list`: −262,232 Ir, −26 B, `block_cycle` 974 → 968
+
+By its own note this function is the single largest consumer of the blocking workload, and it
+derives FOUR bound-checked accesses from an index it reads out of memory —
+`delay_aborted.get_mut(index)`, then `state_item(current)` feeding `lists.remove` and one of
+three inserts. One `index >= TASKS` test at the top folds all of them.
+
+| instrument | result |
+|---|---|
+| `bench/kernel-ir` | **−262,232 in that ONE row**, nothing positive |
+| `bench/tick-work` | rv32 `block_cycle` **974 → 968**, every other row identical |
+| `bench/kernel-flash` | **19,762 → 19,736, −26 B**, and ALL FOUR opcode counts fell |
+
+All four opcode counts falling together is the signature of a folded check rather than a
+reshuffle — the event-item proof of win 6 *raised* three of them. It also repays win 6's +22 B
+with change, so the pair is −4 B against HEAD and −9 on `block_cycle`.
+
+### ★★★ The law, and it is the most transferable thing this goal produced
+
+> **A bound proof pays only where the value is RE-READ FROM MEMORY after the boundary. A
+> parameter carries its own proof across any number of calls; a field does not.**
+
+It explains every B1 result of the day, wins and refutations alike, which is what makes it a
+law rather than an observation:
+
+| site | the value | measured |
+|---|---|---:|
+| `switch_context`'s `top_ready_priority` | a field | **−969,669** |
+| `place_on_event_list`'s `self.current` | a field | **−96,574** |
+| `add_current_task_to_delayed_list`'s `self.current` | a field | **−262,232** |
+| `check_for_timeout`'s task index | a parameter, one of two behind a boundary | −3,167 |
+| `queue_take_blocking`'s queue index | **a parameter**, already proved by the resolve above it | **exactly +0** |
+| `resume_pending_owed`'s nine accesses | a parameter into `[T; TASKS]` | **±0** — compile-time length, already CSE'd |
+
+The `+0` is the one that earns it. I wrote the queue-index proof expecting a third win of the
+same size and it was **byte-identical**, because `queue` is a parameter and `resolve(queue)?`
+had already proved it about a local — and a local survives any number of `&mut self` calls,
+while a field does not survive one.
+
+### Refuted — `add_task_to_ready_list`'s priority guard: a host win the target refuses
+
+Same shape, applied to `priority` (a memory read) feeding `ready_list(priority)`, which IS the
+list id. Host **−50,424 on the program total with the kernel rows byte-identical**, so the
+folded check lives in `rusty_rtos_core`'s list module, outside `run.sh`'s row filter. A null arm
+confirmed HEAD's totals to the instruction first.
+
+And rv32 refused it: `block_cycle` **968 → 971**, `group_roundtrip` 71 → 73 against
+`notify_roundtrip` −1 and `queue_roundtrip` −1, plus **+14 B**. The guard itself — a compare and
+a branch on a `u8` against a const — costs more there than the folded list-id check saves.
+**`block_cycle` is the row this goal is about, so a host-only 50,424 does not buy a +3 on it.**
+
+### Refuted — the `is_empty_of` guard on `remove_from_event_list`: +1,190,472
+
+Seven call sites read `if !self.lists.is_empty_of(l) && self.remove_from_event_list(l)?`, and
+the callee's own first statement is `let Some(item) = self.lists.head(l)? else { return
+Ok(false) }`. The same question, asked twice, in the B3 shape that has paid elsewhere.
+
+Removed as a set: **+1,190,472**. `remove_from_event_list` +585,117 and `exit_critical`
++840,210.
+
+> **The guard was not saving a list READ, it was saving an out-of-line CALL** — the event list
+> is empty on most of these calls, so the inline test answers for free what the callee would
+> charge a frame to discover. This is A5 measured on this kernel: *an early-out test that is
+> provably redundant can still be load-bearing, because the cheap test reaches the answer
+> faster than falling through the dispatch does.*
+
+It is also a behaviour change I was ready for conform to catch: `is_empty_of` returns `bool` and
+swallows an invalid list, where `head(l)?` propagates. Unreachable here, since every list on
+these paths is derived from an already-validated queue handle — but worth stating, because the
+refutation arrived on instructions before correctness had to rule.
+
+### Refuted — A2 on `set_queue_resume`, and why pinning the collateral did not help
+
+19 instructions inlined into a path dead in all three scenarios, four cold call sites: textbook
+A2. Outlined, `queue_take_blocking` −6,967 and `step` −225,060 — and `exit_critical`
+**+365,313**, for **+111,904**. Adding `#[inline(always)]` to `SimPort::exit_critical` to stop
+the cascade produced a result **byte-identical to not adding it**, because the row that moved is
+`Kernel::exit_critical`, a different symbol with the same short name. That one already carries a
+measured refutation of `#[inline(always)]` at its definition (−271,962 net over six scenarios,
+hot sites gain and switch-heavy sites lose more), which is A4 asking for a body/symbol split
+rather than an attribute.
+
+> **Two symbols can share a short name, and a per-function diff keyed on the short name will
+> attribute one's regression to the other.** `SimPort::exit_critical` and
+> `Kernel::exit_critical` both print as `exit_critical`.

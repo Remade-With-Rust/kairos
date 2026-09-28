@@ -328,7 +328,14 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # corrupt `self.current` reporting a stall instead of relying on a downstream
 # range check. Compare the trade DECLINED at -192,102 Ir for +204 B on
 # `unlock_queue`: the rate is what decides these, not the sign.
-check "Kairos kernel + port"   "$rs_kernel" 19762
+# 19,736 (2026-09-28, -26 B): the same bound proof as above, one frame further
+# down, in `add_current_task_to_delayed_list` -- which by its own note is the
+# single largest consumer of the blocking workload and derives FOUR
+# bound-checked accesses from an index it read out of memory. Worth -262,232 Ir
+# in that one row with nothing positive, rv32 `block_cycle` 974 -> 968, and
+# these 26 bytes with every opcode count below falling too. It pays back the +22
+# the event-item proof cost, so the two together are -4 B and -9 on block_cycle.
+check "Kairos kernel + port"   "$rs_kernel" 19736
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -402,11 +409,14 @@ echo "opcode counts -- the four the 1.6x investigation named:"
 # 770 (2026-09-28, -5), 78 srli / 259 slli / 166 andi (+2 / +2 / +1): the
 # event-item bound proof above. The u16 extraction counts rise because the
 # folded check leaves the index arithmetic in narrower registers.
-check "mv   (call-argument setup)" "$(ops mv)"   770
+# 769 / 77 / 258 / 165 (2026-09-28): the delayed-list bound proof above. Every
+# one of the four fell, which is the signature of a folded check rather than a
+# reshuffle -- the event-item proof raised three of them.
+check "mv   (call-argument setup)" "$(ops mv)"   769
 check "mul  (non-p2 indexing)"     "$(ops mul)"    0
-check "srli (u16 extraction)"      "$(ops srli)"  78
-check "slli (u16 extraction)"      "$(ops slli)" 259
-check "andi (incl. zext.b)"        "$(ops andi)" 166
+check "srli (u16 extraction)"      "$(ops srli)"  77
+check "slli (u16 extraction)"      "$(ops slli)" 258
+check "andi (incl. zext.b)"        "$(ops andi)" 165
 
 echo
 if [ "$fail" -eq 0 ]; then
