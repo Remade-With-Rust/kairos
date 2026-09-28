@@ -14589,3 +14589,44 @@ the three structural trades recorded with the decomposition above — a `started
 generation word's spare bits, a packed one-word `Handle`, and item ids as offsets. Each
 trades a row this kernel wins for the row it loses, so each is an owner decision rather
 than an optimisation.
+
+## 2026-09-28 — `switch_select` moves at last: 48 → 47, and it took BOTH halves
+
+The ready-list decomposition put five instructions of ordinary slack in this row, and the
+first four candidates drawn from it all failed (peel +4, guard-removal +2, index-compare 0,
+cursor-mask refuted on reading). This is the one that paid, and the reason it paid is the
+reason the index compare had measured zero.
+
+`switch_context` loaded BOTH words of `current`'s handle at the top of the function. The
+generation half is read only on `hand_over`'s unwind arm, which is skipped on every switch
+after the first — so it looked like a dead load. Two things kept it live:
+
+* the full-handle `next != current` compares index AND generation;
+* `hand_over(outgoing, incoming)` takes the outgoing handle, so it needs both halves.
+
+Remove either and the other still demands the load. **Removing the first alone measured
+exactly 0**, which is recorded above as a refutation — and it was a refutation of the
+half, not of the idea.
+
+Together: compare indices, and let `hand_over` read `self.current` for itself (sound,
+because `set_current_at` has not run yet, so the field still names the task being left).
+
+| axis | before | after |
+|---|---:|---:|
+| rv32 `switch_select` | 48 | **47** (1.78x -> **1.74x** vs the C's 27) |
+| rv32 `block_cycle` | 993 | **989** |
+| rv32 flash, kernel + port | 19,786 | **19,778** |
+| host `bench/kernel-ir` | — | **−369,016 Ir** |
+
+Four axes, all down. Comparing indices is sound because both handles are LIVE — `next` came
+out of a slot whose generation was just matched against it, `current` names the running
+task, and the arena issues one live handle per slot at a time, so two live handles sharing
+an index share a generation. The same argument `Handle::is_null` makes in the other
+direction.
+
+> **`rusty-compiler-leverage` A2, in the form that is easiest to miss: a value is kept alive
+> by EVERY consumer, so removing one consumer changes nothing.** A2 is usually quoted about
+> outlining cold arms as a set; this is the same arithmetic about a load. The lesson for the
+> refutation log is sharper — **a candidate that measures 0 has not been refuted until you
+> know what else holds its cost up.** Had the index compare been written off on its first
+> reading, this win would have been closed as "already optimal".

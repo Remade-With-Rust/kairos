@@ -58,7 +58,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 21 | **queue receive refused** (empty, 0 ticks), Ir | *no C arm* | **39** | — | — | ⬜ −59.6% (§6), then −21 (§10) |
 | 22 | **event-group wait refused** (0 ticks), Ir | *no C arm* | **39** | — | — | ⬜ −31.7% (§6) |
 | 23 | **owe filter** (`resume_pending`, nothing owed), Ir | *no C arm* | **7** | — | — | ⬜ §8 |
-| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **993** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
+| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **989** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
 | 29 | **queue peek** (item present), Ir | *no C arm* | **42** | — | — | ⬜ the `PEEK` twin, §8; −35 (§10) |
 | 30 | **queue messages-waiting**, Ir | *no C arm* | **17** | — | — | ⬜ the FLOOR, = `scaffolding` |
 | 25 | **notify round-trip** (give+take), Ir | *no C arm* | **59** | — | — | ⬜ −28.7% (§6) |
@@ -76,7 +76,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 14 | **ISR-to-task latency** | *no C arm* | 430 cyc (S3) | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 15 | **queue send/receive**, 16 B item | *never built* | — | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 16 | **API coverage** | 341 rows mapped | **0 marked done** | — | 100 %, CI-checked | ⬜ **UNMEASURED** |
-| 17 | **scheduler selection**, Ir | 27 | **48** | 1.78× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
+| 17 | **scheduler selection**, Ir | 27 | **47** | 1.74× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
 
 ### Re-measured 2026-09-28 â€” six figures in this table had gone stale
 

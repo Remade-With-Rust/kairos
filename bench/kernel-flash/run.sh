@@ -288,7 +288,14 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # tick_idle and tick_delayed 14 -> 9 against the C's 15. The function is `#[cold]
 # #[inline(never)]` because `switch_delayed_lists` is `#[inline(always)]` and in
 # line the bigger body cost the tick row 14 -> 34.
-check "Kairos kernel + port"   "$rs_kernel" 19786
+#
+# 19,778 (2026-09-28, -8 B): `hand_over` takes only the INCOMING handle and reads
+# the outgoing one from `self.current` itself, and `switch_context` compares
+# INDICES rather than whole handles. Together those delete the load of
+# `current`'s generation word; either alone leaves it live, which is why the
+# index compare measured 0 on its own (A2: price the set). rv32
+# `switch_select` 48 -> 47 and `block_cycle` 993 -> 989.
+check "Kairos kernel + port"   "$rs_kernel" 19778
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
