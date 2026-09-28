@@ -335,7 +335,18 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # in that one row with nothing positive, rv32 `block_cycle` 974 -> 968, and
 # these 26 bytes with every opcode count below falling too. It pays back the +22
 # the event-item proof cost, so the two together are -4 B and -9 on block_cycle.
-check "Kairos kernel + port"   "$rs_kernel" 19736
+# 19,746 (2026-09-28, +10 B): a trade. `remove_from_event_list`'s `?` put FIVE
+# constants in its entry block -- the Ok/Err tags and both error discriminants --
+# before the tests that would use them, and the census says ALL 21,487 BlockQ
+# calls pass every one of those tests. Producing the error in a `#[cold]
+# #[inline(never)]` callee sinks them: -119,405 Ir, which is 5 x 23,881 calls to
+# the instruction, and rv32 `block_cycle` 968 -> 967. These 10 bytes are the new
+# out-of-line symbol.
+#
+# `#[cold]` WITHOUT `#[inline(never)]` measured +0 Ir for -2 B: LLVM inlines it
+# back and re-materialises the constants. The hint reweights the branch; only
+# moving the code sinks the setup.
+check "Kairos kernel + port"   "$rs_kernel" 19746
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #

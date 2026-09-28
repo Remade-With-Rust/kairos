@@ -15460,3 +15460,78 @@ Three later measurements inherited it.
 > `codec-measurement` §7 says chase it on the first sighting. It also cost a second one, which
 > is why win 8's commit quotes the right figure only because the contaminated baseline happened
 > to make it *more* conservative.
+
+## ★★★ 2026-09-28 — round five: a NEW lever, and the instrument that stopped a tenth win
+
+### Win 9 — `?` materialises its error constants in the entry block: −119,405 Ir
+
+`remove_from_event_list`'s prologue, before it pushes a single register:
+
+```
+5dd31  xor %eax,%eax     ; Ok tag
+5dd33  mov $0x0,%edx     ; false
+5dd51  mov $0x1,%al      ; Err tag
+5dd53  mov $0x8,%dl      ; Error::InvalidArgument
+5dd5f  mov $0x5,%dl      ; Error::Gone
+```
+
+Five constants, materialised ahead of the tests that would use them — and the per-instruction
+census says **all 21,487 BlockQ calls pass every one of those tests**. Five instructions of dead
+setup on the only path anybody takes. Re-deriving the error inside a `#[cold] #[inline(never)]`
+callee sinks them.
+
+| instrument | result |
+|---|---|
+| `bench/kernel-ir` | **−119,405**, one row, nothing positive |
+| `bench/tick-work` | rv32 `block_cycle` **968 → 967**, every other row identical |
+| `bench/kernel-flash` | 19,736 → 19,746, **+10 B** for the new symbol |
+
+**★ The arithmetic closes to the instruction: 5 × 23,881 calls = 119,405, exactly.** A predicted
+figure and a measured one agreeing with no remainder is the strongest self-confirmation this
+bench offers.
+
+**★ `#[inline(never)]` is load-bearing, not decoration.** With `#[cold]` alone the result is
+**exactly +0 Ir for −2 B**: LLVM inlines the helper back and re-materialises the constants where
+they were.
+
+> **`#[cold]` reweights the branch; only moving the CODE sinks the setup.** Both readings are
+> recorded at the attribute so nobody simplifies it away.
+
+### Refuted — the same lever where there is only ONE constant
+
+`add_task_to_ready_list` carries `mov $0x6,%al` in its entry block on every one of its 50,424
+calls across the three scenarios. Identical treatment measured **exactly +0** — LLVM folds a
+single constant back rather than pay a call for it.
+
+> **The lever needs SEVERAL constants.** One is already as cheap as it can be, and outlining it
+> buys a call. Win 9 had five across three exits with distinct values.
+
+That refutation also closed an open question from round four: **50,424 was that one
+instruction × those 50,424 calls.** The figure that had recurred three times with alternating
+signs, and that I mistook for instrument contamination alone, was half contamination and half a
+real single-instruction cost in a function called exactly that many times.
+
+### ★★ And the instrument that stopped a tenth win — the caveat earning its keep
+
+`check_for_timeout` censuses as **91 of 102 instructions dead in all three scenarios**, with
+cold runs of 18, 10, 17 and 31. `unlock_queue` reads 173 of 188. Both look like large A2
+opportunities in hot functions.
+
+Both are artefacts. Reading the 31-run showed `movzbl 0xba(%rdi)`, `cmp $0x5`, `cmp $0x1`,
+`0x98` increment, `test $0xf` — **an inlined `exit_critical`, in a function that exits a
+critical section on every one of its 27,301 calls.** Callgrind records inlined cost under a
+nested `fn=`, and `cold3.py` drops it, so those addresses read zero while executing millions of
+times.
+
+> **The caveat written at the top of the tool in round two is what stopped this:** *a zero from
+> it is not yet evidence of dead code.* It was written after the symbol-boundary bug produced a
+> wrong finding on `unlock_queue`, and three rounds later it prevented a second one on
+> `check_for_timeout` — an A2 outlining built on 76 instructions of phantom cold code.
+>
+> **Writing the limits of an instrument into the instrument is worth more than the measurement
+> that revealed them.** A caveat in a ledger is read once; a caveat in the tool is read every
+> time the tool is.
+
+No A2 conclusion is drawn from either function, and the next session's first job on this path is
+to teach `cold3.py` to follow nested `fn=` records — which would make the whole A2 vein
+measurable for the first time.
