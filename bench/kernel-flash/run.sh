@@ -270,7 +270,16 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # `conform --all` 26/26 and 102/102 kernel tests, but roughly 546 bytes of
 # earlier kernel.rs work has no surviving record and is NOT in this number.
 # See docs/LEDGER.md, 2026-09-28.
-check "Kairos kernel + port"   "$rs_kernel" 19790
+#
+# 19,788 (2026-09-28, -2 B): `switch_context`'s ready-list walk folded its
+# `Err` arm into its empty arm and proved `top < MAX_PRIORITIES` once before
+# the loop instead. The fold stops the walk carrying a packed
+# `Result<Option<ItemId>>` across the back edge, and the up-front proof lets
+# `next_round_robin`'s own bounds check fold away -- so the change is smaller
+# on flash AND -969,669 Ir on `bench/kernel-ir`, which is not the usual
+# direction for this pair. `andi` +2 is the new compare; `mv` -1 is one less
+# argument shuffled.
+check "Kairos kernel + port"   "$rs_kernel" 19788
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -338,11 +347,11 @@ ops() {
 }
 echo
 echo "opcode counts -- the four the 1.6x investigation named:"
-check "mv   (call-argument setup)" "$(ops mv)"   774
+check "mv   (call-argument setup)" "$(ops mv)"   773
 check "mul  (non-p2 indexing)"     "$(ops mul)"    0
 check "srli (u16 extraction)"      "$(ops srli)"  76
 check "slli (u16 extraction)"      "$(ops slli)" 262
-check "andi (incl. zext.b)"        "$(ops andi)" 167
+check "andi (incl. zext.b)"        "$(ops andi)" 169
 
 echo
 if [ "$fail" -eq 0 ]; then

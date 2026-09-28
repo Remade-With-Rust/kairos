@@ -57,8 +57,16 @@ fi
 
 cd "$ROOT/rusty_rtos_demo" || exit 1
 CARGO=${CARGO:-$(command -v cargo || echo "$HOME/.cargo/bin/cargo")}
-CARGO_TARGET_DIR=/tmp/kairos-prof "$CARGO" build --release -q || exit 1
-BIN=/tmp/kairos-prof/release/kairos-sim
+# NOT /tmp, for the SAME reason the recordings are not (see OUT above): under
+# WSL that directory is wiped whenever the distro shuts down, which it does as
+# soon as no process holds it. The recordings were moved out of /tmp and the
+# BUILD DIRECTORY was left behind, so every invocation silently paid a full
+# from-scratch LTO rebuild -- minutes per candidate, on a bench whose whole
+# purpose is pricing many candidates against one baseline. Keep it under $HOME,
+# which persists across a distro restart.
+TD=${TARGET_DIR:-$HOME/.cache/kairos-prof}
+CARGO_TARGET_DIR="$TD" "$CARGO" build --release -q || exit 1
+BIN=$TD/release/kairos-sim
 
 : > "$OUT/$LABEL.raw"
 for s in $SCENARIOS; do

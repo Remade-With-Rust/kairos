@@ -14019,3 +14019,161 @@ instruments re-pinned to the post-incident baseline with the reason written at t
 
 That warning count has now caught four separate defects in this campaign. It belongs in the
 gate, not in the scrollback.
+
+## ★★★ 2026-09-28 — the Ir campaign on `kernel.rs`: a 10% defect found by doubting a comment
+
+The mission was fifteen instruction-reducing wins in `kernel.rs`, priced on **dynamic
+retired instructions** (`bench/kernel-ir`, callgrind Ir) rather than flash bytes. What it
+produced was one very large defect, one solid win, four refutations with numbers, and four
+instrument fixes — and the shape of that result is worth recording as much as the numbers.
+
+### 0. The instrument first, and it had three faults
+
+| fault | consequence |
+|---|---|
+| `run.sh` built into `/tmp/kairos-prof` | WSL wipes `/tmp` whenever the distro shuts down, which it does between invocations. The RECORDINGS had already been moved out of `/tmp` for exactly this reason and the BUILD DIRECTORY was left behind — so every candidate silently paid a full from-scratch LTO rebuild. Moved to `$HOME/.cache/kairos-prof`. |
+| no way to see the program total | `run.sh` greps the kernel crate names, so `core::fmt` and `from_utf8` are invisible in its table. A change that moves work OUT of a kernel function reads as a pure win on the rows and nothing on the total. Added `bench/kernel-ir/price.sh`, which prints both. |
+| callgrind's `--dump-instr=yes` was never used | Per-INSTRUCTION Ir, joined against `objdump` by address, with no source edit and no debug info (thin LTO drops the line tables, so `callgrind_annotate` can only say `???`). This is the instrument that found both wins below. |
+
+**The null arm is exactly zero.** Re-recording the same code reproduced `baseline.txt` byte
+for byte, five times across the session. This instrument has NO noise floor: a difference of
+one instruction is a difference of one instruction, and the usual machinery — interleaving,
+z-scores, best-of-N — is not merely unnecessary here, it would be a category error.
+
+### 1. ★★★ `Name::as_str`'s window optimisation was OFF, and the comment said 86
+
+`as_str` validates a SIXTEEN-byte window rather than the used prefix, so that
+`run_utf8_validation` takes its word-at-a-time ASCII path. The comment reasons at length
+about the window SIZE. `core`'s condition has a second half it never mentions: that loop
+reads two `usize`s at a time and **declines unless the slice is `usize`-aligned**.
+
+It was declining. `Tcb` holds a `Name` at offset zero and is four-aligned deliberately
+(`WaitFrame`'s `Split64` fields exist to keep it that way), and `Slot<Tcb>` puts a `u32`
+generation in front — so the window landed at offset four of every slot and
+`align_offset(8)` answered four.
+
+A single-variable probe, the same window holding `CNT_INC`, three offsets:
+
+| window offset | Ir per `from_utf8` |
+|---|---:|
+| 0 (`usize`-aligned) | **46** |
+| 4 (what `Slot<Tcb>` gave it) | **143** |
+| 1 | 161 |
+
+Production read **142.7**. Offset four, to within a third of an instruction.
+
+`cfg_attr(target_pointer_width = "64", repr(align(8)))` on `Name`:
+
+| | before | after | delta |
+|---|---:|---:|---:|
+| `from_utf8`, three scenarios | 42,553,613 | 13,714,084 | **−28,839,529 (−67.8%)** |
+| program total | 291,653,492 | 262,365,574 | **−29,287,918 (−10.04%)** |
+
+13,714,084 over 298,125 calls is **46.0 Ir each** — the probe's aligned figure exactly. That
+equality is the evidence the fix landed for the stated reason rather than moving
+instructions somewhere the census cannot see.
+
+**★ It was broken only on the HOST, which is why it survived.** `usize` is four bytes on
+every target this kernel ships to, so offset four is already aligned there and the ASCII
+path was being taken all along. Asking for eight unconditionally would grow `Tcb` on rv32
+and spend real firmware RAM to fix a host-only cost — so the attribute is `cfg`'d, and
+**`bench/kernel-flash` is byte-identical across the change**, all seven pins, which is the
+proof no target sees it. This buys the sim and `kairos conform --all` a tenth of their
+instructions and buys firmware nothing, by design.
+
+> **The shape: a safe-by-default optimisation that breaks INVISIBLY.** The answer never
+> changes, so byte-identity passes, the unit test pinning the window invariant passes, and
+> conform passes 26/26. Only a number says otherwise — and the number had been written INTO
+> THE COMMENT, 86 against a measured 143, where it sat unread for weeks.
+> `codec-measurement` §7 says an impossible number is the instrument asking for help. **A
+> comment quoting a stale measurement is the same thing, and it is cheaper to check than
+> anything else in this file.**
+
+The build assert for it was written unconditionally first and failed the rv32 build
+immediately: **`align_of::<Name>()` is ONE**, every field being a `u8`. On a target the
+alignment comes from the CONTAINER, not the type — which is why a type-level assert cannot
+express this invariant on both widths, and why the one that ships is `cfg`'d to the host.
+
+### 2. Win: the ready-list walk carried a packed `Result<Option<ItemId>>`, −969,669 Ir
+
+The per-instruction census of `switch_context` — 168.0 Ir/call, the largest `kernel.rs` row
+at 15.5M, 34% of the file's Ir:
+
+* the walk runs **1.58 levels per call**; 72% of calls find the task at
+  `top_ready_priority` on the first look, so this is not a deep-search problem;
+* the search region is ~35 Ir/call, 20.8% of the function;
+* **~9 Ir/call is packing and unpacking a `Result<Option<ItemId>>`** —
+  `xor`/`cmp`/`setb`/`shl`/`or` to build it and `test`/`jne`/`shr` to take it apart, because
+  a three-armed `match` has to carry the value across the loop's back edge.
+
+Folding `Err` into the empty arm removes that. But `Err` means an out-of-range list id,
+which is a *different fault* from an empty level, so the fold alone would have reported it
+as `NoReadyTask`. Proving the bound ONCE before the loop keeps the diagnostic — and made it
+**faster**:
+
+| variant | Ir | note |
+|---|---:|---|
+| fold alone | −937,965 | diagnostic traded away |
+| **fold + `top >= MAX_PRIORITIES` proved once** | **−969,669** | diagnostic kept, and 31,704 BETTER |
+
+The guard more than pays for itself because proving the bound lets `next_round_robin`'s own
+`list_meta(list)?` check fold away — `rusty-compiler-leverage` B1, "give it the bound
+relation", earning its keep at a site nobody had read it into. **The version that keeps the
+diagnostic is the faster version; there was no trade to make.**
+
+`switch_context` 15,489,175 → 14,519,506 (**−6.26%**, 168.0 → 157.4 Ir/call). And rv32 flash
+went **19,790 → 19,788 B** with `mv` −1 and `andi` +2 — smaller on BOTH axes, which is not
+this codebase's usual direction and is why the pins moved down rather than being argued
+about.
+
+### 3. Refutations, with their numbers
+
+| candidate | result |
+|---|---|
+| `exit_critical` `#[inline(always)]` — **re-tested** because win 1 moved every inlining boundary in the file | **+317,932.** The recorded refutation survives, and reproduces its documented shape exactly: `exit_critical`'s own row falls 208,636 as it inlines away while the demo's `step` gains 498,705. "Whatever the hot sites gain, the switch-heavy ones lose more." |
+| outline `hand_over`'s first-start arm (`#[cold] #[inline(never)]`) — a textbook A2 cold arm: runs once per task against 48,246 switches, and clears a 48-byte `OwedTrace` | **+108, and `switch_context` did not move by one instruction.** LLVM had already laid that arm out cold; it was never claiming registers, so the six pushes belong to the main path. This refutes the A2 premise for this function, not just this edit. |
+| merge the double TCB resolve in `add_task_to_ready_list` and `switch_context` | **Refuted before building.** The asm shows LLVM already CSE'd the slot address across `task_of_state_item`, `hand_over` and `trace_task` (`%rax` reused at 5cc3b). Two rebuilds saved by reading the output before writing the patch. |
+| `saturating_*` → `wrapping_*` and overflow-check elimination (B2a) | **The vein is EMPTY, and that is the finding.** Zero panic-reaching calls in the entire binary: the house clippy policy (`arithmetic_side_effects`, `indexing_slicing`, `unwrap_used = deny`) has already removed the whole class, so `overflow-checks = true` costs this kernel nothing and the remaining Ir is genuine work rather than safety tax. **Do not re-open this.** |
+
+### 4. Where the instructions actually are, so the next session does not re-derive it
+
+Of the program's 262M Ir, `kernel.rs` is roughly **48–52M (~19%)**. The rest is the harness:
+the sim's `LineTrace::event` alone is **100.7M (38%)** at 182.6 Ir per line, and the demo
+bodies another ~53M. Inside `kernel.rs`, `switch_context` is 34%, and roughly half of ITS
+cost is trace-path work that firmware, built with `NoTrace`, never executes at all.
+
+**So the honest yield curve for this file is low and getting lower** — and not for want of
+levers, but because six passes have already taken them. Two structural facts bound what is
+left, both recorded so they are not rediscovered:
+
+* `as_str`'s `all.get(..end)` carries a UTF-8 **char-boundary check**
+  (`cmpb $0xc0,(%rdx,%rax,1)`), ~5 Ir × 298,125 calls, because LLVM cannot know
+  `from_utf8`'s output length and `forbid(unsafe)` forbids telling it. No lever.
+* `from_utf8` is reached through a GOT slot (`R_X86_64_RELATIVE` → `0x1d0c0`), so it cannot
+  be inlined. A PIE-plus-thin-LTO artefact, not ours.
+
+The next large win is **not in `kernel.rs`** — it is `demo_core`'s trace sink, which is 38%
+of every conformance run and therefore 38% of the eight minutes the gate costs on every
+change anyone makes.
+
+### 5. ⚠ Method: the truncation hazard fired TWICE more, and was designed out
+
+Writing a NEW file inside this repo raised `PermissionError` twice in one session — the AV
+or IDE watcher. Once on a probe harness's own backup copy, which it left at **ZERO BYTES**:
+the exact signature of the incident that destroyed `kernel.rs`, one argument position away
+from doing it again.
+
+Both times the target survived, and only because every write went tmp-then-`os.replace`.
+The harness now has: **no backup file at all** (git is the revert, so the safest backup is
+the one we do not write), a unique tmp name per attempt, a bounded retry, line endings
+detected and preserved, and the anchor count asserted to be exactly one before anything is
+written. Three of those five rules exist because a specific failure happened first.
+
+> **`open(p, "w")` truncates before it can fail; `os.replace` cannot.** The rule was already
+> in this ledger. What is new is that **the file you must not truncate includes the BACKUP.**
+
+And one more, cheap and real: **do not restore a `Cargo.lock` while a build is running.**
+A `git checkout -- Cargo.lock` in a sibling repo mid-`conform` made cargo re-lock ("Locking
+5 packages") under the running build, which failed with rustc exit 101 — and the harness
+reported exit 0, so it read as a passing gate until the output was read. The lock trap now
+has a second rule beside "never commit it": restore it only when nothing is building.
