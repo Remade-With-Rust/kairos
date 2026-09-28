@@ -15042,3 +15042,30 @@ helper.
 > boundary always costs flash and marshalling, and only repays it when the registers it frees
 > were genuinely held by the code that moved. `unlock_queue` passed that test on Ir and failed
 > it on bytes; `queue_take_blocking` failed it on both, four times.
+
+## ★★ 2026-09-28 — B1 REFINED: a bound proof pays only across a boundary LLVM cannot see through
+
+Three applications of `rusty-compiler-leverage` B1 today, with three different results, and
+together they say exactly when it works.
+
+| site | what the checks were behind | result |
+|---|---|---:|
+| `switch_context`: prove `top < MAX_PRIORITIES` before the walk | `next_round_robin`'s own `list_meta(list)?`, inside a CALLEE | **−969,669** |
+| `check_for_timeout`: prove the task index once | one array read in-function, one `resolve_mut` inside the ARENA | **−3,167** |
+| `resume_pending_owed`: prove the index once, ahead of NINE bounded accesses | all nine in-function, on `[T; TASKS]` arrays | **±0** |
+
+The third looked like the best target of the three — nine checks on one index against
+`switch_context`'s one — and bought nothing at all.
+
+> **Because `[T; TASKS]` has a COMPILE-TIME length, so nine `index < TASKS` tests with no
+> intervening length change are one test after CSE. LLVM had already done it.** A bound proof
+> cannot remove a check the compiler has already merged; it can only remove one the compiler
+> cannot SEE — behind a call it will not inline, or on a slice whose length is a runtime value.
+>
+> So the B1 test is not "how many bounded accesses are there" but **"can LLVM see the length?"**
+> Count call boundaries and runtime-length slices, not `.get()` calls. `switch_context` won
+> because the check lived in a callee; `check_for_timeout` won a tenth as much because only one
+> of its two checks did; `resume_pending_owed` won nothing because none of them did.
+
+Reverted, and recorded because the naive reading of B1 — more checks means more to win — is
+exactly backwards on fixed-size arrays, which is most of this kernel's per-task state.
