@@ -14947,6 +14947,37 @@ only what it removes.** The peel that duplicated an inlined body, the guard whos
 for itself, the index compare whose word another consumer held alive, the trap entry whose frame
 pointer was free — and now a resolve whose extraction cost six times what the resolve did.
 
+### ★★ And the cure the diagnosis implied ALSO loses: +624,386
+
+The characterisation above says the lever is "fewer things live at once", and there is a
+one-attribute test for it: `queue_take_locked` is currently INLINED into
+`queue_take_blocking` — it has no symbol of its own — which is what makes the caller 418
+instructions with eight values live across five calls. `#[inline(never)]` on it splits the
+live set across two frames.
+
+**+624,386.** `queue_take_locked` appears as a 2,925,324 Ir symbol and the caller sheds
+3,262,652 across the shared rows, and the call boundary's argument marshalling costs more than
+the register relief is worth.
+
+So four distinct approaches, four losses:
+
+| approach | measured |
+|---|---:|
+| A2 cold-arm set (mutex arm + timed-out branch) | +200,668 |
+| outline only what is dead in all three scenarios | +11,619 |
+| delete a genuine double resolve | +254,429 |
+| split the frame to reduce the live set | +624,386 |
+
+> **`queue_take_blocking` is at a LOCAL OPTIMUM, and that is the result.** Removing work loses
+> to its own plumbing; removing dead code loses because dead code is already free; splitting
+> the frame loses to marshalling. The diagnosis (a register cliff) is right and the obvious
+> cure is priced and refused with it. Four numbers, four directions, and they agree.
+>
+> A fifth direction exists and was not taken: change what the function needs to keep live —
+> fewer parameters threaded through the chain, or a state struct passed by reference so the
+> callee reads what it needs instead of the caller holding it. That is a redesign of the
+> blocking-queue protocol, not an optimisation, and it should be costed as one.
+
 ### What of the 225 is not available
 
 * **Four load-modify-stores of the SimPort's `exits` counter** (`0x98(%r14)`), one per outermost
