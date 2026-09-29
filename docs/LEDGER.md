@@ -15617,3 +15617,83 @@ call**, the cost of the hoisted tests that the loop conditions used to carry for
 > cost flash and i-cache only, and restructuring to remove them added five instructions to every
 > call. The vein is now closed with a sound measurement instead of a phantom one, which is worth
 > more than closing it with a wrong number would have been.
+
+## ★★★ 2026-09-28 — the tenth win: `port_yield` spends its life in the arm nobody looked at
+
+Found by the census, not by reasoning, and in the last function on the take path never examined.
+`port_yield` is 1,614,930 Ir over 39,133 calls at 22.2 Ir/call — for what the source says is
+"count a yield, then switch". The listing said where it goes:
+
+```
+5a5b5  movzbl 0xba(%rbx),%eax      ; the port state
+5a5bc  cmp $0x1,%eax               ; COUNTS?
+5a5bf  je  5a5de                   ; taken 142 of 22,627 times in GenQTest
+5a5c1  cmp $0x5,%eax               ; TALLIES?
+5a5c6  mov 0xb4(%rbx),%eax         ; unwound
+5a5cc  inc %eax
+5a5ce  mov $0xffffffff,%ecx        ; \ the saturation
+5a5d3  cmovne %eax,%ecx            ; /
+5a5d6  mov %ecx,0xb4(%rbx)
+```
+
+**`port_yield` takes the TALLIES arm on 22,196 of its 22,627 calls**, because a yield unwinds the
+frame. That arm was outlined as cold in round two on the strength of it reading DEAD inside
+`queue_take_blocking`, and measured +1,411,062 — the refutation whose lesson was *a DEAD-ALL
+column is per-inlined-copy*. This is the same fact from the other side, and it is where the win
+was all along.
+
+`saturating_add(1)` → `wrapping_add(1)`. It cannot fire: `begin_unwind` zeroes the tally and
+`end_unwind` reads-and-zeroes it, so it counts one abandoned frame's exits — a handful, never
+four billion. A `debug_assert` keeps that true rather than believed. **This is verbatim the
+argument `enter_critical` already makes for `nesting` twenty lines above it**, and nobody had
+carried it across to the sibling counter.
+
+| instrument | result |
+|---|---|
+| `bench/kernel-ir` | **−430,503** across TEN rows, one +160 — `port_yield` −183,664, `step` −87,560, `resume_pending_owed` −78,892, **`queue_take_blocking` −39,642**, `resume` −19,372 |
+| `bench/kernel-flash` | **19,746, UNCHANGED** |
+| `bench/tick-work` | every Kairos row fell; the three C-compared rows IDENTICAL |
+
+### ★★ Read the rv32 rows net of `scaffolding`, or overstate the win by a tenth
+
+`scaffolding` fell **17 → 14**. That row is the harness's own REPEAT bracket — the floor under
+every other row — and most rows moved by exactly its 3:
+
+| row | raw | net of scaffolding |
+|---|---:|---:|
+| `block_cycle` | 967 → 932 | **−32** |
+| `queue_roundtrip` | 123 → 113 | **−7** |
+| `group_roundtrip`, `notify_roundtrip` | −6 | **−3** |
+| `send_full` | −4 | **−1** |
+| `recv_empty`, `peek_ok`, `priority_get`, `messages_waiting`, `event_wait_fail`, both notify-empty rows | −3 | **0** |
+
+> **When a harness publishes its own overhead as a row, every other row is quoted relative to
+> it.** Reporting the raw −35 on `block_cycle` would have overstated the kernel's share by a
+> tenth, and claimed wins on seven rows that did not move at all. The scaffolding row exists
+> precisely to be subtracted, and this is the first change large enough to move it.
+
+The three C-compared rows not moving is win 4's fact from the other direction: neither
+`increment_tick` nor `switch_context` takes a critical section on this path.
+
+---
+
+## The goal, closed: ten wins on `queue_take_blocking` and its path
+
+| # | win | Ir | rv32 | flash |
+|---|---|---:|---|---:|
+| 1 | `check_for_timeout` → `Option<NonZeroU64>` | −270,175 | `block_cycle` −4 | **−26 B** |
+| 2 | bound proof in `check_for_timeout` | −3,167 | — | — |
+| 3 | three 64-bit tick masks | — | `block_cycle` −8 | — |
+| 4 | `exit_critical`'s triple compare | **−2,412,746** | (cfg'd to 64-bit) | — |
+| 5 | `queue_take_timed_out`'s `caller` argument | −27,967 | identical | **−12 B** |
+| 6 | the event item's bound proof | −96,574 | `block_cycle` −3 | +22 B |
+| 7 | the delayed list's index proof | −262,232 | `block_cycle` −6 | **−26 B** |
+| 8 | the owes index proved at the CALLER | −159,890 | identical | — |
+| 9 | `?`'s error constants sunk out of the entry block | −119,405 | `block_cycle` −1 | +10 B |
+| 10 | the unwound tally's `saturating_add` | **−430,503** | `block_cycle` −32 net | — |
+
+**`block_cycle` 985 → 932. Flash 19,790 → 19,746. Roughly −3.8M host Ir.** Against about forty
+measured candidates, so the hit rate was one in four — and several of the refutations (the
+calling-convention divergence, the three-clause bound-proof law, the entry-block constants rule,
+the build-mismatch guard) are what made the last four wins findable in one attempt each rather
+than four.
