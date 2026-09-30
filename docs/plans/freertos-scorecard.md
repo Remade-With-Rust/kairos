@@ -19,10 +19,10 @@ others.**
 
 | verdict | rows |
 |---|---|
-| **WIN** | 1 static RAM (0.96×), 3 tick ISR (0.60×), 5b per-queue (0.89×), 6 cooperative switch (0.70×), 7 per-task RAM (0.30×), 8 per-event-group (0.29×), 9 register half cooperative (0.36×), 10 register half preemptive (0.89×) |
+| **WIN** | 1 static RAM (0.96×), 3 tick ISR (0.60×), 5b per-queue (0.89×), 6 cooperative switch (0.68×), 7 per-task RAM (0.30×), 8 per-event-group (0.29×), 9 register half cooperative (0.36×), 10 register half preemptive (0.89×) |
 | **PARITY** | 5 per-timer (1.00×), 11 ARM PendSV (1.00×) |
-| **PASS, at its measured floor** | 4 whole preemptive switch (1.10×, floor 121 by enumeration) |
-| **LOSE** | 2 flash (1.42× against a ≤1.30× target), 17 scheduler selection (1.74×, floor 30 by ablation) |
+| **PASS** | 4 whole preemptive switch (1.08×; register half at its floor, selection half at 45 against a floor of 30) |
+| **LOSE** | 2 flash (1.42× against a ≤1.30× target), 17 scheduler selection (1.67×, floor 30 by ablation) |
 
 Row 17 is half of row 4, so it is not an independent loss; row 2 is, and §"Row 2 is the price
 tag" below prices it against the RAM it buys — **crossover at 13.2 tasks.**
@@ -31,10 +31,10 @@ tag" below prices it against the RAM it buys — **crossover at 13.2 tasks.**
 
 `portYIELD()` on FreeRTOS's RISC-V port is `ecall` — a trap. **A cooperative yield costs C the
 same full 83-instruction save as a preemption**, so C pays **110 for every switch**, while we pay
-**77 for a yield and 121 for a preemption**. The mix of a real application is dominated by
+**75 for a yield and 119 for a preemption**. The mix of a real application is dominated by
 yields: a `taskYIELD`, a queue that blocks, a semaphore take, a mutex contention. Row 4 is where
-C's always-save-everything architecture finally pays off, and it pays off by 11 instructions out
-of 121.
+C's always-save-everything architecture finally pays off, and it pays off by 9 instructions out
+of 119.
 
 ### What moved since 2026-09-23, and what did not
 
@@ -43,12 +43,12 @@ C-compared row**:
 
 | row | then | now |
 |---|---:|---:|
-| 24 blocking cycle | 985 | **932** |
+| 24 blocking cycle | 985 | **924** (932 after the queue campaign; 924 after the selection opener, 2026-09-30) |
 | 18 queue round-trip | 123 | **113** |
 | 19 event-group round-trip | 71 | **65** |
 | 25 notify round-trip | 59 | **53** |
 | 2 flash | 19,788 B | **19,746 B** |
-| 3 / 17 / 4 / 6 (the C-compared rows) | 9 / 47 / 121 / 77 | **unchanged** |
+| 3 / 17 / 4 / 6 (the C-compared rows) | 9 / 47 / 121 / 77 | **unchanged by the queue campaign**; then 17 → 45, 4 → 119, 6 → 75 from the selection opener (2026-09-30) |
 
 That the C-compared rows did not move is a FACT, not an omission: neither `increment_tick` nor
 `switch_context` takes a critical section, which is where nine of the ten wins landed. **Read
@@ -94,7 +94,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 1b | the same, at the hand-picked 8/8/16 | 1,704 B | 5,984 B | 3.51× | — | see §1 on geometry |
 | 2 | **flash** `.text`, kernel + RISC-V port | 13,924 B | **19,746 B** | **1.42×** | ≤ 1.30× (K3) | ❌ **FAIL** — §12, §13, §16; relaxation was off on our arm only, §14; **and the ratio depends on `codegen-units = 1`, worth 4,154 B — §17** |
 | 3 | **tick ISR**, retired instructions | 15 | **9** | **0.60×** | ≤ 1.25× (K3) | ✅ **PASS — a win** |
-| 4 | **whole preemptive switch**, Ir | 110 | **121** | **1.10×** | ≤ 1.25× (K3) | ✅ **PASS** — ⚠ **FLOOR 121 — we are AT it**, by enumeration: the register half is 74 of which **64 move a word that must move** (30 GPRs + 2 CSRs each way, no branches in it), and the 6 control/frame instructions have NO slack either: a unified trap entry removes the stack frame but must materialise a TCB pointer instead, which costs the same 4 instructions the frame cost. The `csrrw mscratch` trick reaches ~72 only by maintaining `mscratch` on every switch, including the cooperative one — a compromise on row 6 to buy 2 here. Even deleting the product entirely gives exactly 100, never under. See docs/LEDGER.md |
+| 4 | **whole preemptive switch**, Ir | 110 | **119** | **1.08×** | ≤ 1.25× (K3) | ✅ **PASS** — ⚠ the REGISTER half is at its floor (74, of which 70 is irreducible) by enumeration; the selection half fell 47 → 45 on 2026-09-30 and has a measured floor of 30, so the whole row's floor is 100, not the 121 previously stated here: the register half is 74 of which **64 move a word that must move** (30 GPRs + 2 CSRs each way, no branches in it), and the 6 control/frame instructions have NO slack either: a unified trap entry removes the stack frame but must materialise a TCB pointer instead, which costs the same 4 instructions the frame cost. The `csrrw mscratch` trick reaches ~72 only by maintaining `mscratch` on every switch, including the cooperative one — a compromise on row 6 to buy 2 here. Even deleting the product entirely gives exactly 100, never under. See docs/LEDGER.md |
 | 5 | **per timer**, RAM | 40 B | **40 B** | **1.00×** | — | ✅ **PARITY** — and the BENCH now says 40 too, §11 |
 | 5b | **per queue**, RAM | 72 B | **64 B** | **0.89×** | — | ✅ **WIN** — 56 B / 0.78× was an AVERAGED slope: the old bench divided the 8→16-queue delta by 8, crossing a list-arena granularity band. The 2026-09-28 marginal fix reports the true one-unit cost — 48 B slot + 8 B free-list entry + 8 B of list metadata for the send/receive waiter lists. **Not a regression**, §11 |
 | 18 | **queue round-trip** (send+receive), Ir | *no C arm* | **113** | — | — | ⬜ −17.6% (§6), then −27 (§10) |
@@ -103,14 +103,14 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 21 | **queue receive refused** (empty, 0 ticks), Ir | *no C arm* | **36** | — | — | ⬜ −59.6% (§6), then −21 (§10) |
 | 22 | **event-group wait refused** (0 ticks), Ir | *no C arm* | **36** | — | — | ⬜ −31.7% (§6) |
 | 23 | **owe filter** (`resume_pending`, nothing owed), Ir | *no C arm* | **7** | — | — | ⬜ §8 |
-| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **932** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
+| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **924** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
 | 29 | **queue peek** (item present), Ir | *no C arm* | **39** | — | — | ⬜ the `PEEK` twin, §8; −35 (§10) |
 | 30 | **queue messages-waiting**, Ir | *no C arm* | **14** | — | — | ⬜ the FLOOR, = `scaffolding` |
 | 25 | **notify round-trip** (give+take), Ir | *no C arm* | **53** | — | — | ⬜ −28.7% (§6) |
 | 26 | **notify take refused** (0 pending, 0 ticks), Ir | *no C arm* | **26** | — | — | ⬜ −43.5% (§6) |
 | 27 | **notify wait refused** (0 ticks), Ir | *no C arm* | **24** | — | — | ⬜ new instrument |
 | 28 | **one lookup + critical section** (`task_priority_get`), Ir | *no C arm* | **14** | — | — | ⬜ the FLOOR every row sits on |
-| 6 | **whole cooperative switch**, Ir | 110 | **77** | **0.70×** | ≤ 1.25× (K3) | ★ **C HAS NO CHEAPER PATH**: `portYIELD()` on its RISC-V port is `ecall`, a trap, so a cooperative yield costs it the same full 83-instruction save as a preemption. C pays 110 for EVERY switch; we pay 77 for a yield and 121 for a preemption, and the mix of a real application is dominated by yields. ✅ **PASS — 30 % faster** |
+| 6 | **whole cooperative switch**, Ir | 110 | **75** | **0.68×** | ≤ 1.25× (K3) | ★ **C HAS NO CHEAPER PATH**: `portYIELD()` on its RISC-V port is `ecall`, a trap, so a cooperative yield costs it the same full 83-instruction save as a preemption. C pays 110 for EVERY switch; we pay 75 for a yield and 119 for a preemption, and the mix of a real application is dominated by yields. ✅ **PASS — 32 % faster** |
 | 7 | **per task**, RAM | 596 B | **176 B** | **0.30×** | — | ✅ **WIN** — 136 was stale; the bench pins 184 (§11). C is 84 B TCB + 512 B stack + a heap header; **the gap is the stack** |
 | 8 | **per event group**, RAM | 28 B | **8 B** | **0.29×** | — | ✅ **WIN** — 16 was step-inflated, §11 |
 | 9 | **register half**, cooperative yield | 83 | 30 | 0.36× | — | ✅ **WIN** |
@@ -121,7 +121,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 14 | **ISR-to-task latency** | *no C arm* | 430 cyc (S3) | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 15 | **queue send/receive**, 16 B item | *never built* | — | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 16 | **API coverage** | 341 rows mapped | **0 marked done** | — | 100 %, CI-checked | ⬜ **UNMEASURED** |
-| 17 | **scheduler selection**, Ir | 27 | **47** | 1.74× — ⚠ **FLOOR 30, measured by ablation**: removing BOTH handle validation (10) and the stackless bookkeeping (7) leaves 30, still 3 above the C. This row cannot be won without adopting C's data representation; see docs/LEDGER.md. Earlier "~5 instructions of slack" was wrong — the hand decomposition undercounted the product by five | ~~1.74× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
+| 17 | **scheduler selection**, Ir | 27 | **45** | 1.67× — ⚠ **FLOOR 30, measured by ablation**: removing BOTH handle validation (10) and the stackless bookkeeping (7) leaves 30, still 3 above the C. This row cannot be won without adopting C's data representation; see docs/LEDGER.md. Earlier "~5 instructions of slack" was wrong — the hand decomposition undercounted the product by five | ~~1.74× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
 
 ### Re-measured 2026-09-28 â€” six figures in this table had gone stale
 

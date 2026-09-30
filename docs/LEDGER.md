@@ -15697,3 +15697,109 @@ measured candidates, so the hit rate was one in four — and several of the refu
 calling-convention divergence, the three-clause bound-proof law, the entry-block constants rule,
 the build-mismatch guard) are what made the last four wins findable in one attempt each rather
 than four.
+
+## ★★★ 2026-09-30 — scheduler selection, read instruction by instruction: the vein is the list layout
+
+Asked which unprobed region of `switch_select` (47 against the C's 27, floor 30 by ablation) is
+worth mining. The recorded decomposition was a hand-trace that had already been wrong once "in
+the direction that mattered", so the first move was the one that found the queue path's largest
+wins: **read all 47 rv32 instructions beside the C's, on the real target, and price each block.**
+
+### The decomposition — Kairos 47 against C 27, by block
+
+| block | Kairos | C | where the difference is |
+|---|---:|---:|---|
+| A entry + guards | 6 | 5 | +2 the `MAX_PRIORITIES` guard (`li`+`bltu`; measured: keeping it is a WIN, it folds `list_meta`'s check), −1 no `lui`/`addi` (a0 is `self`) |
+| B address setup | **8** | 4 | **+2 a SECOND base**: `meta[top]` lives in a different array from the marker node `nodes[end_of(top)]`, so two `slli`/`add`/`addi` chains where C's `List_t` needs one; +1 `li 16`; +1 `lw current` |
+| C round-robin | 11.5 | 7.5 | +1 the `andi 0x1f` mask (refuted before: it IS the bounds elision), +2 item id → address (C dereferences a pointer), **+1 the marker test — REMOVED TODAY, see below** |
+| D handle validation | 7 | 1 | +5 the generation check and its bound, +1 index → TCB address |
+| E top store + compare | 2 | 1 | +1 `current == next` (stackless: `hand_over` only on a real change) |
+| F unwinding marker | 2 | 0 | +2 steady state (9 on the first hand-over of an unwind) — **SimPort's**, see V3 |
+| G started test | 3 | 0 | +3 (stackless) |
+| H commit | 4 | 3 | +1 the two-word handle's generation store |
+
+Sums 43.5 against the bench's 47 — the remainder is the wrap being taken more than every other
+call plus bracket rounding. **The 17 the ablation called "product" is D + E + F + G + H's extra
+(5+1+2+3+1 = 12) plus the guard (2) plus some of B; the 3-above-C floor is B and C's
+representation cost.** The hand-trace had put validation at 7 and stackless at 5; the listing
+says 5 and 7 — the same 12, the other way round, and now in the right place.
+
+### The opener — V2, the round-robin's marker test: 47 → 45, −571,256 Ir, −8 B
+
+`next_round_robin` returned through `(!is_end(next)).then_some(next)`. After the wrap branch
+and the `len != 0` test above it, `next` cannot be a marker — the marker's `next` is itself only
+when the list is empty. A range compare on a value already bound twice, costing `li` + `bltu`
+per round-robin on rv32. Now a `debug_assert`.
+
+| instrument | result |
+|---|---|
+| `bench/kernel-ir` | **−571,256, ONE row (`switch_context`)**, nothing positive |
+| `bench/tick-work` | **`switch_select` 47 → 45 (1.74× → 1.67×)**, `block_cycle` 932 → 924, every other row identical, PARITY + POISON ok |
+| whole switches | cooperative **77 → 75 (0.68×)**, preemptive **121 → 119 (1.08×)** |
+| `bench/kernel-flash` | 19,746 → **19,738**, −8 B |
+| `bench/sweep` list-ir | −148,054 (x86-64) / −166,048 (i686), checksums equal |
+| conform | **26/26**, `exits=3890` |
+
+Both rv32 deltas close exactly: −2 per round-robin, four per blocking cycle. A corrupt list is
+still stopped — one frame down, by `handle_at`, as `Stall::UnknownTask` instead of
+`NoReadyTask`.
+
+**★ Correction to the scorecard's row 4.** "Floor 121, we are at it" summed the register half's
+floor (70 of 74 irreducible) with the selection half's *then-current* 47, not its floor of 30.
+The whole-row floor is **100**; we are at 119. Recorded at the row.
+
+### ★★★ The vein — V1: put the list's `cursor` and `len` in its end marker, as C's `List_t` does
+
+Block B is two address computations where C has one, because `Meta { cursor, len }` is a
+separate `[Meta; L]` array from the marker node. And **it fits in the node's padding exactly**:
+
+```
+Node<u64> = value 8 + prev 2 + next 2 + container 1 = 13  → padded to 16  (3 spare bytes)
+Meta      = cursor u16 + len u16                         = 4  → ONE byte too many
+len ≤ N ≤ 255 on every instantiation (128 demo, 16 tick-work, ≤16 in tests) → len: u8
+Node      = 8 + 2 + 2 + 1 + 2 + 1                         = 16, stride UNCHANGED
+```
+
+A marker's `container` is meaningless (a marker is in no list), so the marker node has four
+usable bytes; the item nodes' `cursor`/`len` are dead weight they already carry as padding.
+`meta[list]` becomes `nodes[end_of(list)]`, one array, one base.
+
+| what it pays | how much | confidence |
+|---|---:|---|
+| `switch_select` block B | **−3** (the second `slli`/`add`/`addi`) | high — it is the exact mechanism the floor analysis named |
+| every other list op that touches both `meta` and the marker (`insert_end`, `insert_sorted`, `remove`, `head`, `is_empty_of` — 20 `list_meta` sites) | one base each | medium — LLVM may already share some |
+| RAM | **−4·L bytes** (−164 B at the demo's L = 41) | certain |
+| `list_meta`'s bound check | `CAPACITY + list < N + L` folds the same way under the guard | high |
+
+Cost: a `list.rs` refactor across 20 sites, a `const _: () = assert!(N <= 255)`, and a size
+assertion on `Node` (there is none today). Risk: real — the module doc records **8 wins against 14
+refutations** on this file and "every mechanism argument has been wrong at least once in both
+directions". So it is priced ONLY by `bench/sweep.sh` on all four cells plus tick-work, never by
+reading. Which brings up:
+
+### The instrument that had to be repaired first
+
+`bench/sweep.sh`'s two kernel-level cells, `kdelay-ir` and `ksched-ir`, read **BUILD FAIL on HEAD
+and on every variant** — all five `rusty_rtos_kernel/bench/k*-ir` harnesses had been unbuildable
+since `Kernel<>` gained `const TIMER_CMDS` (`E0107: 14 generic arguments, 13 supplied`). The
+four-instrument sweep, whose whole justification is that two cells once disagreed in sign, had
+silently been a two-instrument table. Fixed in all five with the demo's own expression,
+`{ <PosixDemoConfig as Config>::TIMER_QUEUE_LENGTH }`, fully qualified so a config change cannot
+desync them again.
+
+> **An instrument that cannot build is indistinguishable from an instrument nobody ran.** The
+> harness printed "this table is not a measurement" in capitals and that is the only reason it
+> was noticed. A sweep cell failing on HEAD should fail the whole sweep.
+
+### Ranked below the vein
+
+* **V3 — the unwinding marker on a committing port.** Block F is `SimPort`'s: `begin_unwind` is a
+  no-op on every silicon port and `unwinding` is consumed only by `settle_unwind`, reached from
+  `resume_pending_cold`. On a `COMMITS_SWITCH` port there is nothing to unwind, so gating the
+  marker on `!P::COMMITS_SWITCH` is −2 steady / −9 on the first hand-over **and** removes a cold
+  `resume_pending` call after every switch — *on silicon*. The bench cannot see it: the tick-work
+  firmware runs `SimPort`, which is also why row 17's 47 charges Kairos two instructions of sim
+  bookkeeping. An instrument question before it is a code change.
+* **V4 — a one-word packed handle**: −1 in H, maybe −1 in D. A repo-wide refactor for two.
+* **V5 — the `andi 0x1f` mask**: refuted on reading; it is the elision.
+* **The `MAX_PRIORITIES` guard**: measured — removing it is +2. Closed.

@@ -346,7 +346,11 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # `#[cold]` WITHOUT `#[inline(never)]` measured +0 Ir for -2 B: LLVM inlines it
 # back and re-materialises the constants. The hint reweights the branch; only
 # moving the code sinks the setup.
-check "Kairos kernel + port"   "$rs_kernel" 19746
+# 19,738 (2026-09-30, -8 B): `next_round_robin` no longer tests whether the item
+# it steps to is a marker -- the wrap above it and the `len != 0` test make that
+# unreachable, so it was `li` + `bltu` on every round-robin for nothing. rv32
+# switch_select 47 -> 45, block_cycle 932 -> 924, kernel-ir -571,256 in one row.
+check "Kairos kernel + port"   "$rs_kernel" 19738
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
