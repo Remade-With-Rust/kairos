@@ -78,6 +78,18 @@ shipped-port column for a product claim, net of its own scaffolding (22).**
 
 ---
 
+## ★★★ Row 2, decomposed to the byte (2026-09-30)
+
+Re-linking each arm with one entry removed / one entry alone gives a per-operation decomposition
+that reconciles exactly on both arms: C = 6,586 exclusive + 7,338 shared core; Kairos = 9,076 +
+11,142. **Two thirds of the gap is the shared core (+3,804).** The structural floor — validation
+1,464 (measured), the stackless resume split ~1,800, `u16` ids ~500 — is ≈ 17,700 = **1.27×**,
+inside the target; everything between that and 19,726 is a speed trade already priced
+(`resume_all_inline` as a call is −356 B for ~+20 on three blocking rows; the inlined take fast
+paths are `khot-ir`'s 7.6%). Two rows Kairos WINS on flash: starting the scheduler (0.58×) and
+creating a task (0.94×). Full tables, the 154-vs-48 constant-bound census, and four ablations in
+docs/LEDGER.md 2026-09-30.
+
 ## ★★★ Row 2 is the PRICE TAG of rows 1, 5b, 7, 8 and 9 — priced 2026-09-25
 
 Nine of the ten rows with a C arm win or match. **Flash is the single outlier**, and it is

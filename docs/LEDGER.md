@@ -15935,3 +15935,144 @@ and `end_unwind` answers 0 — so on silicon the marker's only effect was to for
 beyond this bench's anchors and the argument above. The rv32 corpus runs the sim. Building
 `Kernel<RiscvPort>` under the corpus is the next instrument, and it would gate every
 committing-port-only change from now on.
+
+## ★★★ 2026-09-30 — flash, decomposed to the byte: the row's excess is three products and one trade
+
+Row 2 — Kairos 19,726 B against C's 13,924 (1.42×, target ≤ 1.30× = 18,101) — was one number
+with four partial investigations behind it (§12, §14, §16, §17). `footprint-decomposition`'s rule
+is that a footprint you cannot decompose to the byte is one you cannot optimise, so the first
+move was a decomposition that RECONCILES, on both arms, by the same method.
+
+### The method, and the identity
+
+The flash bench roots each arm by `-u <entry>` with `--gc-sections`. So re-linking with one
+entry REMOVED gives that operation's *exclusive* bytes, and with one entry ALONE its *inclusive*
+bytes — from the artefacts already in the build dir, ~250 links at milliseconds each, symmetric
+across arms (§3 of the skill). The identity holds exactly:
+
+| arm | Σ exclusive | shared core | = `.text` |
+|---|---:|---:|---:|
+| C (46 entries) | 6,586 | 7,338 | **13,924** ✓ |
+| Kairos (47 entries) | 9,076 | 11,142 | **20,218** ✓ (pin = 20,218 − 492 builtins = 19,726) |
+
+**The shared core — what every operation pulls in — is +3,804 B, two thirds of the gap.** The
+operations' own parts are +2,490.
+
+### Per operation, paired (inclusive = the cost of supporting that operation alone)
+
+| operation | C incl | Kairos incl | ratio | | C excl | K excl |
+|---|---:|---:|---:|---|---:|---:|
+| queue receive | 1,924 | 5,460 | **2.84×** | | 0 | 652 |
+| queue peek | 1,910 | 5,166 | 2.70× | | 384 | 562 |
+| semaphore take | 2,394 | 5,562 | 2.32× | | 0 | 36 |
+| mutex take (recursive) | 2,484 | 5,650 | 2.27× | | 82 | 124 |
+| queue send | 2,212 | 4,508 | 2.04× | | 0 | 742 |
+| stream buffer receive / send | 1,990 / 2,286 | 4,052 / 4,276 | 2.0× / 1.9× | | 508 / 446 | 894 / 776 |
+| increment tick | 308 | 804 | 2.61× | | 0 | 4 |
+| event group wait / set | 1,316 / 984 | 2,440 / 1,800 | 1.85× / 1.83× | | 280 / 0 | 688 / 30 |
+| **start scheduler** | 4,754 | 2,774 | **0.58×** | | 1,434 | 122 |
+| **task create** | 2,128 | 1,994 | **0.94×** | | 130 | 30 |
+
+Two rows Kairos WINS on flash — starting the scheduler (C creates the idle and timer tasks and
+pulls in `pvPortMalloc`) and creating a task. **The queue family is where the ratio lives, at
+2.0–2.8×**, and it is the same family that wins on RAM (row 7, 0.30×) and on the cooperative
+switch (row 6, 0.68×): the stackless resume machinery is paid for in flash and collected in RAM.
+
+### The shared core, paired by role
+
+| role | C | Kairos | Δ |
+|---|---:|---:|---:|
+| queue take path | `xQueueReceive` 380 + `xQueueSemaphoreTake` 462 | `take_outlined` 692 + `queue_take_blocking` 704 + `queue_take_timed_out` 380 + `copy_data_from_queue` 192 | **+1,126** |
+| queue send path | `xQueueGenericSend` 388 + `prvCopyDataToQueue` 136 | `send_generic_outlined` 710 + `queue_send_blocking` 432 | +618 |
+| event group set bits | 156 | 550 | **+394** |
+| timeout / wait frame | `xTaskCheckForTimeOut` 148 | `check_for_timeout` 238 + `begin_wait` 186 | +276 |
+| queue create | 98 + 88 + 150 | `new_queue` 592 | +256 |
+| delayed-list add | 174 | 374 | +200 |
+| event-list remove | 196 | 382 | +186 |
+| priority inherit family | 514 | 638 | +124 |
+| malloc / free | 638 | 0 | **−638** |
+
+### The structural counter: constant-bound checks, 154 against 48
+
+A whole-arm census (7,183 Kairos instructions against 5,091 C — 1.41×, matching the byte
+ratio: **equal encoding density, as §14 said**). Constant loads overall are NOT disproportionate
+— 8.4% of instructions against 8.6% (C spends its on `lui` for globals, Kairos on `li`). But
+**`li` followed by a bound or compare branch is 154 against 48**, and the single most-loaded
+immediate is **`0x7` ×96 = `TASKS − 1`** for the probe's `TASKS = 8`: the handle-validation bound
+at the resolve sites. That is the flash-side face of the 1,464 B the ablation of validation
+measured (§ the price tag), and rv32 has no compare-immediate branch, so each costs `li` + `b*`.
+
+### Classified (skill §6), with epistemic status (§7)
+
+| line | bytes | class | status |
+|---|---:|---|---|
+| handle validation (96 `< TASKS` sites, generations, `Err` arms) | 1,464 | **structure** — the safety product | measured by ablation |
+| stackless resume split (`*_blocking`, `*_timed_out`, wait frames) | ~1,800 | **structure** — the RAM product (row 7) | census |
+| `u16` id → address reconstruction (§14's ALU 2.33×) | ~500 | **structure** — the RAM product | census |
+| inlined fast paths in three take wrappers | ~1,000 of 1,956 | **policy** — a measured speed trade (`khot-ir` 7.6%) | recorded |
+| `resume_all_inline` at four sites | **356** | **policy** — priced below | **measured** |
+| stream buffers, `event_group_set_bits`, `new_queue` | ~1,550 | opened below | census |
+
+Structure alone puts the floor at roughly 13,924 + 3,764 ≈ **17,700 B = 1.27×** — inside the
+target. **The target is reachable only from the policy and unexamined lines**, which need
+−1,625 between them.
+
+### Ablations, each verified in the ARTEFACT
+
+| change | flash | speed | verdict |
+|---|---:|---|---|
+| A `resume_all_inline` → a real call | **−356** (19,726 → 19,370), `mv` −20 | kernel-ir **+193,629**; rv32 real port `block_cycle` +21, `event_wait_fail` +21, `group_roundtrip` +20 | **a trade, declined** — every one of its four sites is a measured row, and the outlined body needs a frame because it calls the port's critical section |
+| B `remove_from_unordered_event_list` outlined | +36 | — | refuted: two sites, marshalling exceeds the dedup |
+| C `Arena::try_insert` outlined | +390 | — | refuted: generic over the arena type, so five monomorphised symbols plus marshalling |
+| D `after_stream_wait` outlined (×3 in `receive_inner`), proved by `nm` (146 B symbol) | **+72** | sb-ir +3,754, anchors unmoved | refuted: three per-site `#[inline(always)]` copies, each constant-folded for its arm, were SMALLER than one general body plus three calls |
+
+A has no A4 split that helps: the only non-row site is `resume_all` itself, and a one-caller
+outline dedups nothing. **It is the owner's trade** — 356 B against ~20 instructions on three
+blocking-path rows — and it is priced on every instrument so the decision is arithmetic.
+
+### ★★ Two instrument faults, both of which read as "byte-identical"
+
+1. **The probe's build failure was silent.** `cargo build -q` with no exit check left the
+   previous archive in place, `ls *.a | head -1` linked it, and an ablation read byte-identical
+   flash for a change that never compiled. `run.sh` now fails loudly.
+2. **A rebuilt archive is necessary, not sufficient.** Adding `#[inline(never)]` *beside* an
+   existing `#[inline(always)]` is a conflict rustc resolves with a warning; the archive rebuilt
+   and the function was unchanged. **Prove the change in the linked artefact** — here, the
+   outlined function must appear in `nm` — before reading its number. (`instruction-counting`
+   §10 gains a clause.)
+
+### What the listing of `event_group_set_bits` (195 instructions against C's 59) is made of
+
+A 13-register prologue and epilogue (28 instructions); `remove_from_unordered_event_list`
+inlined into the walk with its three calls; three constants spilled to the stack; the group
+handle resolved THREE times (one is `?`, two are `if let Ok`), each a bound, a generation and an
+`Err` arm; and `resume_all_inline`'s body. C resolves once (a pointer) and calls
+`vTaskRemoveFromUnorderedEventList` and `xTaskResumeAll`. The two re-resolves are B1's memory
+clause — the handle is a parameter but the *generation* is a field, re-read after `&mut self`
+calls — and are the one line here not yet priced.
+
+> **Dedup pays only when the copies are the same code.** A small function inlined `always` at
+> three sites is three *specialised* bodies; a shared symbol is one *general* body plus three
+> calls and their marshalling, and here that was +72 B and +3,754 Ir. A2/A3 count copies; this
+> is the counter-example where the copies were cheaper than the original.
+
+### Dead hypotheses, killed
+
+`resume_all_inline` at cold sites only (no non-row site exists); outlining `try_insert`
+(+390); outlining the unordered-list removal (+36); constant loads as a disproportionate class
+(8.4% vs 8.6%); and, from §16–§17: `--icf=all`, link `-O2`, the sret shrink (−34 max), masking
+the arena index (+444), power-of-two slots (+1,488 B RAM).
+
+### The floor function, stated
+
+```
+C:      flash = Σ ops
+Kairos: flash = Σ ops + validation(#resolve sites) + resume(#blocking ops) + ids(#link follows)
+                ≈ 13,924 + 1,464 + ~1,800 + ~500 ≈ 17,700  (1.27×)
+```
+
+The three added terms are the products that win rows 1, 5b, 7, 8 and 9. Everything above that
+floor and below today's 19,726 is a **speed trade already priced**: the inlined take fast paths
+(`khot-ir` 7.6%), and A (−356 B for ~+20 on three blocking rows). **The ≤ 1.30× target is
+reachable only by spending published performance rows**, and that is the owner's decision, not
+an optimisation. Row 2 stays at 19,726 with this paragraph beside it.
