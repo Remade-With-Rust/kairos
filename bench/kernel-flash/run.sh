@@ -102,7 +102,10 @@ c_nogc=$(text_of "$BUILD/c_nogc.elf")
 
 # ----------------------------------------------------------- the Rust arm --
 echo "building the Kairos probe for riscv32imac-unknown-none-elf"
-( cd bench/kernel-flash/rs && cargo build --release -q --target riscv32imac-unknown-none-elf )
+# The build MUST fail loudly. It did not: a probe that failed to compile left the
+# previous archive in place, `ls *.a | head -1` linked it, and an ablation read
+# BYTE-IDENTICAL flash for a change that had never been built (2026-09-30).
+( cd bench/kernel-flash/rs && cargo build --release -q --target riscv32imac-unknown-none-elf )     || { echo "FAIL: the Kairos probe did not build -- nothing below is a measurement"; exit 1; }
 LIB=$(ls bench/kernel-flash/rs/target/riscv32imac-unknown-none-elf/release/*.a | head -1)
 # The probe's operation entry points, and ONLY those. `kairos_riscv_*` are the
 # port's own assembly symbols, and rooting them charged the Rust arm for both
