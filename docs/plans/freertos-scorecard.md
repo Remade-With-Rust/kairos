@@ -55,6 +55,27 @@ That the C-compared rows did not move is a FACT, not an omission: neither `incre
 rows 18–30 net of row 30 (`scaffolding`, 14)** — it is the harness's own bracket and the floor
 under every one of them.
 
+### ★ Every rv32 row above was measured on `SimPort` until 2026-09-30
+
+Nothing in the repo ran `Kernel<RiscvPort>` at runtime — the rv32 corpus is the sim
+cross-compiled, and the port firmwares test the port alone. `bench/tick-work` now takes
+`--features real-port` and runs the kernel on the shipped RISC-V port. The three C-compared rows
+are identical on both (no critical section); every Kairos-only row is HIGHER on the real port,
+because its critical section (`csrrci`/`csrsi` plus two atomics) costs more than the sim's
+`Cell` arithmetic — `scaffolding` is **22 against 14**:
+
+| row | SimPort | shipped port |
+|---|---:|---:|
+| 17 scheduler selection | 45 | **45** (47 before V3) |
+| 24 blocking cycle | 924 | **962** (966 before V3) |
+| 18 queue round-trip | 113 | **154** |
+| 21 queue receive refused | 36 | **54** |
+| 30 `scaffolding` | 14 | **22** |
+
+The SimPort column stays because it is what `kairos conform` runs and what the queue campaign's
+deltas were measured on; the shipped-port column is what a silicon part pays. **Quote the
+shipped-port column for a product claim, net of its own scaffolding (22).**
+
 ---
 
 ## ★★★ Row 2 is the PRICE TAG of rows 1, 5b, 7, 8 and 9 — priced 2026-09-25
@@ -103,7 +124,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 21 | **queue receive refused** (empty, 0 ticks), Ir | *no C arm* | **36** | — | — | ⬜ −59.6% (§6), then −21 (§10) |
 | 22 | **event-group wait refused** (0 ticks), Ir | *no C arm* | **36** | — | — | ⬜ −31.7% (§6) |
 | 23 | **owe filter** (`resume_pending`, nothing owed), Ir | *no C arm* | **7** | — | — | ⬜ §8 |
-| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **924** | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
+| 24 | **blocking cycle** (two-task hand-off), Ir | *no C arm* | **924** SimPort / **962** shipped port | — | — | ⬜ −12.2% (§8), −112 (§10), −17 (§13–14) |
 | 29 | **queue peek** (item present), Ir | *no C arm* | **39** | — | — | ⬜ the `PEEK` twin, §8; −35 (§10) |
 | 30 | **queue messages-waiting**, Ir | *no C arm* | **14** | — | — | ⬜ the FLOOR, = `scaffolding` |
 | 25 | **notify round-trip** (give+take), Ir | *no C arm* | **53** | — | — | ⬜ −28.7% (§6) |
@@ -121,7 +142,7 @@ Where the 5,444 B goes, both halves measured rather than argued:
 | 14 | **ISR-to-task latency** | *no C arm* | 430 cyc (S3) | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 15 | **queue send/receive**, 16 B item | *never built* | — | — | ≤ 1.25× | ⬜ **UNMEASURED** |
 | 16 | **API coverage** | 341 rows mapped | **0 marked done** | — | 100 %, CI-checked | ⬜ **UNMEASURED** |
-| 17 | **scheduler selection**, Ir | 27 | **45** | 1.67× — ⚠ **FLOOR 30, measured by ablation**: removing BOTH handle validation (10) and the stackless bookkeeping (7) leaves 30, still 3 above the C. This row cannot be won without adopting C's data representation; see docs/LEDGER.md. Earlier "~5 instructions of slack" was wrong — the hand decomposition undercounted the product by five | ~~1.74× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
+| 17 | **scheduler selection**, Ir | 27 | **45** on the SHIPPED port (`--features real-port`, 2026-09-30; was 47 there before V3), 45 on SimPort | 1.67× — ⚠ **FLOOR 30, measured by ablation**: removing BOTH handle validation (10) and the stackless bookkeeping (7) leaves 30, still 3 above the C. This row cannot be won without adopting C's data representation; see docs/LEDGER.md. Earlier "~5 instructions of slack" was wrong — the hand decomposition undercounted the product by five | ~~1.74× | *(half of a switch)* | — §4; the 46 floor is inadmissible, §8 |
 
 ### Re-measured 2026-09-28 â€” six figures in this table had gone stale
 

@@ -350,7 +350,15 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # it steps to is a marker -- the wrap above it and the `len != 0` test make that
 # unreachable, so it was `li` + `bltu` on every round-robin for nothing. rv32
 # switch_select 47 -> 45, block_cycle 932 -> 924, kernel-ir -571,256 in one row.
-check "Kairos kernel + port"   "$rs_kernel" 19738
+# 19,726 (2026-09-30, -12 B): the unwinding marker is gated on
+# `!P::COMMITS_SWITCH`. It exists for a port that does NOT commit the switch, so
+# on this one -- whose `begin_unwind` is a no-op and whose `end_unwind` answers 0
+# -- it only forced `resume_pending` down its cold path once per switch to settle
+# a tally of zero. The const folds the whole block away here: `lw`, `bnez`, `lw`,
+# `sw`, `sw` gone from `switch_context` (76 -> 71 static). On the SHIPPED port
+# (tick-work `--features real-port`): switch_select 47 -> 45, owe_filter 7 -> 5,
+# block_cycle 966 -> 962. On SimPort every row is byte-identical.
+check "Kairos kernel + port"   "$rs_kernel" 19726
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #

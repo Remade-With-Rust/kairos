@@ -15857,3 +15857,81 @@ this morning, is what caught it in one run.**
 row-4 floor, five rebuilt harnesses, and a list-layout question closed by measurement instead of
 left as a plan. Below it, V3 (the unwinding marker on a committing port) is now the best remaining
 lead, and it is an instrument question first: the tick-work firmware runs `SimPort`.
+
+## ★★★ 2026-09-30 — V3: the instrument that did not exist, and the win it measured
+
+V3 was "gate the unwinding marker on `!P::COMMITS_SWITCH`" — a silicon-only change. Testing it
+honestly meant first establishing that **nothing in the repo runs `Kernel<RiscvPort>` at
+runtime**: the rv32 corpus firmware runs `SimPort` cross-compiled ("why this runs with no RISC-V
+port"), `riscv32-qemu-preempt` depends on the port crate alone, and `riscv32-qemu-switch`
+measures the register half directly. The kernel is tested on the sim and the ports are tested
+alone; the shipped combination is linked by the flash bench and run by nobody.
+
+### The instrument: tick-work `--features real-port`
+
+Swap `SimPort` for `RiscvPort` behind a feature. Every row survives: `switch_context` only
+SELECTS (the register swap is `yield_now`), and a yield on `RiscvPort` raises CLINT `msip`,
+which stays harmlessly pending with `mie.MSIE` clear. The ANCHOR line names the port.
+
+**HEAD on the shipped port, against the SimPort figures every scorecard row had carried:**
+
+| row | SimPort | **RiscvPort** |
+|---|---:|---:|
+| `tick_idle` / `tick_delayed` | 9 / 9 | **9 / 9** — no critical section, unchanged |
+| `switch_select` (row 17) | 45 | **47** |
+| `scaffolding` | 14 | **22** |
+| `block_cycle` | 924 | **966** |
+| `queue_roundtrip` | 113 | **154** |
+| `recv_empty` / `send_full` | 36 / 33 | **54 / 44** |
+
+POISON doubles every row on the real port; the PARITY anchor is identical (`tick_count=1024`).
+
+> **My earlier note that SimPort "overstates" firmware cost was wrong in direction.** The
+> sim's critical section is `Cell` arithmetic and a flag test; the real port's is `csrrci` /
+> `csrsi` plus a nesting atomic and a `was_enabled` word. `scaffolding` — one enter/exit pair —
+> is 22 against 14. The three C-compared rows are unaffected because they take no critical
+> section; every Kairos-only row is now honest for the shipped port, and **row 17's shipped
+> figure is 47**.
+
+### The win: V3 on the shipped port
+
+Three sites, one const. `hand_over` no longer sets the marker, `resume_pending` no longer tests
+it, `settle_unwind` returns at once. On `SimPort` (`COMMITS_SWITCH = false`) the const is false
+and every line is as it was.
+
+| instrument | HEAD | V3 |
+|---|---:|---:|
+| `switch_select`, RiscvPort | 47 | **45** |
+| `owe_filter`, RiscvPort | 7 | **5** |
+| `block_cycle`, RiscvPort | 966 | **962** |
+| every other RiscvPort row | — | identical |
+| `switch_context`, static | 76 | **71** — `lw 0x54; bnez; lw 0x2c; sw 0x50; sw 0x54` gone |
+| flash, kernel + RISC-V port | 19,738 | **19,726** |
+| tick-work on SimPort | 45 / 924 / 7 / 113 | **byte-identical** |
+| `bench/kernel-ir` (sim) | — | **+0** |
+| conform (sim) | 26/26 | **26/26** |
+| kernel suites, debug + release | — | green |
+
+The arithmetic closes: −2 per selection (the steady-state `lw` + `bnez`), two selections per
+blocking cycle, −4. `resume_pending` is inlined into its callers, so its −2 shows in
+`owe_filter` and not as a symbol.
+
+### What the mechanism is
+
+The marker exists for a port that does NOT commit the switch: there `switch_context` returns
+into the OUTGOING task's Rust frame, whose tail runs on an abandoned stack and must be tallied
+rather than counted as sim time. A committing port saves the registers itself and resumes the
+incoming task in ITS frame; nothing is abandoned, `begin_unwind` is the trait's no-op default
+and `end_unwind` answers 0 — so on silicon the marker's only effect was to force
+`resume_pending` down its cold path once per switch, to settle a tally of zero.
+
+> **A feature's cost can live entirely on the ports that do not need it.** The sim needs the
+> marker and pays for it honestly; the four silicon ports paid for it too, and the instrument
+> that would have shown that did not exist until today. `P::COMMITS_SWITCH` was already the
+> kernel's own name for the distinction (`port_yield` dispatches on it); it just had not been
+> asked at the three sites that mattered.
+
+**The honest limit:** there is still no runtime *correctness* gate for `Kernel<RiscvPort>`
+beyond this bench's anchors and the argument above. The rv32 corpus runs the sim. Building
+`Kernel<RiscvPort>` under the corpus is the next instrument, and it would gate every
+committing-port-only change from now on.
