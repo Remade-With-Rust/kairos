@@ -15803,3 +15803,57 @@ desync them again.
 * **V4 — a one-word packed handle**: −1 in H, maybe −1 in D. A repo-wide refactor for two.
 * **V5 — the `andi 0x1f` mask**: refuted on reading; it is the elision.
 * **The `MAX_PRIORITIES` guard**: measured — removing it is +2. Closed.
+
+## ★★★ 2026-09-30 — the vein mined: V1 REFUTED on four cells, and the reason is better than the one on record
+
+The meta-in-marker layout did exactly what it was designed to do, and lost. (`bench/variants/`
+is gitignored scratch by convention, so the variant lives only on this box; the layout below is
+enough to rebuild it, and the transform was nine anchored edits to `list.rs`.)
+
+**What it did.** `cursor u16 + len u8` sits in the marker node's 3 padding bytes; `Node<u64>`
+stays 16 (now pinned by a `const` assert); the `[Meta; L]` array is gone; `switch_context`'s
+second address base is gone — the rv32 listing shows `len` read off the same base as the
+marker. Compiles, 62/62 tests, `no_panic` id-fuzz included.
+
+**What it measured.**
+
+| cell | HEAD | V1 | delta |
+|---|---:|---:|---:|
+| list-ir x86-64 | 12,429,895 | 12,875,889 | **+445,994 (+3.6%)** |
+| list-ir i686 | 14,851,695 | 15,209,696 | **+358,001** |
+| kdelay-ir | 3,441,387 | 3,457,534 | +16,147 |
+| ksched-ir | 1,528,703 | 1,556,842 | +28,139 |
+| rv32 `switch_select` | 45 | 44 | −1 (predicted −3) |
+| rv32 `block_cycle` / `notify_roundtrip` | 924 / 53 | 919 / 51 | −5 / −2 |
+| rv32 `queue_roundtrip` | 113 | **116** | **+3** |
+
+Checksums identical down every column. All four host cells lose; the target is mixed and small.
+
+**Two mechanisms, both seen in the listing, not argued.**
+
+1. **Aliasing.** A separate `meta` array is a *no-alias fact* LLVM cannot derive: a write to
+   `meta[l].len` can never touch `nodes[x].next`, so node fields stay in registers across every
+   count and cursor update. Inside one array they must be reloaded. The one source line that
+   indexes `&self.nodes` got **100,000 Ir cheaper** (the predicted saving, real) while the
+   program got **446,000 dearer** with the same checksums — the extra can only be reloads in the
+   inlined callers.
+2. **Layout.** On rv32 the −3 of address setup arrived and LLVM re-laid the selection loop so
+   the non-empty path now *jumps over* the walk-down — an unconditional `j` on every call gave 2
+   of the 3 back (A5's shape: correct-and-strictly-less-work is not fewer instructions).
+
+> **The doc's stated reason was wrong and the real reason is stronger.** `Meta` said it was kept
+> apart so the walk would not pull a cursor and a length through the cache with every step. It
+> was not the cache — the padding merge loads identical bytes — it was the no-alias fact, worth
+> more than the base it costs. The doc now says so with the numbers (`rusty_rtos_core 52db209`).
+> **When a design note gives a reason, price the reason, not just the design**: a wrong reason
+> attached to a right decision invites exactly this refactor.
+
+The module's own warning — 8 wins against 14 refutations, "every mechanism argument has been
+wrong at least once in both directions" — is now 8 against 15, and this one was argued with the
+layout arithmetic written out and the C's own struct as precedent. **The four-cell sweep, repaired
+this morning, is what caught it in one run.**
+
+**What stands from the vein:** V2 (`switch_select` 47 → 45, −571,256 Ir, −8 B), the corrected
+row-4 floor, five rebuilt harnesses, and a list-layout question closed by measurement instead of
+left as a plan. Below it, V3 (the unwinding marker on a committing port) is now the best remaining
+lead, and it is an instrument question first: the tick-work firmware runs `SimPort`.
