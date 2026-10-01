@@ -151,6 +151,23 @@ mutation survey covers one file of nine.
 | **K7 libraries** | `backoff`, `json` and `sntp` done; **`mqtt` complete — 218 of coreMQTT's 218 functions** |
 | **K5 Janus joint, K8 SMP / MPU / 1.0** | open |
 
+### Against FreeRTOS V11.3.1, the same operations, rv32
+
+| | FreeRTOS | Kairos | |
+|---|---:|---:|---:|
+| tick | 15 | **9** | **0.60×** |
+| cooperative switch (yield, block, take) | 110 | **75** | **0.68×** |
+| preemptive switch | 110 | 119 | 1.08× |
+| scheduler selection alone | 27 | 45 | 1.67× |
+| list operation | 22.32 | **18.47** | **0.83×** |
+| RAM per task | 596 B | **176 B** | **0.30×** |
+| flash | 13,924 B | 19,726 B | 1.42× |
+
+Thirteen rows have a C arm: ten win or match, and three are against us — the
+preemptive switch, scheduler selection (which is half of it) and flash. The full
+scorecard, with each one's measured floor and what it buys, is
+[`docs/plans/freertos-scorecard.md`](docs/plans/freertos-scorecard.md).
+
 It has run on a chip, and not only under emulation: K3 is QEMU on Cortex-M and
 RISC-V, K6 links the unmodified C demos against the Rust ABI, and the kernel
 schedules from a tick interrupt on a real ESP32-S3.

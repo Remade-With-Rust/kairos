@@ -16092,3 +16092,24 @@ performance row:
 > losses (B +36, C +390, D +72, R +138, P declined on record). The structural floor is 1.27×;
 > everything between it and 1.42× is a speed trade that has already been priced. Closing the
 > row means spending rows 18–30, and that is a decision, not an optimisation.
+
+## 2026-09-30 — release 0.2.1: ten crates, READMEs re-measured
+
+Published `rusty_rtos_core`, `rusty_rtos_alloc`, `rusty_rtos_kernel-core`, `rusty_rtos_kernel`,
+`rusty_rtos_port-core`, `-riscv`, `-cortex-m`, `-xtensa`, `-host` and `rusty_rtos_port` at
+**0.2.1**, tagged `v0.2.1` in each repo. `rusty_rtos_port-esp-radio` was never published and
+still is not. No public API changed; patch release.
+
+The READMEs were re-measured, not edited: the kernel's still said tick 56, selection 79 and a
+preemptive switch 1.39× against us (now 9, 45, 1.08×), and core's list row said 1.533× where
+`bench/list-cost` now reads **0.83× (64-bit) and 0.69× (32-bit) — faster than `list.c`**, checksum
+`7de9075f4deb23e5` on both arms. Silicon figures are dated as pre-0.2.1 upper bounds because
+they were not re-run on hardware.
+
+**How it was published, and why.** From clean clones OUTSIDE the umbrella, because the umbrella's
+`.cargo/config.toml` path-overrides siblings and would make `cargo publish`'s verify step build
+against working copies instead of crates.io. Lockfiles were refreshed in those clones, where
+crates.io is the only source, so they carry the registry checksum for `rusty_rtos_core 0.2.1`.
+Per-crate `--dry-run` cannot verify a facade whose sibling is not yet published; Cargo 1.98's
+`cargo publish --workspace` dry-runs the whole workspace against a local overlay and uploads in
+dependency order, and that is what was used.
