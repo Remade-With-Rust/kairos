@@ -361,7 +361,14 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # `sw`, `sw` gone from `switch_context` (76 -> 71 static). On the SHIPPED port
 # (tick-work `--features real-port`): switch_select 47 -> 45, owe_filter 7 -> 5,
 # block_cycle 966 -> 962. On SimPort every row is byte-identical.
-check "Kairos kernel + port"   "$rs_kernel" 19726
+# 19,484 (2026-10-01, -242 B): `queue_take`'s fast path resolves the queue once,
+# mutably, and takes the item through that reference, instead of resolving it
+# to read and again inside `copy_data_from_queue` to write. On rv32 LLVM had
+# already merged the two resolves at run time (tick-work: block_cycle 924 ->
+# 923, every other row identical), but each inlined copy still carried the
+# second body. kernel-ir -395,353 Ir (-0.18%). On the Xtensa S3 build the
+# outlined `copy_data_from_queue` (146 B) disappears from the receive path.
+check "Kairos kernel + port"   "$rs_kernel" 19484
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -438,10 +445,11 @@ echo "opcode counts -- the four the 1.6x investigation named:"
 # 769 / 77 / 258 / 165 (2026-09-28): the delayed-list bound proof above. Every
 # one of the four fell, which is the signature of a folded check rather than a
 # reshuffle -- the event-item proof raised three of them.
-check "mv   (call-argument setup)" "$(ops mv)"   769
+# 756 / 254 (2026-10-01, -13 / -4): the single resolve in `queue_take`, above.
+check "mv   (call-argument setup)" "$(ops mv)"   756
 check "mul  (non-p2 indexing)"     "$(ops mul)"    0
 check "srli (u16 extraction)"      "$(ops srli)"  77
-check "slli (u16 extraction)"      "$(ops slli)" 258
+check "slli (u16 extraction)"      "$(ops slli)" 254
 check "andi (incl. zext.b)"        "$(ops andi)" 165
 
 echo

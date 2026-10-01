@@ -16164,3 +16164,42 @@ broken firmware and was a too-long sandbox path (Windows MAX_PATH): the self-tes
 sandbox path over 60 characters. (2) Layer 3's symbol match was counting compiler-local labels
 (`.L7`, `.LFB0`) as evidence; it matches global symbols only now, before that could ever read FAIL
 on a clean firmware. **A gate that has only ever said PASS has not been shown to work.**
+
+## ★★ 2026-10-01 — the interrupt path on the S3, decomposed, and four fixes built
+
+`rusty_rtos_kernel/firmware/xiao-s3-realtime` runs every kernel feature at once on a XIAO ESP32-S3
+and times it (README there: three board runs, a negative control that fails as it must). Its
+interrupt -> task row missed its prediction (notify 6.00 us against 3-5), so `--features decompose`
+stamped `ccount` at eleven points along the path. Notify, p50 cycles at 240 MHz:
+
+| owner | segments | cycles |
+|---|---|---:|
+| esp-hal + port | the `Software0` second trap 345, the `Context` copy 344, trap exit + resume 96 | **785** (53 %) |
+| Kairos | `notify_from_isr` 312, `switch_context` 103, the call made again 140 | **555** (37 %) |
+| demo glue | alarm clear, bookkeeping, raise, idle accounting | **145** (10 %) |
+| outside the headline | a bare esp-hal peripheral trap's entry (probe) | ~450 |
+
+Queue and semaphore wakes cost ~900 in the kernel against notify's 555.
+
+The four fixes, as built (board numbers to follow):
+
+1. **`switch-in-trap`** (firmware feature): switch inside the interrupt's own trap, on the frame
+   it restores, instead of raising `Software0` for a second trap. esp-hal's dispatcher passes
+   peripheral handlers the frame; `#[handler]` accepts `fn(&mut Context)` but fails to type-check
+   it in 1.2.1, so it is wired by hand. Predicted ~-360 cycles.
+2. **`--no-default-features`** drops esp-hal's `float-save-restore` (now behind the default
+   `fp-save` feature): 18 FP words per trap and per switch copy. Without it xtensa-lx-rt traps
+   with CPENABLE = 0 and new contexts are zero-filled, so a float in a task faults loudly.
+3. **The kernel** (`42e183b`): `queue_take` resolves the queue once. rv32 flash **19,726 ->
+   19,484 B** (1.42x -> **1.40x** the C), kernel-ir **-395,353 Ir**, tick-work rows identical
+   but `block_cycle` -1, conform 26/26 (`exits=3890`). On the S3 the outlined
+   `copy_data_from_queue` leaves the receive path. Refuted on the way: a cheaper `end_wait` (the
+   call again 100 -> 93 on rv32, but `queue_roundtrip` 113 -> 119 and `block_cycle` +4, rows
+   that never run it). tick-work gains six opt-in `isr-rows` (shipped port: queue 167 / 45 / 100
+   against notify 88 / 45 / 40); opt-in because their call sites alone moved the default rows.
+4. **`iram`** (firmware feature): `kairos_iram.x` puts the firmware, kernel, core and port code
+   in IRAM, plus esp-hal's critical section and dispatcher helpers it leaves in flash. D/IRAM is
+   one physical SRAM, so a matching DRAM reservation is added and an ASSERT fails the link on
+   overlap; verified in the ELF (36.6 KB, ending exactly at `.data`'s mirror). Two simpler
+   script shapes cannot link (an `INSERT` applies to ld's built-in script; regions are undeclared
+   ahead of `linkall.x`), recorded in the file.
