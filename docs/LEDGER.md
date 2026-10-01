@@ -16227,3 +16227,53 @@ none of the three +529.
 - **Refuted and reverted:** an in-line Context copy lost to the S3's mask-ROM memcpy (278 vs 247
   cycles without FP save, 484 vs 347 with), recorded in port-xtensa 1d50460.
 - **Kept:** the demo's ISR bookkeeping, 87 -> 36 cycles.
+
+## ★★★ 2026-10-01 — commercial readiness: core, kernel and port against the v1.0.0 bar (§2.10–2.11)
+
+The mission plan's market-ready bar asks for a complete hardening row, green CI without a token,
+and the security doctrine of §2.10. A deep `use-protection-please` pass, tools run:
+
+| package | hardening | ★ v1.0 gates | open ★ gates, and whose |
+|---|---|---|---|
+| `rusty_rtos_core` | 50 % -> **88 %** | 10/17 -> **14/16** | H-10: `portable-atomic`, the owner's `cargo vet trust`; H-27: 30 nights of fuzzing |
+| `rusty_rtos_kernel` | 58 % -> **91 %** | 13/16 -> **15/16** | H-27 only |
+| `rusty_rtos_port` | 42 % -> **82 %** | 10/17 -> **14/16** | H-10: 27 embedded-ecosystem crates, the owner's trust decision; H-27 |
+
+**CI was red in all three at release 0.2.1** (`cargo fmt --check` everywhere; clippy `-D warnings` in
+core and kernel, and in port on host-only dead code and a test file). Green now, verified by running
+every CI command in fresh clones (crates.io resolution, no umbrella patches).
+
+**Defects found and fixed:**
+- **`rusty_rtos_port-cortex-m::init_stack` was unsound.** It was a safe `fn` writing sixteen words
+  through a raw pointer. It is now `unsafe fn` with a contract, and the four mps2 cells were updated.
+  Breaking: the port's next release is 0.3.0.
+- **esp-radio heap overflow.** A zero-capacity queue got a one-byte buffer and wrote `item_size`
+  bytes into it.
+- **esp-radio dangling pointers.** Every failed create handed the closed radio driver
+  `NonNull::dangling()`, which it then used.
+- **Host port `errno`.** The Unix host port's `SIGUSR1` handler spoiled `errno`; found by
+  ThreadSanitizer.
+- **A core test that had never run.** `generations_never_mint_a_null_handle` had no `#[test]`.
+
+**What now exists in each repo:**
+- `supply-chain/` (cargo vet);
+- a seeded fuzz target: `kernel_api` (3.7M inputs/10 min, clean), `lists_arena` (model-checked),
+  `task_stacks` (ASan plus canary windows);
+- `docs/threat-model.md` with a residual-risk register;
+- `CHANGELOG.md`;
+- `tools/unsafe_census.py`;
+- SHA-pinned CI with vet, census, table check and fuzz regression per push;
+- a nightly `scheduled.yml` for fuzzing, advisories, ASan, TSan and `cargo careful`.
+
+**The unsafe census earned its place on its first run:**
+- 19 fences were undocumented, including the whole Xtensa port.
+- `UNSAFE.md` claimed the non-Windows host backend had no `unsafe`.
+- One crate (`-esp-radio`) does not deny `unsafe_code` at all, so its 100 sites were invisible to a
+  fence-based check. It is now declared, with the count pinned (port threat model R-6).
+
+**Left for the owner:**
+- the two vet trust decisions;
+- pushing, which starts H-27's 30-day clock;
+- signing (H-38);
+- the 0.3.0 / 0.2.2 releases.
+
