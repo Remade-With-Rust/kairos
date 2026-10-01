@@ -16213,3 +16213,17 @@ with the kernel segments' maxima collapsing (`_from_isr` 4,788 -> 314 cycles), s
 the instruction cache. The kernel fix: queue and semaphore's call made again -48 cycles each.
 Fixes 1 and 2 WITHOUT IRAM worsened the control loop's p99.9 (41.7 -> 60.8 / 65.1 us), and with
 IRAM it is better than baseline (37.1): in a flash build, layout sets the tail.
+
+**Second sweep, the three fixes made the default** (all PASS). Notify p50 4.40 us at the
+headline, 1,061 cycles in segments. Each opt-out costs: software0-switch +267, fp-save +225,
+none of the three +529.
+- **The tick test confirms the tail hypothesis.** In IRAM builds, events with no tick handler
+  inside have no tail at all: notify clean max 1,098 cycles (4.6 us) over 6,613 events. Every
+  event above that had a tick inside (1.1 %, max 3,806).
+- **Flash layout can move the median, not just the tail.** One flash build ran notify's call
+  made again at 7,370 cycles p50 (12.26 us headline).
+- **The event-group one-tick skew is layout.** It is 1.16 ms in flash builds and about 30 us in
+  every IRAM build; the round-robin explanation is withdrawn.
+- **Refuted and reverted:** an in-line Context copy lost to the S3's mask-ROM memcpy (278 vs 247
+  cycles without FP save, 484 vs 347 with), recorded in port-xtensa 1d50460.
+- **Kept:** the demo's ISR bookkeeping, 87 -> 36 cycles.
