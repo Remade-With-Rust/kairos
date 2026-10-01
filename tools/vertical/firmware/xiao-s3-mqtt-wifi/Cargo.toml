@@ -1,0 +1,53 @@
+[package]
+name = "xiao-s3-mqtt-wifi"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "K7 on silicon: rusty_rtos_mqtt over rusty_rtos_tcp over esp-radio Wi-Fi, all on the Kairos kernel."
+
+# Here, not in a package, for the reason `tools/vertical/Cargo.toml` gives:
+# `rusty_rtos_tcp` and `rusty_rtos_mqtt` are unpublished, and a package's
+# checked-in lock must resolve in a fresh clone (H-07).
+[workspace]
+
+[dependencies]
+rusty_rtos_kernel-core = { path = "../../../../rusty_rtos_kernel/crates/rusty_rtos_kernel-core", default-features = false }
+rusty_rtos_core = { path = "../../../../rusty_rtos_core/crates/rusty_rtos_core", default-features = false }
+rusty_rtos_port-xtensa = { path = "../../../../rusty_rtos_port/crates/rusty_rtos_port-xtensa", default-features = false }
+rusty_rtos_port-esp-radio = { path = "../../../../rusty_rtos_port/crates/rusty_rtos_port-esp-radio", default-features = false, features = [
+    "xtensa",
+    "ipc-implementations",
+    "esp32s3",
+] }
+rusty_rtos_heap-core = { path = "../../../../rusty_rtos_heap/crates/rusty_rtos_heap-core", default-features = false }
+rusty_rtos_tcp-core = { path = "../../../../rusty_rtos_tcp/crates/rusty_rtos_tcp-core", default-features = false, features = ["engine", "alloc"] }
+rusty_rtos_mqtt-core = { path = "../../../../rusty_rtos_mqtt/crates/rusty_rtos_mqtt-core", default-features = false, features = ["alloc"] }
+smoltcp = { version = "0.12", default-features = false, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "socket-tcp",
+    "socket-dhcpv4",
+] }
+
+esp-radio-rtos-driver = { version = "=0.4.2", features = ["esp32s3", "ipc-implementations"] }
+esp-radio = { version = "=1.0.0-beta.1", default-features = false, features = ["esp32s3", "wifi", "unstable"] }
+heapless = { version = "0.8", default-features = false }
+esp-hal = { version = "=1.2.1", features = ["esp32s3", "unstable"] }
+esp-bootloader-esp-idf = { version = "=0.6.0", features = ["esp32s3"] }
+esp-println = { version = "=0.18.0", default-features = false, features = ["esp32s3", "jtag-serial"] }
+esp-backtrace = { version = "=0.20.0", features = ["esp32s3", "panic-handler", "println"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = false
+debug = true
+
+[patch.crates-io]
+rusty_rtos_port-xtensa = { path = "../../../../rusty_rtos_port/crates/rusty_rtos_port-xtensa" }
+# One `rusty_rtos_core`: the TCP and MQTT packages name it by version, the
+# kernel by path, and two copies are two `Config` traits that do not unify.
+rusty_rtos_core = { path = "../../../../rusty_rtos_core/crates/rusty_rtos_core" }
