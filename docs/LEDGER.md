@@ -16113,3 +16113,30 @@ crates.io is the only source, so they carry the registry checksum for `rusty_rto
 Per-crate `--dry-run` cannot verify a facade whose sibling is not yet published; Cargo 1.98's
 `cargo publish --workspace` dry-runs the whole workspace against a local overlay and uploads in
 dependency order, and that is what was used.
+
+## 2026-10-01 — is there C or C++ in what we deploy? No — and now a gate says so
+
+`sh tools/no-c-audit.sh` — run before every `cargo publish`. Three layers, exit 0 only if all pass:
+
+1. **Packages** — every file Cargo would upload, for every published crate. All ten: Rust source
+   and Cargo metadata only, no build script, no `links`. It also found an empty
+   `kernel.rs.fixenc` that had shipped in `rusty_rtos_kernel-core` 0.2.1 (removed, kernel d715816).
+2. **Dependencies** — the resolved normal + build graph of every published crate, six targets, all
+   features: 21 third-party packages, none using C build tooling. Two allowed after inspection:
+   `xtensa-lx-rt` (its build script writes linker scripts only) and `windows_x86_64_msvc` (a
+   Windows import library — a DLL binding table, no code, host target only).
+3. **Linked firmware** — four real firmwares carry only rustc + LLD in `.comment` and none of the
+   toolchain's GCC-built symbols.
+
+**Layer 3 exists because of a false alarm worth recording.** The first manual check found
+`GCC: () 13.2.0` inside the flash bench's linked kernel. Real, but not ours: Rust's own prebuilt
+`compiler_builtins` for the embedded targets contains 36–40 objects compiled from LLVM compiler-rt
+C by GCC, and the flash bench links with `--whole-archive`, which pulls every member's `.comment`
+in even though `--gc-sections` keeps none of their code. Normally-linked firmware contains zero of
+those symbols. **A provenance check must read the artefact that ships, linked the way it ships.**
+
+**And it found a defect that had nothing to do with C:** five firmwares had stopped compiling when
+`Handle::index()` widened to `u32` (`usize::from` has no `u32` impl) — the Cortex-M, host and Xtensa
+coverage, silently gone. Fixed at 18 sites (port repo), and all four runnable ones run to
+`RESULT: PASS`. A gate that only reads manifests would have passed while a whole architecture's
+tests could not build.
