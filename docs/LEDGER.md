@@ -16277,3 +16277,28 @@ every CI command in fresh clones (crates.io resolution, no umbrella patches).
 - signing (H-38);
 - the 0.3.0 / 0.2.2 releases.
 
+## 2026-10-01 — released: core 0.2.2, kernel 0.2.2, port 0.3.0
+
+Published to crates.io and pushed to `main` with annotated tags, from clean clones so every
+`Cargo.lock` is the standalone one:
+
+| repo | version | crates | tag |
+|---|---|---|---|
+| `rusty_rtos_core` | 0.2.2 | `rusty_rtos_core`, `rusty_rtos_alloc` | `v0.2.2` |
+| `rusty_rtos_kernel` | 0.2.2 | `rusty_rtos_kernel`, `rusty_rtos_kernel-core` | `v0.2.2` |
+| `rusty_rtos_port` | **0.3.0** (breaking) | `rusty_rtos_port`, `-core`, `-cortex-m`, `-host`, `-riscv`, `-xtensa` | `v0.3.0` |
+
+Port is 0.3.0 because `rusty_rtos_port-cortex-m::init_stack` became an `unsafe fn` (it was unsound
+as a safe one). `rusty_rtos_port-esp-radio` stays unpublished, as at 0.2.1. Each release ran its
+gates in the release clone before publishing: tests, clippy `-D warnings`, fmt, `cargo vet`, the
+unsafe census and the hardening-table check. The vet stores record the new core publication, and
+port's first-party policies moved to 0.3.0.
+
+**Downstream:** `rusty_rtos_demo` requires port `0.2`, so it keeps resolving 0.2.1 from crates.io,
+and inside the umbrella the port path patch no longer applies to it. Moving it to `0.3` is a
+one-line change in that repo; none of its callers use `init_stack`.
+
+**Still open, as before:** H-27's 30 nights of fuzzing, whose clock starts with this push; the
+owner's `cargo vet trust` decisions (core 1 crate, port 27); and signed tags (H-38). The repos'
+visibility was not changed.
+

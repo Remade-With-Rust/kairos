@@ -161,7 +161,7 @@ mutation survey covers one file of nine.
 | scheduler selection alone | 27 | 45 | 1.67× |
 | list operation | 22.32 | **18.47** | **0.83×** |
 | RAM per task | 596 B | **176 B** | **0.30×** |
-| flash | 13,924 B | 19,726 B | 1.42× |
+| flash | 13,924 B | 19,484 B | 1.40× |
 
 Thirteen rows have a C arm: ten win or match, and three are against us — the
 preemptive switch, scheduler selection (which is half of it) and flash. The full
