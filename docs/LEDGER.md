@@ -16302,3 +16302,28 @@ one-line change in that repo; none of its callers use `init_stack`.
 owner's `cargo vet trust` decisions (core 1 crate, port 27); and signed tags (H-38). The repos'
 visibility was not changed.
 
+
+## 2026-10-01 — rusty_alloc 2.2.2 and core 0.2.3: every Kairos host job green, macOS included
+
+After the 0.2.2 releases, core's macOS host job was the one red cell. The cause was upstream:
+`rusty_alloc` 2.2.1 did not compile on macOS (`mincore`'s out-vector is `*mut c_char` on Apple).
+Fixing it, and adding macOS to rusty_alloc's own CI matrix, turned up three more defects. All of
+them predated the change, and two of them had kept rusty_alloc's `main` red since at least 2026-09-07:
+
+| defect | evidence | fix |
+|---|---|---|
+| macOS: `range_is_reserved` accepted unmapped ranges (XNU's `mincore` succeeds on them) and `__PAGEZERO` (0x8 as an arena base) | `oh_f05_*`, 2 failures on the first macOS run | Mach region walk; a region whose MAXIMUM protection is none is refused |
+| `blockmap`: a large span reusing a small page's slot kept the old `payload`, so adoption decoded a remotely-freed block against a stale map and aborted | `stress_mt` SIGABRT / `0xc0000409`. Under `taskset -c 0-3` (the runner's 4 vCPUs): 5/5 before, 15/15 clean after | `large_alloc` and `span_free` null the pointer |
+| `cargo vet --locked`: `portable-atomic` 1.15.0 never recorded | `supply-chain` job | exemption with a note; trusting it is the owner's call |
+
+Released from `main`: **rusty_alloc 2.2.2 and rusty_alloc-api 2.2.2**, via release-plz PR #42. Then
+**core 0.2.3** (`rusty_rtos_core`, `rusty_rtos_alloc` pinned `=2.2.2`, tag `v0.2.3`). Core CI on
+`90e1ed9` is green on all eleven jobs, including `host (macos-latest)`.
+
+**Still red in rusty_alloc, and not mine to redesign:** `miri` reports a Stacked Borrows violation
+in `oh_f01_deferred_free_hook_that_mallocs_is_contained`. `fire_deferred` calls the user's hook
+from inside `Heap::malloc_generic_body`, which holds `&mut self`, and a hook that calls `malloc`
+reaches the same heap through another pointer. That is a real aliasing defect: `&mut` is
+`noalias`, so LLVM may cache heap fields across the indirect call. The fix is to fire the hook
+where no `&mut Heap` is live, which moves it on the slow path that this repo prices per
+instruction.
