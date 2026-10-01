@@ -16076,3 +16076,19 @@ floor and below today's 19,726 is a **speed trade already priced**: the inlined 
 (`khot-ir` 7.6%), and A (−356 B for ~+20 on three blocking rows). **The ≤ 1.30× target is
 reachable only by spending published performance rows**, and that is the owner's decision, not
 an optimisation. Row 2 stays at 19,726 with this paragraph beside it.
+
+### Addendum — the free-win search on flash, closed (2026-09-30)
+
+Two more candidates after the four ablations above, both chosen because they cost no published
+performance row:
+
+| candidate | flash | verdict |
+|---|---:|---|
+| **P** pack `Handle` into one `u32` (halve `mv` at every handle argument) | not built | **a recorded decision**: `handle.rs` says the two-word layout was chosen BECAUSE the packed form made rv32 extract halves with `slli 16`/`srli 16` at every use (`srli` 16.3× against C). The `mv` count is the price of that, measured and paid; the ISA mechanism has not moved, so it is not re-derived. |
+| **R** merge the "validate before `suspend_all`" resolve into the one inside, with an error arm that resumes (three `events.rs` sites) | **+138 B** (`wait_bits` 686 → 716) | refuted — the resuming error arms cost more than the resolves they replaced. The file's own note on a sibling merge had said it: *what it costs is branch shape.* |
+
+> **The free wins on this row are exhausted.** Six candidates, all proved in the linked artefact:
+> one trade (A, −356 B for ~+20 instructions on three blocking rows and +193,629 Ir) and five
+> losses (B +36, C +390, D +72, R +138, P declined on record). The structural floor is 1.27×;
+> everything between it and 1.42× is a speed trade that has already been priced. Closing the
+> row means spending rows 18–30, and that is a decision, not an optimisation.
