@@ -16181,7 +16181,7 @@ stamped `ccount` at eleven points along the path. Notify, p50 cycles at 240 MHz:
 
 Queue and semaphore wakes cost ~900 in the kernel against notify's 555.
 
-The four fixes, as built (board numbers to follow):
+The four fixes, as built (board numbers below):
 
 1. **`switch-in-trap`** (firmware feature): switch inside the interrupt's own trap, on the frame
    it restores, instead of raising `Software0` for a second trap. esp-hal's dispatcher passes
@@ -16203,3 +16203,13 @@ The four fixes, as built (board numbers to follow):
    overlap; verified in the ELF (36.6 KB, ending exactly at `.data`'s mirror). Two simpler
    script shapes cannot link (an `INSERT` applies to ld's built-in script; regions are undeclared
    ahead of `linkall.x`), recorded in the file.
+
+**On the board** (`board-sweep.ps1`, five builds, all PASS, all with `decompose`): all three
+firmware fixes together take interrupt -> task p50 **6.26 -> 4.53 us** (notify, -28 %), **7.60 ->
+5.73** (queue), **7.33 -> 5.60** (semaphore); notify's p99 8.26 -> 4.66 us and worst case 62.7 ->
+15.9 us. Alone: switch-in-trap -295 cycles (predicted ~-360; the alarm's trap now exits through
+esp-hal's peripheral dispatcher, +56), no FP save -142 (predicted -100..-150), IRAM p50 +-0
+with the kernel segments' maxima collapsing (`_from_isr` 4,788 -> 314 cycles), so the tails were
+the instruction cache. The kernel fix: queue and semaphore's call made again -48 cycles each.
+Fixes 1 and 2 WITHOUT IRAM worsened the control loop's p99.9 (41.7 -> 60.8 / 65.1 us), and with
+IRAM it is better than baseline (37.1): in a flash build, layout sets the tail.
