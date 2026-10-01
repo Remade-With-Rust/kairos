@@ -16140,3 +16140,27 @@ those symbols. **A provenance check must read the artefact that ships, linked th
 coverage, silently gone. Fixed at 18 sites (port repo), and all four runnable ones run to
 `RESULT: PASS`. A gate that only reads manifests would have passed while a whole architecture's
 tests could not build.
+
+### The audit's own self-test: one hole found and closed (2026-10-01)
+
+`sh tools/no-c-audit-selftest.sh` plants C six ways in throwaway clones and requires the audit to
+FAIL on each, naming the culprit, and to PASS on the clean clone. Run against the audit as first
+committed, it read **5 of 6**: a **path dependency linking a prebuilt C archive** (no `cc` anywhere,
+so nothing upstream of it trips the tooling check) went **undetected**. Layer 2 skipped every
+package with no registry `source`, intending "our workspace", which also meant every path
+dependency. It now skips only the workspace's own members. Re-run: **6 of 6**.
+
+| case | planted | caught by |
+|---|---|---|
+| control | nothing | PASS, as required |
+| P1 | `evil.c` + `build.rs` in a published crate | layer 1 — names both |
+| P2 | `libz-sys` from crates.io | layer 2 |
+| P3 | a path crate linking a prebuilt `libevil.a` | layer 2 — **was missed** |
+| P4 | a clang-compiled object linked into firmware | layer 3 — the clang producer |
+| P5 | firmware calling the toolchain's GCC-built `__absvsi2` | layer 3 — GCC producer and symbols |
+
+Two lessons from building it. (1) The demo's first control FAILED with LNK1104, which looked like a
+broken firmware and was a too-long sandbox path (Windows MAX_PATH): the self-test now refuses a
+sandbox path over 60 characters. (2) Layer 3's symbol match was counting compiler-local labels
+(`.L7`, `.LFB0`) as evidence; it matches global symbols only now, before that could ever read FAIL
+on a clean firmware. **A gate that has only ever said PASS has not been shown to work.**

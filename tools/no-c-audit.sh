@@ -128,7 +128,12 @@ for path in sorted(glob.glob(os.path.join(tmp, "meta.*.json"))):
                 stack.append(d["pkg"])
     for i in reach:
         p = pk[i]
-        if p["source"] is None:                    # our own workspace crates: layer 1
+        # Skip ONLY this workspace's own members -- layer 1 lists their files.
+        # This used to skip every package with no registry `source`, which also
+        # skips PATH dependencies outside the workspace: the selftest's P3 (a
+        # path crate linking a prebuilt C archive, no `cc` anywhere) sailed
+        # through that rule with a PASS. Path crates are scanned like any other.
+        if i in m["workspace_members"]:
             continue
         key = (p["name"], p["version"])
         seen.setdefault(key, set()).add(target)
@@ -162,7 +167,10 @@ gcc_syms() {    # every symbol defined by a GCC-built member of compiler_builtin
     d="$TMP/cb.$1"; mkdir -p "$d"; (cd "$d" && "$LLVM/llvm-ar" x "$lib")
     for o in "$d"/*.o; do
         "$LLVM/llvm-readobj" -p .comment "$o" 2>/dev/null | grep -q GCC &&
-            "$LLVM/llvm-nm" --defined-only "$o" 2>/dev/null | awk '$2 ~ /[TtWwRrDd]/ {print $3}'
+            "$LLVM/llvm-nm" --defined-only "$o" 2>/dev/null | awk '$2 ~ /^[TWRDB]$/ && $3 !~ /^\./ {print $3}'
+            # GLOBAL symbols only. Local labels (.L7, .LFB0, ...) carry no
+            # identity across objects, and matching on them is how a clean
+            # firmware would one day read FAIL.
     done | sort -u > "$TMP/gcc.$1"
 }
 # A plain redirect, not a pipe: a `while` at the end of a pipeline runs in a
