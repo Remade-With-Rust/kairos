@@ -1,0 +1,78 @@
+refuted 4: merged SMP tick tail (hook inlined into it): semtest +160,020 BlockQ +160,020 recmutex +43,325 diff -13,820; tick_tail_smp +2,750,001
+refuted 5b: skip select_for_core's move-to-end when it is the identity (item already before the cursor): semtest +952,885 BlockQ +748,642 recmutex +253,629 diff +98,513; select_for_core +2,053,701 -- the identity is rare and the test costs more than the move
+
+refuted 6a: `mine` computed from `current` instead of reloaded from `held`.
+  semtest +0, BlockQ +0, recmutex +0, differential -36 (noise).
+  The stack spill went, but LLVM rebuilt both lanes branchless (sbb/or) and
+  the instruction count landed exactly where it was. A spill on a path run
+  once per call is not a cost here; the count is.
+
+refuted 8a: yield_for_task's running test folded into the candidate pass
+  (one loop, slot-index compare, early return). BlockQ +1,898, recmutex
+  +42, differential +5,057; yield_for_task +19,074 while its callers
+  shrank (wake_due_tasks -4,629, remove_from_event_list -4,490). The
+  separate running_core pass is branch-light and fully unrolled; an exit
+  inside the candidate loop splits it into more blocks than it saves.
+
+refuted 9a: #[cold] dropped from the five SMP bodies (switch_context_smp,
+  tick_time_slice_smp, tick_yields_smp, yield_for_task, smp_readied),
+  #[inline(never)] kept. semtest +19,988, BlockQ +15,709, recmutex +5,359,
+  differential +10,668; increment_tick +45,414. The cold call sites keep
+  the tick's common route straight even on two cores.
+
+miss on win 8 (fixed): the bare core-id mask changed the ONE-core build's
+  MIR inlining (+63,896 kernel rows on bench/kernel-ir) though the branch
+  folds there. Every kernel change now also runs bench/kernel-ir.
+
+instrument note: shape B (the differential binary) is NOT exact -- the
+  same code read -85 and +69 on two runs. Its floor is ~±90, not ±30.
+  Shape A (kairos-sim) reproduces to the instruction.
+
+refuted 15a: tick_time_slice_smp #[inline(always)] into increment_tick.
+  semtest -60,006, BlockQ -60,006, recmutex -16,239, one-core +0 -- but
+  differential +7,339. In the differential's binary increment_tick had
+  been inlined into its caller (no row of its own in any earlier B
+  listing); the larger body no longer was, and the new call (104,858 Ir
+  over 3,887 ticks) outweighs the helper call it removed. The win depends
+  on whether the CALLER inlines the tick, which is the firmware's choice.
+
+refuted 16a: trace the incoming task BEFORE hand_over, to reuse the TCB
+  the walk resolved. semtest +159,552, BlockQ +149,882, recmutex +43,550,
+  differential -536; switch_context_smp +352,984. The hand-over's inputs
+  then live across the trace call (callee-saved spills) and the
+  generation check was 3 instructions -- the wrong trade by ~3 Ir/switch.
+
+refuted 6a (again, after the core mask): semtest/BlockQ/recmutex +0,
+  differential +240. LLVM lands on the same count either way.
+  Shape B's spread is at least +-250 (that +240 on an A-identical build).
+
+refuted 18a: yield_for_task skips the idle-bit read when the core's
+  priority is more than one above `lowest`. semtest +1,673, BlockQ
+  +33,420, recmutex +2,065, differential -17,226. A content split: in the
+  corpus the cores mostly run within one of `lowest`, so the extra
+  compare is paid and rarely saves the read; the random scripts differ.
+
+refuted 19a: `mine` apart from the other cores' items, tested first in
+  the walk. semtest +584,458, BlockQ +541,260, recmutex +158,742,
+  differential +128,062 (switch_context_smp +1,412,895). The held set's
+  two compares on a packed register beat three tests in this order: mine
+  is the LAST item of its list after move_to_end, so testing it first
+  costs every item and almost never hits.
+
+refuted 21a: select_for_core hands back the chosen task instead of the
+  switch re-reading `current`. A shapes +0 exactly (LLVM already forwards
+  the store); no kernel row moved anywhere.
+  Shape B read +1,776 on it with NO kernel row moving: B's total spread
+  reaches ~2k. A B-only verdict must be carried by B's KERNEL rows (wins
+  11 and 14 were: suspend -4,080; smp_readied -8,264).
+
+refuted 22a: #[cold] dropped from tick_time_slice_smp alone. A +0
+  exactly, no kernel row moved; B -6,685 is B's own spread.
+
+refuted 23a: switch_context_smp #[inline(always)] into switch_context.
+  A +0 exactly (that binary already reached the SMP body directly);
+  differential +149,494.
+
+refuted 24a: the idle adjustment written as `prio - bit` instead of a
+  conditional saturating_sub. +0 on every shape: LLVM canonicalises both
+  to the same shl/sar sign-mask sequence.

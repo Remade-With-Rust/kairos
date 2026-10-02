@@ -16567,3 +16567,59 @@ p50 4.53 us unchanged, queue +31 cycles.
 
 **5. Port 0.3.1** ships the RISC-V lint `allow` (no code change), the proofs
 and the property tests.
+
+## ★★ 2026-10-02 — the two-core kernel: fifteen deterministic instruction wins
+
+**Method.** `bench/smp-ir` (new): callgrind Ir, program totals, on two shapes —
+A, `kairos-sim --features smp` on semtest, BlockQ and recmutex at 20,000 ticks;
+B, the `smp_differential` test binary. Anchors (trace lines, ticks, yields,
+verdict) identical on every kept change. A reproduces to the instruction; **B
+does not** (the same code read -85 and +69, and +1,776 once with no kernel row
+moving), so a B-only verdict is carried by B's kernel rows. Every kept change
+passed: kernel lib + `smp_differential`, `smp_conformance` (nine scenarios
+identical to the C), the one-core corpus, clippy `-D warnings` on core, kernel
+and demo — and, from win 9 on, **`bench/kernel-ir`'s one-core kernel rows**,
+now part of `probe.sh`. The campaign's one-core total is unchanged:
+219,103,567 before win 1 and after win 15.
+
+| shape | start | end | | kernel rows only |
+|---|---:|---:|---:|---:|
+| semtest | 67,561,062 | 62,778,298 | -7.1% | 19,518,825 -> 14,879,499 (-23.8%) |
+| BlockQ | 78,160,523 | 73,464,779 | -6.0% | 22,197,142 -> 17,684,287 (-20.3%) |
+| recmutex | 17,027,807 | 15,727,379 | -7.6% | 5,226,170 -> 3,947,934 (-24.5%) |
+| differential | 170,531,046 | 169,115,207 | -0.8% | 4,867,373 -> 3,318,645 (-31.8%) |
+
+The rest of each program is the harness (line formatting, the runner, the
+tick hook's copies); it moved -143k, -183k, -22k and +133k.
+
+**The fifteen** (kernel unless marked; each commit carries its four numbers):
+1 select walks held items by index; 2 yield_for_task's cheap flags first;
+3 the idle reap skips the out-of-line body; 4 the list's own iterator;
+5 `move_to_end` (core 0.2.4) fuses remove + insert-end; 6 select in line in
+the switch (-3.24M semtest, the largest); 7 the list iterator ends on its
+count alone (core); 8 `core()` masks the core id; 9 the idle test is a TCB
+flag bit, as the C keeps it; 10 yield_for_task's running test by slot;
+11 (small, B only) suspend's likewise; 12 select's walk as a `for`;
+13 the held set skips the null test once running; 14 (small, B only)
+`smp_readied` in line; 15 the idle mark is the flag byte's sign bit.
+
+**Found on the way.** `move_to_end` (unreleased) checked the list AFTER
+unlinking: `move_to_end(NO_LIST, free_item)` relinked a free item's stale
+neighbours inside a live list before returning `Err`. Fixed, and the property
+test now feeds bad list ids (it fails the old body at seed 1, step 29).
+
+**A miss, corrected.** Win 8 was committed without the one-core gate and cost
+the one-core build +63,896 kernel-row Ir through the MIR inliner, though its
+branch folds there. Fixed by keeping a `.min` the SMP build folds away; the
+gate is now in `probe.sh`.
+
+**Refuted** (numbers in `bench/smp-ir/refuted.txt`): merging the tick tails;
+skipping an identity move; folding the running test into the candidate loop;
+dropping `#[cold]` from the SMP bodies; inlining the time-slice helper (A -60k
+each, B +7k: the differential's caller stopped inlining the tick); tracing
+before the hand-over (+160k); testing this core's task first in the walk
+(+584k: after `move_to_end` it is LAST); and four that read exactly +0.
+
+**Not released.** Kernel 9d178cb..fde5718 and core 9bb0cce..7808c0d are local
+commits. The kernel now needs core 0.2.4 (`move_to_end`), which is not on
+crates.io; the umbrella's working-copy locks point at the local core.

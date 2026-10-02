@@ -32,6 +32,11 @@ bench/kernel-ir/out4/
 # probe has to be checked against; both are rebuilt by one run.
 bench/sb-ir/out/
 bench/sb-ir/out3/
+# Same, from bench/smp-ir: the two-core recordings (and the one-core run its
+# probe gates on, in out/k1), plus the per-probe source snapshots the
+# campaign reverted from. All regenerable.
+bench/smp-ir/out/
+bench/smp-ir/snap/
 
 # K7 library oracles, cloned at their ORACLES.md pins by
 # `kairos oracle fetch --lib <name>`. Pinned, not vendored: the same
