@@ -16620,6 +16620,28 @@ each, B +7k: the differential's caller stopped inlining the tick); tracing
 before the hand-over (+160k); testing this core's task first in the walk
 (+584k: after `move_to_end` it is LAST); and four that read exactly +0.
 
-**Not released.** Kernel 9d178cb..fde5718 and core 9bb0cce..7808c0d are local
-commits. The kernel now needs core 0.2.4 (`move_to_end`), which is not on
-crates.io; the umbrella's working-copy locks point at the local core.
+**Released** the same day: see the next entry.
+
+## 2026-10-02 — released: core 0.2.4, kernel 0.3.2, demo 0.3.1
+
+Published to crates.io and pushed to `main` with annotated tags, each from a
+clean clone outside the umbrella, so every `Cargo.lock` resolves its siblings
+from the registry:
+
+| repo | version | crates | tag | what |
+|---|---|---|---|---|
+| `rusty_rtos_core` | 0.2.4 | `rusty_rtos_core`, `rusty_rtos_alloc` | `v0.2.4` | `move_to_end`; the iterator ends on its count |
+| `rusty_rtos_kernel` | 0.3.2 | `rusty_rtos_kernel`, `rusty_rtos_kernel-core` | `v0.3.2` | the fifteen two-core wins (entry above) |
+| `rusty_rtos_demo` | 0.3.1 | `rusty_rtos_demo`, `rusty_rtos_demo-core` | `v0.3.1` | requires kernel 0.3.2 |
+
+Gates in each clone, CI's own commands: fmt, clippy `-D warnings`, tests
+(the demo's also with `--features smp` and `smp_conformance`), `cargo deny`;
+core and kernel also `cargo vet --locked`, the unsafe census and the
+hardening-table check; `tools/no-c-audit.sh` PASS over all three. Two fixes
+on the way: `cargo fmt` reflowed `tests/move_to_end.rs` (the probe script
+never ran fmt), and the kernel's vet store records the core 0.2.4
+publication (`imports.lock`; the trusted-publisher entry already covered it).
+
+Unchanged and not republished: port 0.3.1 and the network crates. The
+READMEs carry the two-core numbers: the kernel's table, core's paragraph,
+the demo's pointer, and the umbrella's line under the rv32 table.

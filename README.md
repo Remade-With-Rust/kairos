@@ -168,6 +168,12 @@ preemptive switch, scheduler selection (which is half of it) and flash. The full
 scorecard, with each one's measured floor and what it buys, is
 [`docs/plans/freertos-scorecard.md`](docs/plans/freertos-scorecard.md).
 
+**On two cores** there is no C arm for cost yet, only agreement (nine
+scenarios trace-identical to FreeRTOS's SMP kernel). Kernel 0.3.2 cut the
+kernel's own instructions on that corpus by 20-25% (semtest -23.8%, BlockQ
+-20.3%, recmutex -24.5%; callgrind on the host, `bench/smp-ir`), with the
+one-core kernel unchanged to the instruction.
+
 It has run on a chip, and not only under emulation: K3 is QEMU on Cortex-M and
 RISC-V, K6 links the unmodified C demos against the Rust ABI, and the kernel
 schedules from a tick interrupt on a real ESP32-S3.
