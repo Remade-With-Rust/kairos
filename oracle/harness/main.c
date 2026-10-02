@@ -54,8 +54,10 @@
 #include "recmutex.h"
 #include "semtest.h"
 
-/* From the patched Posix port. */
+/* From the patched Posix port, or the two-core port (oracle/harness-smp). */
+#if !defined( KAIROS_SMP )
 extern void vPortKairosTick( void );
+#endif
 extern unsigned long ulKairosYields;
 extern unsigned long ulKairosTicks;
 extern unsigned long ulKairosExits;
@@ -327,11 +329,14 @@ int main( int argc,
 
 /* --------------------------------------------------------------- hooks --- */
 
+#if !defined( KAIROS_SMP )
+/* The two-core port owns both idle hooks: a pass of either ends a turn. */
 void vApplicationIdleHook( void )
 {
     /* The sim contract: one tick per idle pass. */
     vPortKairosTick();
 }
+#endif
 
 /* The interrupt half of whichever scenario is running.
  *
@@ -418,6 +423,15 @@ void vApplicationStackOverflowHook( TaskHandle_t pxTask,
 void vAssertCalled( const char * const pcFileName,
                     unsigned long ulLine )
 {
+    #if defined( KAIROS_SMP )
+        /* The base name only: the Rust corpus prints the same line, and it
+         * cannot know where this checkout lives. */
+        const char * pcBase = strrchr( pcFileName, '/' );
+
+        fprintf( stderr, "KAIROS_RESULT %s fail assert %s:%lu\n", pxScenario ? pxScenario->pcName : "?", pcBase ? pcBase + 1 : pcFileName, ulLine );
+        kairos_trace_flush();
+        _exit( 4 );
+    #endif
     fprintf( stderr, "KAIROS_RESULT %s fail assert %s:%lu\n", pxScenario ? pxScenario->pcName : "?", pcFileName, ulLine );
     kairos_trace_flush();
     _exit( 4 );

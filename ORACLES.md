@@ -103,6 +103,49 @@ traces are comparable:
 The contract is version 1; changing it is a `FORMAT_VERSION` bump for the trace
 format (mission plan §2.5) and re-captures every stored trace.
 
+## The two-core sim contract (SMP, 2026-10-02)
+
+The one-core contract delivers ticks INSIDE kernel calls, at every 16th
+critical-section exit, and keeps the books for a preempted call's unrun tail.
+Two cores cannot share that clock without stopping a call halfway, so the
+two-core corpus has its own contract, written so that both sides can obey it
+exactly. The C side is `oracle/harness-smp` (FreeRTOS V11.3.1,
+`configNUMBER_OF_CORES 2`, a deterministic pthreads port with one token); the
+Rust side is `rusty_rtos_demo`'s `src/smp.rs` (`--features smp`).
+
+1. **Cores alternate turns**, core 0 first. A turn runs the core's current
+   task.
+2. **A turn ends** at the first of: the RETURN of a top-level kernel call
+   that left at least one critical section; a switch of this core to another
+   task; one pass of an idle task (each idle hook -- `prvIdleTask` calls the
+   idle and the passive hook, so core 0's idle has two). A `taskYIELD()` a
+   task makes itself is a call that leaves a critical section (as the Posix
+   port's `vPortYield` is), so it ends the turn too. The port's own kernel
+   calls, and `vTaskYieldWithinAPI` (the kernel's internal yield), are not
+   calls for this rule.
+3. **A core whose partner holds the scheduler suspended is skipped** -- on
+   silicon it would spin on the task lock at its next critical section.
+4. **A switch of a core's own task** is taken as soon as interrupts are
+   enabled (as PendSV would be). **A yield for the other core** is taken at
+   the start of that core's next turn.
+5. **Ticks land on core 0 between turns**, one every two turns -- never
+   inside a call.
+
+The trace format is v1's. The critical-exit count is NOT compared: under
+this contract exits decide only whether a call ends a turn, which the trace
+proves line by line, and the two kernels' `configASSERT` probes differ. A
+demo `configASSERT` that fires ends the run with `fail assert <file>:<line>`
+on both sides.
+
+**The corpus (2026-10-02):** semtest, dynamic, PollQ, BlockQ, countsem,
+recmutex, blocktim, QPeek and GenQTest, identical at 20,000 ticks
+(`rusty_rtos_demo/crates/rusty_rtos_demo-core/tests/smp_conformance.rs`).
+
+```sh
+sh oracle/harness-smp/build.sh                         # WSL
+oracle/build/smp/corpus semtest 20000 2> semtest.trace # + KAIROS_SMP_DEBUG=1 for the turns
+```
+
 ## Trace line format (v1)
 
 One line per event on stderr of the oracle binary and of our sim sink:

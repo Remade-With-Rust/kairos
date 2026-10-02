@@ -16488,3 +16488,82 @@ privilege on its own, with or without an MPU.
 
 **The C6 half of item 4 is blocked on hardware.** No C6 board is on this
 machine.
+
+## ★★★ 2026-10-02 — SMP out of preview, the flash target met, and the remaining hardening gates
+
+Six items from the commercial-readiness list, each to completion or to a
+recorded limit. Released: kernel **0.3.1**, demo **0.3.0**, port **0.3.1**
+(all seven crates), each from a clean clone, tagged.
+
+**1. Multi-core, both halves.**
+
+- **Blocking waits in the two-core differential** (`rusty_rtos_kernel/oracle/smp`,
+  `smp_block.trace`). The C now runs each blocking take in a ucontext
+  coroutine, suspended at the yield exactly where a real port leaves it, and
+  continued -- possibly on the other core -- when the task next runs. Kairos
+  replays it through `Wait::Blocked`'s retry protocol. 20,000 steps identical
+  on the first run: 246 takes blocked, then 170 woken, 40 timed out, 18
+  blocked again. A timeout one tick early diverges at step 41, and the old
+  script passes that poison -- so this script is what proves block and timeout
+  on two cores.
+- **The threaded SMP demos.** `oracle/harness-smp` runs FreeRTOS V11.3.1 with
+  two cores on a deterministic pthreads port (one token), and
+  `rusty_rtos_demo --features smp` runs the same bodies under the same
+  two-core contract (`ORACLES.md`). **Nine scenarios identical at 20,000
+  ticks** -- semtest, dynamic, PollQ, BlockQ, countsem, recmutex, blocktim,
+  QPeek, GenQTest, about 900,000 lines -- pinned in `smp_conformance`, which
+  has been seen to fail on a one-count change. Four fail their own checks on
+  two cores (single-core timing, or single-core exclusion asserted in the
+  demo's own code) and fail identically, at the same `configASSERT` line.
+- **A kernel defect, found by it.** The SMP arms of priority inheritance were
+  missing: a give that disinherits and wakes a waiter sent the waiter to the
+  other core, where the C runs it on the giver's (`recmutex`, tick 417).
+  Fixed in kernel 0.3.1; one core unchanged.
+- **The contract was fixed four times on the way**, each by reading the two
+  turn logs side by side: interrupts enabled at scheduler start; the port's
+  own kernel calls invisible to the turn rule; `prvIdleTask` calls BOTH idle
+  hooks on SMP; the port's yield is a critical section (as the Posix port's
+  is). And the LAZY turn rule was replaced by an EAGER one -- the Rust side
+  cannot stop before a call it has not yet seen -- with five Rust steps split
+  where a C statement followed a call (no change on one core; the one-core
+  corpus is identical).
+
+SMP is no longer marked preview. Still not covered: core affinity,
+`configRUN_MULTIPLE_PRIORITIES = 0`, more than two cores, and the corpus on
+the S3 itself.
+
+**2. Hardening gates.**
+
+| gate | crate | evidence | poison |
+|---|---|---|---|
+| H-28 | kernel | `tests/invariants.rs`: seven invariants after every call, 144,000 states | never disinheriting: step 759 |
+| H-28 | port | `SimPort` against a model of its contract (320,000 ops); the three stack builders over 20,000 seeded inputs | tick one exit late: step 4,270; R0 one slot off: case 0 |
+| H-29 | core | the list against FreeRTOS's own `list.c`: 50,000 steps, all 25,000 states identical | insert before equals: line 3 |
+| H-30 | port | Kani: the three stack builders, 519 checks, 0 failures | one word too many: "pointer outside object bounds" |
+
+H-30 stays Incomplete: the switches (assembly) and core-register access
+(fixed addresses) are outside what a model checker sees, and R-4 now names
+exactly that. The kernel's first invariant test passed VACUOUSLY -- its port
+ignored yields, so one task ran for ever -- and its own coverage floor caught
+it. Hardening now: core 30 Completed / 3 Incomplete, kernel 31 / 2 (15/16
+v1.0 gates), port 30 / 4 + R-4 narrowed.
+
+**3. Flash: the `small` profile, 1.24x.** A kernel feature that gives the
+queue take and send bodies and `xTaskResumeAll` one out-of-line body each.
+rv32, against the C's 13,924 B: **17,318 B (1.24x)**, inside the 1.30x
+target; the default stays the speed profile at 19,450 B (1.40x). Each alone:
+take -1,062, send -708, resume -356 -- none reaches the target by itself.
+Identical behaviour (every kernel test and the whole corpus, both profiles).
+The price, retired instructions on rv32: `recv_empty` 36 -> 69, `peek_ok`
+39 -> 94, `send_full` 33 -> 60, `queue_roundtrip` 113 -> 198, `block_cycle`
+923 -> 1,040, `event_wait_fail` 36 -> 58, `group_roundtrip` 65 -> 82; tick,
+switch and notify rows unchanged. `bench/kernel-flash` pins both profiles.
+
+**4. The interrupt-masking sweep.** `xiao-s3-tickless` and `xiao-s3-realtime`
+borrowed the kernel bare from their handlers; both now mask (`rsil 5`,
+restoring the handler's level) and re-pass on the XIAO: tickless 400 wakeups
+-> 0, digest `ebb908b74bccb99e` unchanged in both arms; realtime 9/9, notify
+p50 4.53 us unchanged, queue +31 cycles.
+
+**5. Port 0.3.1** ships the RISC-V lint `allow` (no code change), the proofs
+and the property tests.

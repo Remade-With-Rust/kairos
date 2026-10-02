@@ -105,7 +105,7 @@ echo "building the Kairos probe for riscv32imac-unknown-none-elf"
 # The build MUST fail loudly. It did not: a probe that failed to compile left the
 # previous archive in place, `ls *.a | head -1` linked it, and an ablation read
 # BYTE-IDENTICAL flash for a change that had never been built (2026-09-30).
-( cd bench/kernel-flash/rs && cargo build --release -q --target riscv32imac-unknown-none-elf )     || { echo "FAIL: the Kairos probe did not build -- nothing below is a measurement"; exit 1; }
+( cd bench/kernel-flash/rs && cargo build --release -q --target riscv32imac-unknown-none-elf ${KAIROS_FLASH_FEATURES:+--features $KAIROS_FLASH_FEATURES} )     || { echo "FAIL: the Kairos probe did not build -- nothing below is a measurement"; exit 1; }
 LIB=$(ls bench/kernel-flash/rs/target/riscv32imac-unknown-none-elf/release/*.a | head -1)
 # The probe's operation entry points, and ONLY those. `kairos_riscv_*` are the
 # port's own assembly symbols, and rooting them charged the Rust arm for both
@@ -368,7 +368,17 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # 923, every other row identical), but each inlined copy still carried the
 # second body. kernel-ir -395,353 Ir (-0.18%). On the Xtensa S3 build the
 # outlined `copy_data_from_queue` (146 B) disappears from the receive path.
-check "Kairos kernel + port"   "$rs_kernel" 19484
+# Two profiles, two pins. The default is the SPEED profile; `small`
+# (KAIROS_FLASH_FEATURES=small) is the kernel's flash profile, which outlines
+# the queue take and send bodies and `xTaskResumeAll` -- three priced trades
+# (docs/LEDGER.md, 2026-10-02). Re-pinned 2026-10-02: the speed profile had
+# moved 19,484 -> 19,450 (and `mv` 756 -> 754) between the 0.2.2 pin and
+# kernel 0.3.x; the change is real and small and is NOT attributed here.
+if [ "${KAIROS_FLASH_FEATURES:-}" = small ]; then
+    check "Kairos kernel + port (small profile)" "$rs_kernel" 17318
+else
+    check "Kairos kernel + port"   "$rs_kernel" 19450
+fi
 
 # ---- the opcode counts, PINNED ---------------------------------------------
 #
@@ -446,11 +456,13 @@ echo "opcode counts -- the four the 1.6x investigation named:"
 # one of the four fell, which is the signature of a folded check rather than a
 # reshuffle -- the event-item proof raised three of them.
 # 756 / 254 (2026-10-01, -13 / -4): the single resolve in `queue_take`, above.
-check "mv   (call-argument setup)" "$(ops mv)"   756
-check "mul  (non-p2 indexing)"     "$(ops mul)"    0
-check "srli (u16 extraction)"      "$(ops srli)"  77
-check "slli (u16 extraction)"      "$(ops slli)" 254
-check "andi (incl. zext.b)"        "$(ops andi)" 165
+if [ "${KAIROS_FLASH_FEATURES:-}" != small ]; then
+    check "mv   (call-argument setup)" "$(ops mv)"   754
+fi
+[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "mul  (non-p2 indexing)"     "$(ops mul)"    0
+[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "srli (u16 extraction)"      "$(ops srli)"  77
+[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "slli (u16 extraction)"      "$(ops slli)" 254
+[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "andi (incl. zext.b)"        "$(ops andi)" 165
 
 echo
 if [ "$fail" -eq 0 ]; then

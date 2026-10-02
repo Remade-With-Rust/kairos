@@ -11,6 +11,11 @@ license = "MIT OR Apache-2.0"
 # A staticlib so there are real sections for the linker to keep or discard.
 crate-type = ["staticlib"]
 
+[features]
+# The kernel's FLASH profile (`rusty_rtos_kernel-core`'s `small`): run.sh with
+# `KAIROS_FLASH_FEATURES=small` measures it.
+small = ["rusty_rtos_kernel-core/small"]
+
 [dependencies]
 rusty_rtos_core = { path = "../../../rusty_rtos_core/crates/rusty_rtos_core", default-features = false }
 rusty_rtos_kernel-core = { path = "../../../rusty_rtos_kernel/crates/rusty_rtos_kernel-core", default-features = false }
