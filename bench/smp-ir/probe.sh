@@ -29,6 +29,10 @@ fail() { echo "GATE FAIL: $1"; exit 1; }
 ( cd "$ROOT/rusty_rtos_core" && cargo clippy -q -p rusty_rtos_core --all-targets -- -D warnings 2>&1 | grep -qE "^(error|warning)" ) && fail "clippy core"
 ( cd "$ROOT/rusty_rtos_kernel" && cargo clippy -q -p rusty_rtos_kernel-core --all-targets -- -D warnings 2>&1 | grep -qE "^(error|warning)" ) && fail "clippy kernel"
 ( cd "$ROOT/rusty_rtos_demo" && cargo clippy -q -p rusty_rtos_demo-core --all-targets --features smp -- -D warnings 2>&1 | grep -qE "^(error|warning)" ) && fail "clippy demo smp"
+# fmt too: CI runs it, and a probe-clean tree once failed it in the release clone.
+for r in rusty_rtos_core rusty_rtos_kernel rusty_rtos_demo; do
+    ( cd "$ROOT/$r" && cargo fmt --all --check >/dev/null 2>&1 ) || fail "fmt $r"
+done
 echo "gates: ok"
 
 wsl -e bash -lc "cd /mnt/f/coding/rusty_RTOS && sh bench/smp-ir/run.sh after >/dev/null 2>&1 && sh bench/smp-ir/run.sh diff"
