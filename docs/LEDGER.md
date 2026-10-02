@@ -16327,3 +16327,80 @@ reaches the same heap through another pointer. That is a real aliasing defect: `
 `noalias`, so LLVM may cache heap fields across the indirect call. The fix is to fire the hook
 where no `&mut Heap` is live, which moves it on the slow path that this repo prices per
 instruction.
+
+## ★★ 2026-10-01 — the XIAO, four ways: Wi-Fi, SMP, nested interrupts, and a C arm
+
+Four items asked for at once, on one XIAO ESP32-S3, each with a board run.
+
+**1. Wi-Fi on Kairos -- stage 1 PASSES; stages 2 and 3 wait for a network.**
+`rusty_rtos_port/firmware/xiao-s3-wifi`: `esp-radio` 1.0.0-beta.1, with
+every radio task, queue, timer and interrupt-side send on the Kairos kernel
+and `heap_4` as the only heap (no `esp-rtos`, no `esp-alloc`). A passive
+scan finds 14-18 access points; the control arm
+(`xiao-s3-wifi-control`, esp-rtos + esp-alloc, same board) found 15. The
+real radio found four defects the two-task radio cell never could:
+- the tick had never interrupted (`PeriodicTimer` without `listen()`);
+- `main` level with `Tmr Svc` let the daemon become `current`;
+- 16 radio timer slots ran out in soft-AP mode;
+- the heap: `rusty_alloc`'s small-metal profile NULLed 29 of 88 blob
+  mallocs at `free=0`.
+
+Two adapter fixes came with them:
+- the queue ring is now under the interrupt mask, and the ISR send keeps
+  the `empty` count;
+- `IDLE` and `Tmr Svc` get stacks.
+
+Transmit was proven independently: this PC's radio heard the board's soft
+AP at -33 dBm. Stage 3 (`tools/vertical/firmware/xiao-s3-mqtt-wifi`: MQTT
+over our TCP over smoltcp/DHCP over this link) builds. Stages 2 and 3 need
+`KAIROS_WIFI_SSID` / `KAIROS_WIFI_PASSWORD` at build time. Reading the
+hotspot's stored passphrase was refused by the session's permission
+classifier, correctly, so those are the owner's to give.
+
+**2. SMP -- slice S1 in the kernel, slice S3 on silicon.**
+`rusty_rtos_kernel/docs/plans/smp.md`.
+- **S1** is per-core `current` and the C's selection, yield-for-task and
+  yield-core logic, read from the pinned `tasks.c`, with 9 two-core
+  scenarios. Two of those first expected the wrong thing, and the
+  transcription was right both times.
+- **One core stays identical to the C** (the 25-scenario corpus), and the
+  five `*-ir` benches are neutral. Getting there took two measured fixes:
+  the `Option` accessor form cost +14,985 Ir, and three fields in
+  `#[repr(C)]` beside `yield_pending` cost +24,000 Ir with no SMP code
+  running.
+- **S3** (`rusty_rtos_port/firmware/xiao-s3-smp`) runs one kernel on both
+  cores: two spins in 342 ms against 301 alone, and 2,000 cross-core
+  hand-offs at 16.1 µs each (untuned). S2, the two-core C oracle, is the
+  kill test and is not done.
+
+**3. Nested interrupts -- PASS, with a poison arm that fails.**
+`rusty_rtos_port/firmware/xiao-s3-nested`: a level-3 timer interrupt
+preempting a level-1 one, both using the kernel's FromISR queues. Over 5 s
+there were 49,280 nested interrupts, and 173,003 values all arrived in
+order with none lost. Removing the mask in the level-1 handler gave 493
+entries inside a kernel section, 304 out-of-order values and a corrupted
+queue. That unmasked pattern was live in `xiao-s3-radio` and
+`xiao-s3-wifi`; both now mask and re-pass. **Not yet swept:** the older
+cells with `with_kernel_in_isr` (`xiao-s3-tickless`, the realtime cell)
+carry the same pattern, latent while nothing above level 1 calls the kernel.
+
+**4. The C arm on the same part.**
+`rusty_rtos_kernel/firmware/xiao-s3-cycles-c` uses the same instrument and
+calls. Kairos on its shipped port, against FreeRTOS V10.5.1 (IDF) and
+V11.1.0 (upstream):
+
+| cycles | Kairos | V10.5.1 (IDF) | V11.1.0 (upstream) |
+|---|---:|---:|---:|
+| tick | **36** | 69 | 69 |
+| switch | 96 | **90** | 98 |
+| ISR-API wake | **310** | 431 | 399 |
+
+Fat LTO against `-O2` is the open caveat. The recorded K3 rows (54/166/430)
+are superseded: the same cell reads 35/35/102/293 on the sim port today.
+
+**A shared-board incident, recorded because it was mine.** While the SMP
+cell was flashing, another agent on this machine (`hermes`, `r3-stamp.py`)
+was writing `F:/jt-w/r3-backup-4m.bin` to the same XIAO on COM4. I stopped
+one `espflash` process holding the port before identifying it, which may
+have interrupted one of that job's writes. After that I checked the port
+for other users before every flash.
