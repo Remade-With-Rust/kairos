@@ -16404,3 +16404,87 @@ was writing `F:/jt-w/r3-backup-4m.bin` to the same XIAO on COM4. I stopped
 one `espflash` process holding the port before identifying it, which may
 have interrupted one of that job's writes. After that I checked the port
 for other users before every flash.
+
+## ★★ 2026-10-01 — the commercial blockers 2, 3 and 4: SMP proved against the C, the radio glue fenced and published, the MPU refusal on M33
+
+The commercial-readiness verdict earlier today named six blockers. These are
+items 2–4, each closed as far as this machine can close it.
+
+**2. Multi-core: the two-core scheduler is step-identical to the C kernel.**
+Kernel 0.3.0 (published, tagged `v0.3.0`).
+
+- **S1b.** Seven more two-core scenarios, 16 in all: deleting and
+  suspending a task the OTHER core is running, priority-set on either core,
+  and resume and notify wakes landing on the other core. The one-core build
+  is conformance-identical; the benches moved +2 Ir, which is the new
+  field's initialisation.
+- **S2a, the kill test for the scheduler.** `rusty_rtos_kernel/oracle/smp/`
+  builds the pinned FreeRTOS V11.3.1 with `configNUMBER_OF_CORES 2` on a
+  fake port. It runs a 20,000-step random script; each step is one of
+  create, delete, suspend, resume, priority-set, delay, give,
+  give-from-ISR, take, tick or yield, issued from a chosen core.
+  `tests/smp_differential.rs` replays the committed trace against Kairos,
+  and **every line is identical, on the first run.**
+- **The instrument has been seen to fail.** Flipping one tie-break in
+  `yield_for_task` (`<=` to `<`) makes it diverge at step 8.
+- **Coverage.** Each operation ran 759–1,954 times; 2,455 cross-core
+  yields; idle migration in 3,715 steps.
+- **Open.** The script has no blocking event waits, because a
+  single-threaded C driver cannot run a blocking take. S2b, the threaded
+  SMP demos traced on two cores, is not done. SMP is marked preview in the
+  kernel README.
+
+**3. Wi-Fi: `rusty_rtos_port-esp-radio` 0.3.0 is under the workspace lints, and on crates.io.**
+
+- **Fenced.** All 100 `unsafe` sites now compile only under an
+  `#[expect(unsafe_code, reason)]` on their owning item, and each owner has
+  a row in the port's `UNSAFE.md`. The census passes with no `Unfenced`
+  declaration left. Threat model R-6 is closed; hardening gate H-17 is
+  Completed (port 29 / 0 / 5).
+- **A fifth defect from the hardening work.** `WaitQueue::wait_until`
+  counted its waiters with a bare `+= 1` that a tick could preempt. One
+  registration could be lost, leaving a waiter that `notify` never
+  released. It is now updated under the interrupt mask.
+- **Re-run on the XIAO after the change.** `xiao-s3-wifi` stage 1 PASS: 15
+  APs, 115 interrupt-side queue sends, 0 full, 0 context declines.
+  `xiao-s3-radio` PASS: 50/50 hand-offs.
+- **Published** from a clean clone: `esp-radio-v0.3.0`. The xtensa/riscv
+  dependencies are now `path` + `version`, which removed a second registry
+  copy of each from the graph. That is what had made `cargo vet` fail.
+  Linting the riscv arm then reached the in-tree riscv crate and found one
+  `unwrap_or_default` lint. It is suppressed with a reasoned `allow`: the
+  MSRV is 1.85, and `Default` for raw pointers needs 1.88.
+- **Stages 2–3 (association, then MQTT over it) are not run.** They need a
+  network's credentials at build time (`KAIROS_WIFI_SSID` /
+  `KAIROS_WIFI_PASSWORD`), which only the owner can supply.
+
+**4. Hardware: the MPU refusal on Cortex-M33 passes (QEMU `mps2-an505`).**
+The cell is `rusty_rtos_port/firmware/mps2-an505-qemu-mpu`.
+
+- **Setup.** Two Kairos tasks run unprivileged, each confined by the
+  ARMv8-M MPU to its own stack and data. They reach the kernel only by
+  `svc`. The scheduler hook sets region 1 and `CONTROL.nPRIV` for whichever
+  task the kernel chose.
+- **The result.** One task tries four accesses: another task's data,
+  privileged data, the kernel, and `MPU_CTRL = 0`. **Four refusals**: three
+  MemManage and one BusFault. The other task counts to exactly 50; the
+  canary and the kernel are untouched; the rogue keeps running. 9/9.
+
+| arm | result |
+|---|---|
+| `cargo run --release` | **PASS** 9/9 |
+| `--features poison` (MPU off) | **FAIL**, 4 checks: `good` = 57005 (`0xDEAD`), canary `0x0bad` |
+| `--features poison-region` (MPU on, each task's region over all of RAM) | **FAIL**, 3 checks: the same corruptions |
+
+The second poison is why the PASS can be attributed to the **per-task
+region**, not just to the MPU being on. One refusal, the `MPU_CTRL` write,
+survives both poisons. That is correct: the System Control Space checks
+privilege on its own, with or without an MPU.
+
+**Not claimed:**
+- silicon (QEMU's PMSAv8, 8 regions, Secure instance);
+- the `rusty_rtos_mpu` package: two calls cross the boundary, not ~80
+  wrappers; no ACLs, no `PSPLIM`, no TrustZone split.
+
+**The C6 half of item 4 is blocked on hardware.** No C6 board is on this
+machine.
