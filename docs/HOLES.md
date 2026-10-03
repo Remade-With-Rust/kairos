@@ -12,7 +12,7 @@ Ordered by how much a reader should care, not by how easy the fix is.
 
 ---
 
-## H10 — 77 of 118 C-twinned APIs are never compared against the C on two cores — OPEN
+## H10 — 14 of 119 C-twinned APIs are never compared against the C on two cores — OPEN (was 77)
 
 **Measured 2026-10-02 by coverage, not grep** (`tools/api-census`,
 `docs/API-COVERAGE.md`). Of the 118 public kernel APIs whose FreeRTOS twin the
@@ -31,6 +31,15 @@ and said nothing about two.
 **Closing it:** `docs/plans/api-differential.md`, P1 (a generative differential
 over the whole surface, one-core and two-core FreeRTOS builds) and P2 (the
 fifteen one-core scenarios that have never run on two cores).
+
+**Progress, same day.** The API differential (P1.1-P1.7: tasks, queues,
+mutexes, notifications, event groups, stream/message buffers, timers and the
+daemon, against FreeRTOS built two-core) took the two-core column to **105**
+entered and **50** with every arm executed. It found five Kairos defects on the
+way (see the plan's P1 table), two of them two-core only. Still never entered
+on two cores: `task_get_handle`, `queue_spaces_available` and the five
+queue-set APIs (P1.8), the four typed wrappers (P4), and `step_tick`
+(tickless; H11).
 
 ## H11 — Three C-twinned APIs are not compared on one core either — OPEN
 

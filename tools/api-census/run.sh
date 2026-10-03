@@ -9,9 +9,11 @@
 #
 #   C1   compared against the C kernel, ONE core: rusty_rtos_demo's
 #        `conformance` pins -- every scenario's C trace digest and counters
-#        (and the async arm) -- the two tests that compare, by exact name.
+#        (and the async arm) -- the two tests that compare, by exact name --
+#        and the kernel's `api_differential`, one-core script.
 #   C2   compared against the C kernel, TWO cores: `smp_conformance` (nine
-#        scenarios) and the kernel's `smp_differential` (both scripts).
+#        scenarios), the kernel's `smp_differential` (both scripts) and
+#        `api_differential`'s two-core script.
 #   ANY  every test in the kernel and the demo, default and smp features:
 #        "executed by something", which is NOT "compared".
 #   C1L  compared against the C kernel, one core, at FULL length: given
@@ -61,7 +63,11 @@ for l in sys.stdin:
 
 run C1 rusty_rtos_demo "-p rusty_rtos_demo-core --test conformance" \
     "--exact every_scenario_reproduces_the_c_kernels_trace_and_counters the_async_arm_reproduces_pollqs_trace_exactly"
+# The API differential (docs/plans/api-differential.md, P1): every step of a
+# seeded script compared against FreeRTOS, one core and two.
+run C1 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test api_differential"     "--exact one_core_answers_every_step_as_the_c_kernel_does"
 run C2 rusty_rtos_demo "-p rusty_rtos_demo-core --features smp --test smp_conformance" ""
+run C2 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test api_differential"     "--exact two_cores_answer_every_step_as_the_c_kernel_does"
 run C2 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test smp_differential" ""
 run ANY rusty_rtos_kernel "--workspace" ""
 run ANY rusty_rtos_demo "--workspace" ""
