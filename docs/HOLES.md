@@ -12,6 +12,49 @@ Ordered by how much a reader should care, not by how easy the fix is.
 
 ---
 
+## H10 — 77 of 118 C-twinned APIs are never compared against the C on two cores — OPEN
+
+**Measured 2026-10-02 by coverage, not grep** (`tools/api-census`,
+`docs/API-COVERAGE.md`). Of the 118 public kernel APIs whose FreeRTOS twin the
+pinned headers declare, the two-core runs that compare against the C
+(`smp_conformance`'s nine scenarios, `smp_differential`'s two scripts) enter
+**41**, and execute every arm of **22**. The 77 they never enter are every
+timer, event-group, stream/message-buffer, notification and queue-set API,
+and every `*_from_isr` but one. On one core the same census reads **115**
+entered, **55** fully.
+
+**Why it was invisible.** H2 closed on 2026-09-21, before SMP existed; nothing
+re-asked the question when a second core arrived. The README's "22 APIs"
+sentence was by then stale in the other direction -- it overstated one core
+and said nothing about two.
+
+**Closing it:** `docs/plans/api-differential.md`, P1 (a generative differential
+over the whole surface, one-core and two-core FreeRTOS builds) and P2 (the
+fifteen one-core scenarios that have never run on two cores).
+
+## H11 — Three C-twinned APIs are not compared on one core either — OPEN
+
+| API | why |
+|---|---|
+| `step_tick` (`vTaskStepTick`) | no compared run reaches it: in the corpus its C path is TimerDemo's Test7 (`xTaskCatchUpTicks`), which the oracle runs DISABLED (H2, *Why TimerDemo does not already cover this*), and the tickless cells run it on silicon, not against the C; unit-tested (18 of 19 regions) |
+| `typed::Mutex::new` (`xSemaphoreCreateMutex`) | a typed wrapper: `Raw::raw_mutex_create` is `mutex_create`, which IS compared |
+| `typed::Queue::send_from_isr` (`xQueueSendToBackFromISR`) | the kernel call (`queue_send_from_isr`, through `Raw`) is compared; the face's own slot bookkeeping around it has no C twin to compare with |
+
+The first needs Test7 switched on in the harness and ported (plan P3); the two
+wrappers need the wrapper-equivalence test (plan P4).
+
+## H12 — CI's conformance pins cannot see a regression in two timer APIs — OPEN
+
+`timer_reset` and `timer_set_id` are compared against the C only at full
+length: TimerDemo reaches them in its Test6, which starts after the 2,000
+ticks `rusty_rtos_demo`'s `conformance` pins run. At 100,000 ticks `kairos
+conform` enters `timer_reset` 460 times in a trace identical to the C. So the
+comparison exists, but only on a machine with the oracle built: a regression
+in either would pass CI. Fix: a TimerDemo pin long enough to reach Test6, or
+its arms in the generative differential (plan P1).
+
+---
+
 ## H1 — Three of the four kernel instruments never block a task — CLOSED 2026-09-19
 
 **Closed.** All four now park a task on a real timeout and assert

@@ -1,0 +1,15587 @@
+{
+"meta": {
+"long": [
+[
+"dynamic",
+100000,
+1219231
+],
+[
+"AbortDelay",
+100000,
+126621
+],
+[
+"PollQ",
+100000,
+117417
+],
+[
+"BlockQ",
+100000,
+1344460
+],
+[
+"semtest",
+100000,
+1503634
+],
+[
+"countsem",
+100000,
+966326
+],
+[
+"recmutex",
+100000,
+1385862
+],
+[
+"blocktim",
+100000,
+131384
+],
+[
+"QPeek",
+100000,
+486871
+],
+[
+"GenQTest",
+100000,
+1253579
+],
+[
+"QueueOverwrite",
+100000,
+1300382
+],
+[
+"QueueSetPolling",
+100000,
+1373606
+],
+[
+"IntSemTest",
+100000,
+132893
+],
+[
+"StreamBufferInterrupt",
+100000,
+113300
+],
+[
+"StreamBufferDemo",
+100000,
+1155782
+],
+[
+"MessageBufferDemo",
+100000,
+1017915
+],
+[
+"QueueSet",
+100000,
+318143
+],
+[
+"IntQueue",
+100000,
+2220518
+],
+[
+"ApiSweep",
+100000,
+243101
+],
+[
+"TaskNotify",
+100000,
+167509
+],
+[
+"TimerDemo",
+100000,
+156492
+],
+[
+"EventGroupsDemo",
+100000,
+1202787
+],
+[
+"MessageBufferAMP",
+100000,
+120835
+],
+[
+"PollQ-typed",
+100000,
+117417
+],
+[
+"PollQ-async",
+100000,
+117417
+],
+[
+"death",
+100000,
+110355
+]
+]
+},
+"rows": [
+{
+"any": 12,
+"c": "xTasksWaitingForBits",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "events.rs",
+"line": 79,
+"missed_by_c": [],
+"name": "event_group_list",
+"pub": false,
+"regions": 12,
+"twin": "state"
+},
+{
+"any": 5,
+"c": "prvTestWaitCondition",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "events.rs",
+"line": 85,
+"missed_by_c": [],
+"name": "wait_condition_met",
+"pub": false,
+"regions": 5,
+"twin": "state"
+},
+{
+"any": 19,
+"c": "xEventGroupCreate",
+"c1": 18,
+"c1_pin": 18,
+"c2": 0,
+"file": "events.rs",
+"line": 97,
+"missed_by_c": [
+[
+102,
+38
+]
+],
+"name": "event_group_create",
+"pub": true,
+"regions": 19,
+"twin": "api"
+},
+{
+"any": 24,
+"c": "vEventGroupDelete",
+"c1": 23,
+"c1_pin": 23,
+"c2": 0,
+"file": "events.rs",
+"line": 133,
+"missed_by_c": [
+[
+134,
+35
+],
+[
+140,
+82
+]
+],
+"name": "event_group_delete",
+"pub": true,
+"regions": 25,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "xEventGroupGetBits",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "events.rs",
+"line": 157,
+"missed_by_c": [],
+"name": "event_group_bits",
+"pub": true,
+"regions": 5,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "xEventGroupGetBitsFromISR",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "events.rs",
+"line": 166,
+"missed_by_c": [
+[
+167,
+38
+]
+],
+"name": "event_group_bits_from_isr",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 18,
+"c": "xEventGroupClearBits",
+"c1": 18,
+"c1_pin": 18,
+"c2": 0,
+"file": "events.rs",
+"line": 174,
+"missed_by_c": [],
+"name": "event_group_clear_bits",
+"pub": true,
+"regions": 18,
+"twin": "api"
+},
+{
+"any": 69,
+"c": "xEventGroupSetBits",
+"c1": 68,
+"c1_pin": 68,
+"c2": 0,
+"file": "events.rs",
+"line": 191,
+"missed_by_c": [
+[
+192,
+35
+],
+[
+206,
+9
+],
+[
+208,
+45
+],
+[
+213,
+64
+],
+[
+231,
+18
+],
+[
+246,
+27
+]
+],
+"name": "event_group_set_bits",
+"pub": true,
+"regions": 74,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xEventGroupSetBitsFromISR",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "events.rs",
+"line": 261,
+"missed_by_c": [],
+"name": "event_group_set_bits_from_isr",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xEventGroupClearBitsFromISR",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "events.rs",
+"line": 273,
+"missed_by_c": [],
+"name": "event_group_clear_bits_from_isr",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 10,
+"c": "",
+"c1": 10,
+"c1_pin": 10,
+"c2": 0,
+"file": "events.rs",
+"line": 283,
+"missed_by_c": [],
+"name": "pend_group_call",
+"pub": false,
+"regions": 10,
+"twin": "none"
+},
+{
+"any": 18,
+"c": "",
+"c1": 17,
+"c1_pin": 17,
+"c2": 0,
+"file": "events.rs",
+"line": 301,
+"missed_by_c": [
+[
+308,
+20
+],
+[
+313,
+55
+],
+[
+316,
+57
+],
+[
+318,
+18
+]
+],
+"name": "event_group_pended_call",
+"pub": true,
+"regions": 21,
+"twin": "none"
+},
+{
+"any": 102,
+"c": "xEventGroupWaitBits",
+"c1": 94,
+"c1_pin": 94,
+"c2": 0,
+"file": "events.rs",
+"line": 333,
+"missed_by_c": [
+[
+343,
+60
+],
+[
+344,
+93
+],
+[
+354,
+35
+],
+[
+356,
+49
+],
+[
+368,
+27
+],
+[
+368,
+32
+],
+[
+368,
+32
+],
+[
+368,
+63
+],
+[
+370,
+17
+],
+[
+372,
+30
+],
+[
+386,
+14
+],
+[
+403,
+13
+]
+],
+"name": "event_group_wait_bits",
+"pub": true,
+"regions": 106,
+"twin": "api"
+},
+{
+"any": 68,
+"c": "xEventGroupSync",
+"c1": 65,
+"c1_pin": 65,
+"c2": 0,
+"file": "events.rs",
+"line": 421,
+"missed_by_c": [
+[
+430,
+60
+],
+[
+435,
+81
+],
+[
+438,
+35
+],
+[
+440,
+50
+],
+[
+441,
+46
+],
+[
+448,
+13
+],
+[
+450,
+48
+],
+[
+456,
+14
+]
+],
+"name": "event_group_sync",
+"pub": true,
+"regions": 73,
+"twin": "api"
+},
+{
+"any": 31,
+"c": "",
+"c1": 24,
+"c1_pin": 24,
+"c2": 0,
+"file": "events.rs",
+"line": 489,
+"missed_by_c": [
+[
+503,
+74
+],
+[
+504,
+27
+],
+[
+504,
+32
+],
+[
+504,
+32
+],
+[
+504,
+63
+],
+[
+506,
+17
+],
+[
+508,
+9
+],
+[
+510,
+27
+]
+],
+"name": "finish_wait",
+"pub": false,
+"regions": 32,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "traceEVENT_GROUP_WAIT_BITS_END",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "events.rs",
+"line": 515,
+"missed_by_c": [],
+"name": "trace_wait_bits_end",
+"pub": false,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "kernel.rs",
+"line": 704,
+"missed_by_c": [],
+"name": "new",
+"pub": true,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 36,
+"c": "",
+"c1": 35,
+"c1_pin": 35,
+"c2": 35,
+"file": "kernel.rs",
+"line": 715,
+"missed_by_c": [
+[
+716,
+22
+],
+[
+726,
+20
+]
+],
+"name": "with_tick_hook",
+"pub": true,
+"regions": 37,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 784,
+"missed_by_c": [],
+"name": "port",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 789,
+"missed_by_c": [],
+"name": "trace",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 794,
+"missed_by_c": [],
+"name": "trace_mut",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 800,
+"missed_by_c": [],
+"name": "into_trace",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "xNumOfOverflows",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 806,
+"missed_by_c": [
+[
+806,
+5
+],
+[
+807,
+9
+],
+[
+808,
+5
+]
+],
+"name": "overflows",
+"pub": true,
+"regions": 3,
+"twin": "state"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 816,
+"missed_by_c": [],
+"name": "ready_list",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 4,
+"file": "kernel.rs",
+"line": 820,
+"missed_by_c": [
+[
+822,
+31
+]
+],
+"name": "delayed_list",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 4,
+"file": "kernel.rs",
+"line": 828,
+"missed_by_c": [
+[
+830,
+13
+]
+],
+"name": "overflow_delayed_list",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 836,
+"missed_by_c": [],
+"name": "pending_ready_list",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 840,
+"missed_by_c": [],
+"name": "suspended_list",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "xTasksWaitingToSend",
+"c1": 13,
+"c1_pin": 13,
+"c2": 13,
+"file": "kernel.rs",
+"line": 845,
+"missed_by_c": [],
+"name": "queue_send_list",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 5,
+"c": "xTasksWaitingToReceive",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "kernel.rs",
+"line": 853,
+"missed_by_c": [],
+"name": "queue_receive_list",
+"pub": false,
+"regions": 5,
+"twin": "state"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 858,
+"missed_by_c": [],
+"name": "state_item",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "kernel.rs",
+"line": 864,
+"missed_by_c": [],
+"name": "event_item",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 4,
+"file": "kernel.rs",
+"line": 868,
+"missed_by_c": [],
+"name": "task_item_base",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 7,
+"file": "kernel.rs",
+"line": 872,
+"missed_by_c": [],
+"name": "task_of_state_item",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "",
+"c1": 13,
+"c1_pin": 13,
+"c2": 13,
+"file": "kernel.rs",
+"line": 876,
+"missed_by_c": [
+[
+879,
+43
+]
+],
+"name": "task_of_event_item",
+"pub": false,
+"regions": 14,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "pxCurrentTCB",
+"c1": 4,
+"c1_pin": 4,
+"c2": 4,
+"file": "kernel.rs",
+"line": 890,
+"missed_by_c": [],
+"name": "current",
+"pub": true,
+"regions": 4,
+"twin": "state"
+},
+{
+"any": 6,
+"c": "pxCurrentTCBs",
+"c1": 0,
+"c1_pin": 0,
+"c2": 6,
+"file": "kernel.rs",
+"line": 897,
+"missed_by_c": [
+[
+901,
+13
+]
+],
+"name": "current_on",
+"pub": true,
+"regions": 7,
+"twin": "state"
+},
+{
+"any": 3,
+"c": "xTaskGetTickCount",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 907,
+"missed_by_c": [],
+"name": "tick_count",
+"pub": true,
+"regions": 3,
+"twin": "api"
+},
+{
+"any": 3,
+"c": "xSchedulerRunning",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "kernel.rs",
+"line": 913,
+"missed_by_c": [],
+"name": "is_running",
+"pub": true,
+"regions": 3,
+"twin": "state"
+},
+{
+"any": 3,
+"c": "uxCurrentNumberOfTasks",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "kernel.rs",
+"line": 919,
+"missed_by_c": [],
+"name": "task_count",
+"pub": true,
+"regions": 3,
+"twin": "state"
+},
+{
+"any": 3,
+"c": "uxSchedulerSuspended",
+"c1": 0,
+"c1_pin": 0,
+"c2": 3,
+"file": "kernel.rs",
+"line": 925,
+"missed_by_c": [],
+"name": "scheduler_suspended",
+"pub": true,
+"regions": 3,
+"twin": "state"
+},
+{
+"any": 0,
+"c": "xPendedTicks",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 931,
+"missed_by_c": [
+[
+931,
+5
+],
+[
+932,
+9
+],
+[
+933,
+5
+]
+],
+"name": "pended_ticks",
+"pub": true,
+"regions": 3,
+"twin": "state"
+},
+{
+"any": 16,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 941,
+"missed_by_c": [
+[
+941,
+5
+],
+[
+942,
+13
+],
+[
+942,
+21
+],
+[
+943,
+13
+],
+[
+943,
+21
+],
+[
+943,
+32
+],
+[
+943,
+37
+],
+[
+943,
+54
+],
+[
+944,
+22
+],
+[
+944,
+30
+],
+[
+944,
+30
+],
+[
+945,
+17
+],
+[
+947,
+13
+],
+[
+948,
+13
+],
+[
+950,
+9
+],
+[
+951,
+5
+]
+],
+"name": "ready_items",
+"pub": true,
+"regions": 16,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 959,
+"missed_by_c": [
+[
+959,
+5
+],
+[
+960,
+9
+],
+[
+961,
+14
+],
+[
+961,
+24
+],
+[
+961,
+41
+],
+[
+962,
+14
+],
+[
+963,
+5
+]
+],
+"name": "ready_cursor",
+"pub": true,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 10,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 976,
+"missed_by_c": [
+[
+976,
+5
+],
+[
+977,
+13
+],
+[
+977,
+21
+],
+[
+977,
+35
+],
+[
+977,
+42
+],
+[
+977,
+46
+],
+[
+978,
+9
+],
+[
+978,
+19
+],
+[
+978,
+29
+],
+[
+979,
+5
+]
+],
+"name": "task_at",
+"pub": true,
+"regions": 10,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "kernel.rs",
+"line": 985,
+"missed_by_c": [],
+"name": "name_of",
+"pub": true,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 11,
+"c": "uxTaskPriorityGet",
+"c1": 11,
+"c1_pin": 11,
+"c2": 11,
+"file": "kernel.rs",
+"line": 993,
+"missed_by_c": [],
+"name": "priority_of",
+"pub": true,
+"regions": 11,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "kernel.rs",
+"line": 998,
+"missed_by_c": [
+[
+1004,
+13
+],
+[
+1004,
+18
+],
+[
+1005,
+13
+],
+[
+1005,
+18
+],
+[
+1005,
+30
+],
+[
+1005,
+36
+]
+],
+"name": "current_priority",
+"pub": false,
+"regions": 11,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1025,
+"missed_by_c": [
+[
+1029,
+9
+],
+[
+1032,
+9
+]
+],
+"name": "set_current_at",
+"pub": false,
+"regions": 15,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "pxCurrentTCB",
+"c1": 6,
+"c1_pin": 6,
+"c2": 10,
+"file": "kernel.rs",
+"line": 1045,
+"missed_by_c": [],
+"name": "cur",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 13,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 10,
+"file": "kernel.rs",
+"line": 1058,
+"missed_by_c": [],
+"name": "cur_priority",
+"pub": false,
+"regions": 13,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "xYieldPendings",
+"c1": 6,
+"c1_pin": 6,
+"c2": 10,
+"file": "kernel.rs",
+"line": 1068,
+"missed_by_c": [],
+"name": "pending_here",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 15,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 11,
+"file": "kernel.rs",
+"line": 1081,
+"missed_by_c": [
+[
+1090,
+9
+]
+],
+"name": "set_pending_here",
+"pub": false,
+"regions": 16,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "portGET_CORE_ID",
+"c1": 4,
+"c1_pin": 4,
+"c2": 8,
+"file": "kernel.rs",
+"line": 1099,
+"missed_by_c": [],
+"name": "core",
+"pub": false,
+"regions": 9,
+"twin": "api"
+},
+{
+"any": 17,
+"c": "",
+"c1": 17,
+"c1_pin": 17,
+"c2": 17,
+"file": "kernel.rs",
+"line": 1129,
+"missed_by_c": [
+[
+1130,
+36
+],
+[
+1137,
+17
+]
+],
+"name": "set_task_priority",
+"pub": false,
+"regions": 19,
+"twin": "none"
+},
+{
+"any": 11,
+"c": "uxTaskPriorityGet",
+"c1": 11,
+"c1_pin": 11,
+"c2": 11,
+"file": "kernel.rs",
+"line": 1153,
+"missed_by_c": [],
+"name": "task_priority_get",
+"pub": true,
+"regions": 11,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "eTaskGetState",
+"c1": 15,
+"c1_pin": 15,
+"c2": 14,
+"file": "kernel.rs",
+"line": 1165,
+"missed_by_c": [],
+"name": "task_state_get",
+"pub": true,
+"regions": 15,
+"twin": "api"
+},
+{
+"any": 47,
+"c": "eTaskGetState",
+"c1": 45,
+"c1_pin": 45,
+"c2": 44,
+"file": "kernel.rs",
+"line": 1179,
+"missed_by_c": [
+[
+1181,
+20
+],
+[
+1184,
+20
+],
+[
+1186,
+70
+],
+[
+1187,
+20
+],
+[
+1190,
+60
+]
+],
+"name": "state_of",
+"pub": true,
+"regions": 50,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 8,
+"file": "kernel.rs",
+"line": 1225,
+"missed_by_c": [
+[
+1227,
+20
+]
+],
+"name": "ready_len",
+"pub": true,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1238,
+"missed_by_c": [
+[
+1238,
+5
+],
+[
+1239,
+9
+],
+[
+1240,
+12
+],
+[
+1240,
+44
+],
+[
+1242,
+9
+],
+[
+1243,
+5
+]
+],
+"name": "note_stall",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1251,
+"missed_by_c": [],
+"name": "stalls",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1258,
+"missed_by_c": [
+[
+1258,
+5
+],
+[
+1259,
+9
+],
+[
+1260,
+5
+]
+],
+"name": "first_stall",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 28,
+"c": "",
+"c1": 27,
+"c1_pin": 27,
+"c2": 28,
+"file": "kernel.rs",
+"line": 1264,
+"missed_by_c": [],
+"name": "trace_task",
+"pub": false,
+"regions": 28,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "kernel.rs",
+"line": 1291,
+"missed_by_c": [],
+"name": "priority_value",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1308,
+"missed_by_c": [],
+"name": "account_for_allocation",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "taskENTER_CRITICAL",
+"c1": 4,
+"c1_pin": 4,
+"c2": 4,
+"file": "kernel.rs",
+"line": 1316,
+"missed_by_c": [],
+"name": "enter_critical",
+"pub": true,
+"regions": 4,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "taskEXIT_CRITICAL",
+"c1": 8,
+"c1_pin": 8,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1331,
+"missed_by_c": [],
+"name": "exit_critical",
+"pub": true,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 4,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1359,
+"missed_by_c": [],
+"name": "tick_on_exit",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 12,
+"c": "vPortSystemTickHandler",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1369,
+"missed_by_c": [],
+"name": "tick_from_isr",
+"pub": true,
+"regions": 12,
+"twin": "state"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1386,
+"missed_by_c": [],
+"name": "idle_hook_tick",
+"pub": true,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 12,
+"c": "prvGetExpectedIdleTime",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1404,
+"missed_by_c": [
+[
+1404,
+5
+],
+[
+1414,
+13
+],
+[
+1414,
+19
+],
+[
+1415,
+16
+],
+[
+1415,
+16
+],
+[
+1416,
+16
+],
+[
+1418,
+12
+],
+[
+1419,
+13
+],
+[
+1421,
+13
+],
+[
+1421,
+36
+],
+[
+1421,
+51
+],
+[
+1423,
+5
+]
+],
+"name": "expected_idle_time",
+"pub": false,
+"regions": 12,
+"twin": "state"
+},
+{
+"any": 18,
+"c": "vTaskStepTick",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1441,
+"missed_by_c": [
+[
+1441,
+5
+],
+[
+1442,
+13
+],
+[
+1442,
+20
+],
+[
+1442,
+43
+],
+[
+1442,
+58
+],
+[
+1443,
+13
+],
+[
+1443,
+24
+],
+[
+1443,
+38
+],
+[
+1443,
+42
+],
+[
+1445,
+12
+],
+[
+1445,
+12
+],
+[
+1445,
+22
+],
+[
+1445,
+72
+],
+[
+1445,
+81
+],
+[
+1446,
+13
+],
+[
+1448,
+9
+],
+[
+1450,
+9
+],
+[
+1450,
+21
+],
+[
+1451,
+5
+]
+],
+"name": "step_tick",
+"pub": true,
+"regions": 19,
+"twin": "api"
+},
+{
+"any": 36,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 1465,
+"missed_by_c": [
+[
+1465,
+5
+],
+[
+1466,
+12
+],
+[
+1467,
+13
+],
+[
+1468,
+9
+],
+[
+1470,
+12
+],
+[
+1471,
+13
+],
+[
+1472,
+9
+],
+[
+1474,
+9
+],
+[
+1474,
+14
+],
+[
+1475,
+13
+],
+[
+1475,
+24
+],
+[
+1475,
+29
+],
+[
+1476,
+12
+],
+[
+1476,
+59
+],
+[
+1477,
+17
+],
+[
+1477,
+24
+],
+[
+1478,
+13
+],
+[
+1478,
+18
+],
+[
+1479,
+13
+],
+[
+1479,
+24
+],
+[
+1479,
+30
+],
+[
+1479,
+36
+],
+[
+1481,
+17
+],
+[
+1481,
+25
+],
+[
+1481,
+35
+],
+[
+1481,
+60
+],
+[
+1482,
+13
+],
+[
+1482,
+18
+],
+[
+1482,
+28
+],
+[
+1484,
+17
+],
+[
+1484,
+24
+],
+[
+1485,
+13
+],
+[
+1485,
+18
+],
+[
+1486,
+13
+],
+[
+1486,
+24
+],
+[
+1487,
+9
+],
+[
+1488,
+17
+],
+[
+1489,
+5
+]
+],
+"name": "idle_suppress_ticks",
+"pub": true,
+"regions": 38,
+"twin": "none"
+},
+{
+"any": 11,
+"c": "portYIELD",
+"c1": 10,
+"c1_pin": 10,
+"c2": 10,
+"file": "kernel.rs",
+"line": 1499,
+"missed_by_c": [],
+"name": "port_yield",
+"pub": false,
+"regions": 11,
+"twin": "api"
+},
+{
+"any": 4,
+"c": "taskYIELD",
+"c1": 4,
+"c1_pin": 4,
+"c2": 4,
+"file": "kernel.rs",
+"line": 1523,
+"missed_by_c": [],
+"name": "task_yield",
+"pub": true,
+"regions": 4,
+"twin": "api"
+},
+{
+"any": 71,
+"c": "xTaskCreate",
+"c1": 58,
+"c1_pin": 58,
+"c2": 52,
+"file": "kernel.rs",
+"line": 1542,
+"missed_by_c": [
+[
+1580,
+21
+],
+[
+1580,
+28
+],
+[
+1581,
+17
+],
+[
+1581,
+22
+],
+[
+1582,
+17
+],
+[
+1582,
+28
+],
+[
+1582,
+34
+],
+[
+1582,
+40
+],
+[
+1583,
+24
+],
+[
+1595,
+62
+],
+[
+1616,
+13
+],
+[
+1620,
+58
+]
+],
+"name": "create_task",
+"pub": true,
+"regions": 74,
+"twin": "api"
+},
+{
+"any": 55,
+"c": "prvAddNewTaskToReadyList",
+"c1": 42,
+"c1_pin": 42,
+"c2": 33,
+"file": "kernel.rs",
+"line": 1625,
+"missed_by_c": [
+[
+1646,
+46
+]
+],
+"name": "add_new_task_to_ready_list",
+"pub": false,
+"regions": 56,
+"twin": "state"
+},
+{
+"any": 21,
+"c": "prvAddTaskToReadyList",
+"c1": 21,
+"c1_pin": 21,
+"c2": 21,
+"file": "kernel.rs",
+"line": 1686,
+"missed_by_c": [
+[
+1687,
+47
+]
+],
+"name": "add_task_to_ready_list",
+"pub": false,
+"regions": 22,
+"twin": "state"
+},
+{
+"any": 45,
+"c": "vTaskStartScheduler",
+"c1": 43,
+"c1_pin": 43,
+"c2": 5,
+"file": "kernel.rs",
+"line": 1736,
+"missed_by_c": [
+[
+1740,
+47
+],
+[
+1744,
+46
+],
+[
+1746,
+72
+]
+],
+"name": "start_scheduler",
+"pub": true,
+"regions": 48,
+"twin": "api"
+},
+{
+"any": 70,
+"c": "vTaskStartScheduler",
+"c1": 0,
+"c1_pin": 0,
+"c2": 70,
+"file": "kernel.rs",
+"line": 1777,
+"missed_by_c": [
+[
+1781,
+67
+],
+[
+1784,
+13
+],
+[
+1788,
+46
+],
+[
+1790,
+72
+],
+[
+1809,
+17
+]
+],
+"name": "start_scheduler_smp",
+"pub": false,
+"regions": 75,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "configNUMBER_OF_CORES",
+"c1": 7,
+"c1_pin": 7,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1820,
+"missed_by_c": [
+[
+1823,
+13
+],
+[
+1825,
+13
+]
+],
+"name": "cores",
+"pub": false,
+"regions": 9,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "pxCurrentTCBs",
+"c1": 7,
+"c1_pin": 7,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1833,
+"missed_by_c": [],
+"name": "current_of",
+"pub": false,
+"regions": 7,
+"twin": "state"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1839,
+"missed_by_c": [],
+"name": "priority_on",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 10,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 10,
+"file": "kernel.rs",
+"line": 1844,
+"missed_by_c": [
+[
+1847,
+9
+],
+[
+1850,
+9
+]
+],
+"name": "set_current_of",
+"pub": false,
+"regions": 12,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1853,
+"missed_by_c": [],
+"name": "idle_of",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1857,
+"missed_by_c": [],
+"name": "pending_on",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 6,
+"file": "kernel.rs",
+"line": 1861,
+"missed_by_c": [
+[
+1864,
+9
+]
+],
+"name": "set_pending_on",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1867,
+"missed_by_c": [],
+"name": "requested_on",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 6,
+"file": "kernel.rs",
+"line": 1871,
+"missed_by_c": [
+[
+1874,
+9
+]
+],
+"name": "set_requested_on",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "taskTASK_IS_RUNNING",
+"c1": 0,
+"c1_pin": 0,
+"c2": 8,
+"file": "kernel.rs",
+"line": 1879,
+"missed_by_c": [],
+"name": "running_core",
+"pub": false,
+"regions": 8,
+"twin": "state"
+},
+{
+"any": 7,
+"c": "xTaskRunState",
+"c1": 0,
+"c1_pin": 0,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1885,
+"missed_by_c": [],
+"name": "held_by_any_core",
+"pub": false,
+"regions": 7,
+"twin": "state"
+},
+{
+"any": 15,
+"c": "prvYieldCore",
+"c1": 0,
+"c1_pin": 0,
+"c2": 15,
+"file": "kernel.rs",
+"line": 1896,
+"missed_by_c": [
+[
+1898,
+13
+]
+],
+"name": "yield_core",
+"pub": false,
+"regions": 16,
+"twin": "state"
+},
+{
+"any": 55,
+"c": "prvYieldForTask",
+"c1": 0,
+"c1_pin": 0,
+"c2": 55,
+"file": "kernel.rs",
+"line": 1919,
+"missed_by_c": [],
+"name": "yield_for_task",
+"pub": false,
+"regions": 55,
+"twin": "state"
+},
+{
+"any": 8,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 8,
+"file": "kernel.rs",
+"line": 1973,
+"missed_by_c": [
+[
+1976,
+9
+]
+],
+"name": "smp_readied",
+"pub": false,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 7,
+"file": "kernel.rs",
+"line": 1981,
+"missed_by_c": [],
+"name": "held_core",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 4,
+"file": "kernel.rs",
+"line": 1990,
+"missed_by_c": [],
+"name": "take_core_yields",
+"pub": true,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 82,
+"c": "prvSelectHighestPriorityTask",
+"c1": 0,
+"c1_pin": 0,
+"c2": 82,
+"file": "kernel.rs",
+"line": 2013,
+"missed_by_c": [
+[
+2037,
+21
+],
+[
+2041,
+13
+],
+[
+2041,
+38
+],
+[
+2042,
+21
+],
+[
+2042,
+28
+],
+[
+2042,
+33
+],
+[
+2042,
+44
+],
+[
+2043,
+20
+],
+[
+2043,
+41
+],
+[
+2044,
+21
+],
+[
+2044,
+38
+],
+[
+2046,
+21
+],
+[
+2048,
+13
+],
+[
+2072,
+25
+],
+[
+2095,
+24
+]
+],
+"name": "select_for_core",
+"pub": false,
+"regions": 97,
+"twin": "state"
+},
+{
+"any": 17,
+"c": "xTaskIncrementTick",
+"c1": 0,
+"c1_pin": 0,
+"c2": 17,
+"file": "kernel.rs",
+"line": 2110,
+"missed_by_c": [
+[
+2118,
+9
+]
+],
+"name": "tick_time_slice_smp",
+"pub": false,
+"regions": 18,
+"twin": "api"
+},
+{
+"any": 19,
+"c": "xTaskIncrementTick",
+"c1": 0,
+"c1_pin": 0,
+"c2": 19,
+"file": "kernel.rs",
+"line": 2126,
+"missed_by_c": [
+[
+2139,
+9
+]
+],
+"name": "tick_yields_smp",
+"pub": false,
+"regions": 20,
+"twin": "api"
+},
+{
+"any": 39,
+"c": "vTaskSwitchContext",
+"c1": 0,
+"c1_pin": 0,
+"c2": 39,
+"file": "kernel.rs",
+"line": 2146,
+"missed_by_c": [
+[
+2149,
+13
+],
+[
+2149,
+18
+],
+[
+2149,
+33
+],
+[
+2150,
+13
+],
+[
+2156,
+13
+],
+[
+2156,
+18
+],
+[
+2156,
+29
+],
+[
+2157,
+13
+]
+],
+"name": "switch_context_smp",
+"pub": false,
+"regions": 47,
+"twin": "api"
+},
+{
+"any": 60,
+"c": "vTaskSwitchContext",
+"c1": 54,
+"c1_pin": 54,
+"c2": 5,
+"file": "kernel.rs",
+"line": 2169,
+"missed_by_c": [
+[
+2205,
+13
+],
+[
+2205,
+18
+],
+[
+2205,
+29
+],
+[
+2206,
+13
+],
+[
+2219,
+25
+],
+[
+2219,
+30
+],
+[
+2219,
+41
+],
+[
+2220,
+25
+],
+[
+2228,
+13
+],
+[
+2228,
+18
+],
+[
+2228,
+29
+],
+[
+2229,
+13
+]
+],
+"name": "switch_context",
+"pub": true,
+"regions": 68,
+"twin": "api"
+},
+{
+"any": 22,
+"c": "",
+"c1": 22,
+"c1_pin": 22,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2260,
+"missed_by_c": [
+[
+2288,
+24
+]
+],
+"name": "resume_pending",
+"pub": true,
+"regions": 23,
+"twin": "none"
+},
+{
+"any": 18,
+"c": "",
+"c1": 18,
+"c1_pin": 18,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2304,
+"missed_by_c": [
+[
+2313,
+20
+]
+],
+"name": "resume_pending_cold",
+"pub": false,
+"regions": 19,
+"twin": "none"
+},
+{
+"any": 11,
+"c": "",
+"c1": 11,
+"c1_pin": 11,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2336,
+"missed_by_c": [],
+"name": "resume_pending_owed",
+"pub": false,
+"regions": 11,
+"twin": "none"
+},
+{
+"any": 123,
+"c": "",
+"c1": 123,
+"c1_pin": 123,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2349,
+"missed_by_c": [
+[
+2364,
+13
+],
+[
+2375,
+13
+],
+[
+2394,
+17
+],
+[
+2404,
+17
+],
+[
+2418,
+17
+],
+[
+2432,
+17
+],
+[
+2433,
+17
+],
+[
+2435,
+29
+],
+[
+2435,
+37
+],
+[
+2435,
+37
+],
+[
+2435,
+68
+],
+[
+2437,
+17
+],
+[
+2438,
+21
+],
+[
+2438,
+28
+],
+[
+2439,
+17
+],
+[
+2439,
+22
+],
+[
+2440,
+17
+],
+[
+2440,
+28
+],
+[
+2441,
+21
+],
+[
+2442,
+21
+],
+[
+2447,
+24
+],
+[
+2457,
+17
+],
+[
+2474,
+17
+],
+[
+2481,
+20
+]
+],
+"name": "resume_pending_owed_inner",
+"pub": false,
+"regions": 147,
+"twin": "none"
+},
+{
+"any": 26,
+"c": "",
+"c1": 26,
+"c1_pin": 26,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2493,
+"missed_by_c": [
+[
+2496,
+13
+],
+[
+2503,
+13
+],
+[
+2507,
+13
+],
+[
+2515,
+9
+]
+],
+"name": "settle_unwind",
+"pub": false,
+"regions": 30,
+"twin": "none"
+},
+{
+"any": 55,
+"c": "",
+"c1": 54,
+"c1_pin": 54,
+"c2": 22,
+"file": "kernel.rs",
+"line": 2527,
+"missed_by_c": [
+[
+2587,
+78
+],
+[
+2593,
+9
+]
+],
+"name": "trace_failure_or_owe",
+"pub": false,
+"regions": 57,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "kernel.rs",
+"line": 2620,
+"missed_by_c": [
+[
+2623,
+21
+]
+],
+"name": "flag",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 8,
+"file": "kernel.rs",
+"line": 2630,
+"missed_by_c": [
+[
+2637,
+9
+]
+],
+"name": "set_flag",
+"pub": false,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 17,
+"c": "",
+"c1": 17,
+"c1_pin": 17,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2654,
+"missed_by_c": [
+[
+2661,
+13
+]
+],
+"name": "clear_owe_if_settled",
+"pub": false,
+"regions": 18,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2665,
+"missed_by_c": [
+[
+2668,
+9
+]
+],
+"name": "owe",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2673,
+"missed_by_c": [],
+"name": "owe_yield",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 32,
+"c": "",
+"c1": 31,
+"c1_pin": 31,
+"c2": 28,
+"file": "kernel.rs",
+"line": 2693,
+"missed_by_c": [
+[
+2724,
+13
+],
+[
+2727,
+13
+]
+],
+"name": "hand_over",
+"pub": false,
+"regions": 34,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 7,
+"file": "kernel.rs",
+"line": 2733,
+"missed_by_c": [
+[
+2736,
+9
+]
+],
+"name": "note_first_start",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 48,
+"c": "xTaskIncrementTick",
+"c1": 46,
+"c1_pin": 46,
+"c2": 33,
+"file": "kernel.rs",
+"line": 2740,
+"missed_by_c": [
+[
+2748,
+26
+],
+[
+2776,
+17
+]
+],
+"name": "increment_tick",
+"pub": true,
+"regions": 50,
+"twin": "api"
+},
+{
+"any": 110,
+"c": "xTaskGenericNotifyWait",
+"c1": 109,
+"c1_pin": 109,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2837,
+"missed_by_c": [
+[
+2845,
+20
+],
+[
+2857,
+21
+],
+[
+2860,
+21
+],
+[
+2861,
+17
+],
+[
+2863,
+13
+],
+[
+2874,
+67
+],
+[
+2875,
+13
+],
+[
+2902,
+17
+],
+[
+2906,
+13
+],
+[
+2907,
+9
+]
+],
+"name": "notify_wait",
+"pub": true,
+"regions": 119,
+"twin": "api"
+},
+{
+"any": 99,
+"c": "ulTaskGenericNotifyTake",
+"c1": 99,
+"c1_pin": 98,
+"c2": 0,
+"file": "kernel.rs",
+"line": 2940,
+"missed_by_c": [
+[
+2947,
+20
+],
+[
+2960,
+21
+],
+[
+2961,
+17
+],
+[
+2963,
+13
+],
+[
+2973,
+67
+],
+[
+2974,
+13
+],
+[
+3013,
+17
+],
+[
+3017,
+13
+],
+[
+3018,
+9
+]
+],
+"name": "notify_take",
+"pub": true,
+"regions": 108,
+"twin": "api"
+},
+{
+"any": 27,
+"c": "xTaskGetHandle",
+"c1": 27,
+"c1_pin": 27,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3046,
+"missed_by_c": [
+[
+3051,
+17
+]
+],
+"name": "task_get_handle",
+"pub": true,
+"regions": 28,
+"twin": "api"
+},
+{
+"any": 18,
+"c": "xTaskGenericNotify",
+"c1": 17,
+"c1_pin": 17,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3071,
+"missed_by_c": [
+[
+3079,
+20
+]
+],
+"name": "notify",
+"pub": true,
+"regions": 18,
+"twin": "api"
+},
+{
+"any": 23,
+"c": "xTaskGenericNotifyFromISR",
+"c1": 23,
+"c1_pin": 23,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3093,
+"missed_by_c": [
+[
+3101,
+20
+]
+],
+"name": "notify_from_isr",
+"pub": true,
+"regions": 24,
+"twin": "api"
+},
+{
+"any": 27,
+"c": "xTaskGenericNotify",
+"c1": 27,
+"c1_pin": 27,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3121,
+"missed_by_c": [
+[
+3129,
+20
+],
+[
+3138,
+19
+],
+[
+3138,
+32
+]
+],
+"name": "notify_and_query",
+"pub": true,
+"regions": 30,
+"twin": "api"
+},
+{
+"any": 35,
+"c": "xTaskGenericNotifyAndQueryFromISR",
+"c1": 35,
+"c1_pin": 34,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3145,
+"missed_by_c": [
+[
+3153,
+20
+],
+[
+3162,
+33
+],
+[
+3163,
+25
+]
+],
+"name": "notify_and_query_from_isr",
+"pub": true,
+"regions": 38,
+"twin": "state"
+},
+{
+"any": 92,
+"c": "",
+"c1": 86,
+"c1_pin": 86,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3167,
+"missed_by_c": [
+[
+3178,
+50
+],
+[
+3181,
+13
+],
+[
+3196,
+13
+],
+[
+3213,
+69
+],
+[
+3215,
+87
+],
+[
+3217,
+46
+],
+[
+3219,
+17
+],
+[
+3220,
+50
+],
+[
+3226,
+17
+],
+[
+3226,
+31
+],
+[
+3226,
+36
+],
+[
+3227,
+20
+],
+[
+3227,
+35
+],
+[
+3227,
+45
+],
+[
+3229,
+17
+]
+],
+"name": "notify_locked",
+"pub": false,
+"regions": 101,
+"twin": "none"
+},
+{
+"any": 28,
+"c": "xTaskGenericNotifyStateClear",
+"c1": 27,
+"c1_pin": 27,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3254,
+"missed_by_c": [
+[
+3256,
+20
+],
+[
+3265,
+17
+],
+[
+3266,
+13
+]
+],
+"name": "notify_state_clear",
+"pub": true,
+"regions": 30,
+"twin": "api"
+},
+{
+"any": 25,
+"c": "ulNotifiedValue",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3286,
+"missed_by_c": [
+[
+3286,
+5
+],
+[
+3287,
+12
+],
+[
+3288,
+20
+],
+[
+3289,
+9
+],
+[
+3290,
+13
+],
+[
+3290,
+22
+],
+[
+3290,
+27
+],
+[
+3290,
+37
+],
+[
+3290,
+42
+],
+[
+3291,
+9
+],
+[
+3291,
+14
+],
+[
+3292,
+13
+],
+[
+3292,
+21
+],
+[
+3294,
+14
+],
+[
+3294,
+22
+],
+[
+3295,
+14
+],
+[
+3295,
+24
+],
+[
+3295,
+37
+],
+[
+3295,
+41
+],
+[
+3295,
+48
+],
+[
+3295,
+57
+],
+[
+3296,
+9
+],
+[
+3296,
+14
+],
+[
+3297,
+9
+],
+[
+3298,
+5
+]
+],
+"name": "notify_value",
+"pub": true,
+"regions": 25,
+"twin": "state"
+},
+{
+"any": 25,
+"c": "ulTaskGenericNotifyValueClear",
+"c1": 25,
+"c1_pin": 25,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3305,
+"missed_by_c": [
+[
+3312,
+20
+],
+[
+3323,
+25
+],
+[
+3325,
+17
+],
+[
+3325,
+23
+]
+],
+"name": "notify_value_clear",
+"pub": true,
+"regions": 29,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3340,
+"missed_by_c": [],
+"name": "notify_wait_pending",
+"pub": true,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3346,
+"missed_by_c": [
+[
+3347,
+51
+]
+],
+"name": "take_stream_resume",
+"pub": false,
+"regions": 13,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3356,
+"missed_by_c": [
+[
+3360,
+9
+]
+],
+"name": "set_stream_resume",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 15,
+"c": "",
+"c1": 15,
+"c1_pin": 15,
+"c2": 4,
+"file": "kernel.rs",
+"line": 3365,
+"missed_by_c": [
+[
+3373,
+20
+]
+],
+"name": "take_queue_resume",
+"pub": false,
+"regions": 16,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3393,
+"missed_by_c": [
+[
+3404,
+13
+],
+[
+3406,
+9
+]
+],
+"name": "set_queue_resume",
+"pub": false,
+"regions": 11,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3417,
+"missed_by_c": [
+[
+3419,
+20
+]
+],
+"name": "take_stream_timed",
+"pub": false,
+"regions": 10,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3427,
+"missed_by_c": [
+[
+3430,
+9
+]
+],
+"name": "set_stream_timed",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3441,
+"missed_by_c": [
+[
+3443,
+20
+]
+],
+"name": "take_stream_waited",
+"pub": false,
+"regions": 10,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3451,
+"missed_by_c": [
+[
+3451,
+5
+],
+[
+3452,
+19
+],
+[
+3452,
+26
+],
+[
+3452,
+26
+],
+[
+3452,
+54
+],
+[
+3454,
+9
+],
+[
+3455,
+5
+]
+],
+"name": "set_stream_waited",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3457,
+"missed_by_c": [],
+"name": "notify_blocked",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3464,
+"missed_by_c": [
+[
+3467,
+9
+]
+],
+"name": "set_notify_blocked",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3470,
+"missed_by_c": [],
+"name": "notify_state_of",
+"pub": false,
+"regions": 13,
+"twin": "none"
+},
+{
+"any": 12,
+"c": "",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3478,
+"missed_by_c": [],
+"name": "notified_value_of",
+"pub": false,
+"regions": 12,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "xTaskGetTickCountFromISR",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3492,
+"missed_by_c": [],
+"name": "tick_count_from_isr",
+"pub": true,
+"regions": 3,
+"twin": "api"
+},
+{
+"any": 4,
+"c": "vTaskMissedYield",
+"c1": 4,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3499,
+"missed_by_c": [],
+"name": "missed_yield",
+"pub": false,
+"regions": 4,
+"twin": "api"
+},
+{
+"any": 9,
+"c": "vApplicationTickHook",
+"c1": 8,
+"c1_pin": 8,
+"c2": 9,
+"file": "kernel.rs",
+"line": 3509,
+"missed_by_c": [],
+"name": "run_tick_hook",
+"pub": false,
+"regions": 9,
+"twin": "api"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 3521,
+"missed_by_c": [],
+"name": "tick_hook",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3526,
+"missed_by_c": [],
+"name": "tick_hook_mut",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 71,
+"c": "",
+"c1": 60,
+"c1_pin": 60,
+"c2": 59,
+"file": "kernel.rs",
+"line": 3535,
+"missed_by_c": [
+[
+3541,
+13
+],
+[
+3550,
+17
+],
+[
+3551,
+24
+],
+[
+3554,
+24
+],
+[
+3561,
+24
+],
+[
+3573,
+24
+],
+[
+3593,
+17
+]
+],
+"name": "wake_due_tasks",
+"pub": false,
+"regions": 78,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 3610,
+"missed_by_c": [
+[
+3610,
+5
+],
+[
+3611,
+9
+],
+[
+3612,
+9
+],
+[
+3613,
+9
+],
+[
+3613,
+14
+],
+[
+3614,
+5
+]
+],
+"name": "switch_delayed_lists",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "prvResetNextTaskUnblockTime",
+"c1": 13,
+"c1_pin": 13,
+"c2": 13,
+"file": "kernel.rs",
+"line": 3655,
+"missed_by_c": [],
+"name": "reset_next_task_unblock_time",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 31,
+"c": "vTaskDelay",
+"c1": 31,
+"c1_pin": 31,
+"c2": 29,
+"file": "kernel.rs",
+"line": 3670,
+"missed_by_c": [
+[
+3678,
+68
+],
+[
+3691,
+9
+]
+],
+"name": "delay",
+"pub": true,
+"regions": 33,
+"twin": "api"
+},
+{
+"any": 57,
+"c": "xTaskAbortDelay",
+"c1": 52,
+"c1_pin": 52,
+"c2": 49,
+"file": "kernel.rs",
+"line": 3709,
+"missed_by_c": [
+[
+3711,
+20
+],
+[
+3716,
+48
+],
+[
+3733,
+17
+],
+[
+3737,
+42
+],
+[
+3743,
+51
+]
+],
+"name": "abort_delay",
+"pub": true,
+"regions": 60,
+"twin": "api"
+},
+{
+"any": 67,
+"c": "prvAddCurrentTaskToDelayedList",
+"c1": 67,
+"c1_pin": 67,
+"c2": 67,
+"file": "kernel.rs",
+"line": 3751,
+"missed_by_c": [
+[
+3770,
+13
+],
+[
+3784,
+20
+],
+[
+3790,
+9
+],
+[
+3799,
+64
+],
+[
+3812,
+51
+],
+[
+3843,
+58
+],
+[
+3857,
+17
+]
+],
+"name": "add_current_task_to_delayed_list",
+"pub": false,
+"regions": 74,
+"twin": "state"
+},
+{
+"any": 96,
+"c": "vTaskSuspend",
+"c1": 66,
+"c1_pin": 66,
+"c2": 82,
+"file": "kernel.rs",
+"line": 3873,
+"missed_by_c": [
+[
+3879,
+17
+],
+[
+3879,
+22
+],
+[
+3880,
+24
+],
+[
+3888,
+43
+],
+[
+3891,
+64
+],
+[
+3917,
+13
+],
+[
+3942,
+13
+],
+[
+3953,
+23
+],
+[
+3953,
+23
+],
+[
+3953,
+34
+],
+[
+3953,
+38
+],
+[
+3953,
+94
+],
+[
+3955,
+13
+]
+],
+"name": "suspend",
+"pub": true,
+"regions": 106,
+"twin": "api"
+},
+{
+"any": 49,
+"c": "vTaskResume",
+"c1": 41,
+"c1_pin": 41,
+"c2": 43,
+"file": "kernel.rs",
+"line": 3964,
+"missed_by_c": [
+[
+3969,
+20
+],
+[
+3973,
+44
+],
+[
+3976,
+50
+],
+[
+3980,
+54
+]
+],
+"name": "resume",
+"pub": true,
+"regions": 52,
+"twin": "api"
+},
+{
+"any": 18,
+"c": "prvTaskIsTaskSuspended",
+"c1": 16,
+"c1_pin": 16,
+"c2": 17,
+"file": "kernel.rs",
+"line": 3996,
+"missed_by_c": [
+[
+3997,
+56
+],
+[
+4000,
+70
+],
+[
+4002,
+20
+]
+],
+"name": "task_is_suspended",
+"pub": false,
+"regions": 20,
+"twin": "state"
+},
+{
+"any": 89,
+"c": "vTaskDelete",
+"c1": 65,
+"c1_pin": 65,
+"c2": 84,
+"file": "kernel.rs",
+"line": 4031,
+"missed_by_c": [
+[
+4034,
+34
+],
+[
+4043,
+12
+],
+[
+4045,
+9
+],
+[
+4077,
+72
+],
+[
+4108,
+26
+]
+],
+"name": "task_delete",
+"pub": true,
+"regions": 93,
+"twin": "api"
+},
+{
+"any": 26,
+"c": "prvDeleteTCB",
+"c1": 0,
+"c1_pin": 0,
+"c2": 25,
+"file": "kernel.rs",
+"line": 4124,
+"missed_by_c": [
+[
+4135,
+25
+]
+],
+"name": "reap_smp",
+"pub": false,
+"regions": 26,
+"twin": "state"
+},
+{
+"any": 13,
+"c": "",
+"c1": 13,
+"c1_pin": 13,
+"c2": 13,
+"file": "kernel.rs",
+"line": 4146,
+"missed_by_c": [
+[
+4173,
+9
+]
+],
+"name": "delete_tcb",
+"pub": false,
+"regions": 14,
+"twin": "none"
+},
+{
+"any": 24,
+"c": "prvCheckTasksWaitingTermination",
+"c1": 19,
+"c1_pin": 19,
+"c2": 8,
+"file": "kernel.rs",
+"line": 4189,
+"missed_by_c": [],
+"name": "check_tasks_waiting_termination",
+"pub": true,
+"regions": 24,
+"twin": "state"
+},
+{
+"any": 126,
+"c": "vTaskPrioritySet",
+"c1": 98,
+"c1_pin": 98,
+"c2": 119,
+"file": "kernel.rs",
+"line": 4215,
+"missed_by_c": [
+[
+4222,
+17
+],
+[
+4222,
+22
+],
+[
+4223,
+24
+],
+[
+4230,
+49
+],
+[
+4248,
+62
+],
+[
+4250,
+56
+],
+[
+4253,
+69
+],
+[
+4255,
+50
+],
+[
+4259,
+70
+],
+[
+4261,
+46
+],
+[
+4263,
+56
+],
+[
+4275,
+64
+],
+[
+4281,
+21
+]
+],
+"name": "set_priority",
+"pub": true,
+"regions": 136,
+"twin": "api"
+},
+{
+"any": 3,
+"c": "vTaskSuspendAll",
+"c1": 3,
+"c1_pin": 3,
+"c2": 3,
+"file": "kernel.rs",
+"line": 4294,
+"missed_by_c": [],
+"name": "suspend_all",
+"pub": true,
+"regions": 3,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4311,
+"missed_by_c": [
+[
+4315,
+13
+]
+],
+"name": "drain_pending_ready",
+"pub": false,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 37,
+"c": "",
+"c1": 37,
+"c1_pin": 37,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4323,
+"missed_by_c": [
+[
+4327,
+17
+],
+[
+4330,
+17
+],
+[
+4335,
+17
+],
+[
+4339,
+39
+],
+[
+4340,
+25
+],
+[
+4340,
+30
+],
+[
+4347,
+9
+]
+],
+"name": "drain_pending_ready_walk",
+"pub": false,
+"regions": 44,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "kernel.rs",
+"line": 4357,
+"missed_by_c": [
+[
+4359,
+13
+]
+],
+"name": "unwind_pended_ticks",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 11,
+"c": "",
+"c1": 11,
+"c1_pin": 11,
+"c2": 11,
+"file": "kernel.rs",
+"line": 4367,
+"missed_by_c": [],
+"name": "unwind_pended_ticks_loop",
+"pub": false,
+"regions": 11,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 7,
+"file": "kernel.rs",
+"line": 4387,
+"missed_by_c": [],
+"name": "note_exits",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "xTaskResumeAll",
+"c1": 4,
+"c1_pin": 4,
+"c2": 4,
+"file": "kernel.rs",
+"line": 4397,
+"missed_by_c": [],
+"name": "resume_all",
+"pub": true,
+"regions": 4,
+"twin": "api"
+},
+{
+"any": 27,
+"c": "",
+"c1": 27,
+"c1_pin": 27,
+"c2": 26,
+"file": "kernel.rs",
+"line": 4405,
+"missed_by_c": [
+[
+4420,
+21
+]
+],
+"name": "resume_all_inline",
+"pub": false,
+"regions": 28,
+"twin": "none"
+},
+{
+"any": 32,
+"c": "",
+"c1": 32,
+"c1_pin": 32,
+"c2": 32,
+"file": "kernel.rs",
+"line": 4450,
+"missed_by_c": [
+[
+4497,
+20
+]
+],
+"name": "begin_wait",
+"pub": false,
+"regions": 33,
+"twin": "none"
+},
+{
+"any": 17,
+"c": "",
+"c1": 16,
+"c1_pin": 16,
+"c2": 17,
+"file": "kernel.rs",
+"line": 4517,
+"missed_by_c": [
+[
+4537,
+9
+]
+],
+"name": "end_wait",
+"pub": false,
+"regions": 18,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "xInheritanceOccurred",
+"c1": 7,
+"c1_pin": 7,
+"c2": 7,
+"file": "kernel.rs",
+"line": 4541,
+"missed_by_c": [],
+"name": "wait_inherited",
+"pub": false,
+"regions": 7,
+"twin": "state"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "kernel.rs",
+"line": 4548,
+"missed_by_c": [
+[
+4551,
+9
+]
+],
+"name": "set_wait_inherited",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 58,
+"c": "xTaskCheckForTimeOut",
+"c1": 58,
+"c1_pin": 58,
+"c2": 58,
+"file": "kernel.rs",
+"line": 4584,
+"missed_by_c": [
+[
+4599,
+13
+],
+[
+4599,
+18
+],
+[
+4600,
+20
+],
+[
+4607,
+13
+],
+[
+4620,
+21
+],
+[
+4620,
+39
+],
+[
+4621,
+21
+],
+[
+4625,
+21
+],
+[
+4625,
+36
+],
+[
+4626,
+21
+],
+[
+4637,
+62
+],
+[
+4638,
+21
+],
+[
+4639,
+21
+],
+[
+4655,
+23
+]
+],
+"name": "check_for_timeout",
+"pub": false,
+"regions": 72,
+"twin": "api"
+},
+{
+"any": 18,
+"c": "vTaskPlaceOnUnorderedEventList",
+"c1": 17,
+"c1_pin": 17,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4671,
+"missed_by_c": [
+[
+4678,
+42
+],
+[
+4679,
+42
+]
+],
+"name": "place_on_unordered_event_list",
+"pub": false,
+"regions": 19,
+"twin": "api"
+},
+{
+"any": 28,
+"c": "vTaskRemoveFromUnorderedEventList",
+"c1": 28,
+"c1_pin": 28,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4692,
+"missed_by_c": [
+[
+4697,
+42
+],
+[
+4698,
+49
+],
+[
+4701,
+42
+],
+[
+4702,
+44
+],
+[
+4703,
+35
+],
+[
+4704,
+21
+],
+[
+4704,
+26
+]
+],
+"name": "remove_from_unordered_event_list",
+"pub": false,
+"regions": 35,
+"twin": "api"
+},
+{
+"any": 20,
+"c": "uxTaskResetEventItemValue",
+"c1": 20,
+"c1_pin": 20,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4713,
+"missed_by_c": [
+[
+4715,
+43
+],
+[
+4716,
+47
+],
+[
+4718,
+84
+]
+],
+"name": "reset_event_item_value",
+"pub": false,
+"regions": 23,
+"twin": "api"
+},
+{
+"any": 14,
+"c": "",
+"c1": 14,
+"c1_pin": 14,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4724,
+"missed_by_c": [],
+"name": "take_event_resume",
+"pub": false,
+"regions": 14,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4742,
+"missed_by_c": [
+[
+4747,
+13
+],
+[
+4749,
+9
+]
+],
+"name": "set_event_resume",
+"pub": false,
+"regions": 10,
+"twin": "none"
+},
+{
+"any": 18,
+"c": "",
+"c1": 17,
+"c1_pin": 17,
+"c2": 17,
+"file": "kernel.rs",
+"line": 4765,
+"missed_by_c": [
+[
+4778,
+13
+],
+[
+4778,
+18
+],
+[
+4778,
+29
+],
+[
+4779,
+20
+],
+[
+4785,
+52
+]
+],
+"name": "place_on_event_list",
+"pub": false,
+"regions": 22,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 4,
+"file": "kernel.rs",
+"line": 4791,
+"missed_by_c": [],
+"name": "yield_or_owe",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "pvTaskIncrementMutexHeldCount",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "kernel.rs",
+"line": 4800,
+"missed_by_c": [
+[
+4803,
+9
+]
+],
+"name": "increment_mutexes_held",
+"pub": false,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 68,
+"c": "xTaskPriorityInherit",
+"c1": 61,
+"c1_pin": 61,
+"c2": 63,
+"file": "kernel.rs",
+"line": 4812,
+"missed_by_c": [
+[
+4818,
+48
+],
+[
+4828,
+62
+],
+[
+4830,
+38
+],
+[
+4832,
+60
+],
+[
+4833,
+48
+],
+[
+4840,
+60
+]
+],
+"name": "priority_inherit",
+"pub": false,
+"regions": 74,
+"twin": "api"
+},
+{
+"any": 61,
+"c": "xTaskPriorityDisinherit",
+"c1": 56,
+"c1_pin": 56,
+"c2": 60,
+"file": "kernel.rs",
+"line": 4853,
+"missed_by_c": [
+[
+4869,
+30
+],
+[
+4876,
+20
+],
+[
+4883,
+45
+],
+[
+4886,
+62
+],
+[
+4887,
+44
+],
+[
+4896,
+13
+]
+],
+"name": "priority_disinherit",
+"pub": false,
+"regions": 67,
+"twin": "api"
+},
+{
+"any": 69,
+"c": "vTaskPriorityDisinheritAfterTimeout",
+"c1": 62,
+"c1_pin": 62,
+"c2": 65,
+"file": "kernel.rs",
+"line": 4904,
+"missed_by_c": [
+[
+4910,
+20
+],
+[
+4913,
+48
+],
+[
+4917,
+20
+],
+[
+4925,
+20
+],
+[
+4932,
+47
+],
+[
+4935,
+62
+],
+[
+4937,
+38
+],
+[
+4939,
+48
+],
+[
+4944,
+17
+]
+],
+"name": "priority_disinherit_after_timeout",
+"pub": false,
+"regions": 76,
+"twin": "api"
+},
+{
+"any": 43,
+"c": "xTaskDelayUntil",
+"c1": 39,
+"c1_pin": 39,
+"c2": 39,
+"file": "kernel.rs",
+"line": 4958,
+"missed_by_c": [
+[
+4967,
+20
+],
+[
+4967,
+48
+],
+[
+4967,
+62
+],
+[
+4969,
+17
+],
+[
+4981,
+68
+],
+[
+4986,
+9
+]
+],
+"name": "delay_until",
+"pub": true,
+"regions": 45,
+"twin": "api"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "kernel.rs",
+"line": 4998,
+"missed_by_c": [
+[
+4998,
+5
+],
+[
+4999,
+15
+],
+[
+4999,
+15
+],
+[
+5000,
+21
+],
+[
+5001,
+24
+],
+[
+5003,
+5
+]
+],
+"name": "event_item_error",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 40,
+"c": "xTaskRemoveFromEventList",
+"c1": 35,
+"c1_pin": 35,
+"c2": 28,
+"file": "kernel.rs",
+"line": 5013,
+"missed_by_c": [
+[
+5014,
+47
+],
+[
+5015,
+20
+],
+[
+5025,
+20
+],
+[
+5025,
+24
+],
+[
+5030,
+46
+],
+[
+5032,
+68
+],
+[
+5034,
+44
+],
+[
+5040,
+13
+]
+],
+"name": "remove_from_event_list",
+"pub": false,
+"regions": 48,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "lib.rs",
+"line": 80,
+"missed_by_c": [],
+"name": "items_for",
+"pub": true,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "lib.rs",
+"line": 102,
+"missed_by_c": [],
+"name": "list_slots_for",
+"pub": true,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "lib.rs",
+"line": 112,
+"missed_by_c": [],
+"name": "lists_for",
+"pub": true,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "name.rs",
+"line": 105,
+"missed_by_c": [],
+"name": "default",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 33,
+"c": "",
+"c1": 33,
+"c1_pin": 33,
+"c2": 0,
+"file": "name.rs",
+"line": 126,
+"missed_by_c": [
+[
+130,
+54
+]
+],
+"name": "new",
+"pub": true,
+"regions": 34,
+"twin": "none"
+},
+{
+"any": 19,
+"c": "",
+"c1": 19,
+"c1_pin": 19,
+"c2": 19,
+"file": "name.rs",
+"line": 163,
+"missed_by_c": [
+[
+184,
+57
+],
+[
+189,
+23
+]
+],
+"name": "as_str",
+"pub": true,
+"regions": 21,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "name.rs",
+"line": 205,
+"missed_by_c": [],
+"name": "matches",
+"pub": true,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "name.rs",
+"line": 212,
+"missed_by_c": [
+[
+212,
+5
+],
+[
+213,
+9
+],
+[
+214,
+5
+]
+],
+"name": "len",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "name.rs",
+"line": 218,
+"missed_by_c": [
+[
+218,
+5
+],
+[
+219,
+9
+],
+[
+220,
+5
+]
+],
+"name": "is_empty",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "name.rs",
+"line": 224,
+"missed_by_c": [
+[
+224,
+5
+],
+[
+225,
+9
+],
+[
+225,
+25
+],
+[
+225,
+40
+],
+[
+226,
+5
+]
+],
+"name": "fmt",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "name.rs",
+"line": 230,
+"missed_by_c": [
+[
+230,
+5
+],
+[
+231,
+9
+],
+[
+231,
+11
+],
+[
+231,
+21
+],
+[
+232,
+5
+]
+],
+"name": "fmt",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "uxItemSize",
+"c1": 4,
+"c1_pin": 4,
+"c2": 0,
+"file": "queue.rs",
+"line": 96,
+"missed_by_c": [],
+"name": "carries_data",
+"pub": false,
+"regions": 4,
+"twin": "state"
+},
+{
+"any": 4,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 0,
+"file": "queue.rs",
+"line": 101,
+"missed_by_c": [],
+"name": "is_mutex",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "queue.rs",
+"line": 146,
+"missed_by_c": [],
+"name": "new",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "xQueueCreate",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "queue.rs",
+"line": 190,
+"missed_by_c": [],
+"name": "queue_create",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 17,
+"c": "vQueueDelete",
+"c1": 17,
+"c1_pin": 17,
+"c2": 0,
+"file": "queue.rs",
+"line": 214,
+"missed_by_c": [
+[
+215,
+44
+]
+],
+"name": "queue_delete",
+"pub": true,
+"regions": 18,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "xSemaphoreCreateBinary",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "queue.rs",
+"line": 249,
+"missed_by_c": [],
+"name": "semaphore_create_binary",
+"pub": true,
+"regions": 5,
+"twin": "api"
+},
+{
+"any": 16,
+"c": "xSemaphoreCreateCounting",
+"c1": 14,
+"c1_pin": 14,
+"c2": 14,
+"file": "queue.rs",
+"line": 258,
+"missed_by_c": [
+[
+260,
+20
+],
+[
+262,
+58
+],
+[
+265,
+9
+]
+],
+"name": "semaphore_create_counting",
+"pub": true,
+"regions": 17,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "xSemaphoreCreateMutex",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "queue.rs",
+"line": 273,
+"missed_by_c": [],
+"name": "mutex_create",
+"pub": true,
+"regions": 5,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "xSemaphoreCreateRecursiveMutex",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "queue.rs",
+"line": 281,
+"missed_by_c": [],
+"name": "mutex_create_recursive",
+"pub": true,
+"regions": 5,
+"twin": "api"
+},
+{
+"any": 12,
+"c": "prvInitialiseMutex",
+"c1": 11,
+"c1_pin": 11,
+"c2": 11,
+"file": "queue.rs",
+"line": 307,
+"missed_by_c": [
+[
+308,
+45
+],
+[
+309,
+73
+]
+],
+"name": "new_mutex",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 17,
+"c": "",
+"c1": 16,
+"c1_pin": 16,
+"c2": 16,
+"file": "queue.rs",
+"line": 320,
+"missed_by_c": [
+[
+324,
+13
+],
+[
+325,
+18
+],
+[
+325,
+24
+],
+[
+325,
+33
+],
+[
+325,
+49
+],
+[
+325,
+53
+],
+[
+325,
+55
+],
+[
+326,
+16
+],
+[
+327,
+17
+],
+[
+328,
+13
+],
+[
+329,
+16
+],
+[
+329,
+31
+],
+[
+330,
+17
+],
+[
+331,
+32
+],
+[
+331,
+40
+],
+[
+331,
+40
+],
+[
+331,
+67
+],
+[
+332,
+26
+],
+[
+332,
+31
+],
+[
+332,
+46
+],
+[
+332,
+55
+],
+[
+333,
+13
+],
+[
+334,
+20
+],
+[
+336,
+54
+],
+[
+338,
+20
+]
+],
+"name": "take_slots",
+"pub": false,
+"regions": 41,
+"twin": "none"
+},
+{
+"any": 37,
+"c": "",
+"c1": 36,
+"c1_pin": 36,
+"c2": 0,
+"file": "queue.rs",
+"line": 347,
+"missed_by_c": [
+[
+349,
+13
+],
+[
+356,
+17
+],
+[
+363,
+13
+],
+[
+364,
+16
+],
+[
+364,
+16
+],
+[
+364,
+21
+],
+[
+365,
+17
+],
+[
+365,
+26
+],
+[
+366,
+17
+],
+[
+366,
+22
+],
+[
+366,
+37
+],
+[
+367,
+17
+],
+[
+368,
+13
+],
+[
+369,
+13
+],
+[
+380,
+9
+]
+],
+"name": "give_slots",
+"pub": false,
+"regions": 51,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "queue.rs",
+"line": 383,
+"missed_by_c": [
+[
+386,
+26
+],
+[
+386,
+35
+],
+[
+386,
+35
+],
+[
+387,
+29
+],
+[
+387,
+37
+],
+[
+387,
+37
+],
+[
+387,
+68
+],
+[
+389,
+17
+],
+[
+390,
+13
+]
+],
+"name": "drop_free_slot",
+"pub": false,
+"regions": 17,
+"twin": "none"
+},
+{
+"any": 46,
+"c": "",
+"c1": 39,
+"c1_pin": 39,
+"c2": 39,
+"file": "queue.rs",
+"line": 395,
+"missed_by_c": [
+[
+397,
+20
+],
+[
+401,
+61
+],
+[
+407,
+17
+],
+[
+407,
+22
+],
+[
+407,
+33
+],
+[
+407,
+39
+],
+[
+408,
+24
+]
+],
+"name": "new_queue",
+"pub": false,
+"regions": 46,
+"twin": "none"
+},
+{
+"any": 12,
+"c": "uxQueueMessagesWaiting",
+"c1": 12,
+"c1_pin": 12,
+"c2": 12,
+"file": "queue.rs",
+"line": 437,
+"missed_by_c": [],
+"name": "queue_messages_waiting",
+"pub": true,
+"regions": 12,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "xQueueIsQueueFullFromISR",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "queue.rs",
+"line": 455,
+"missed_by_c": [],
+"name": "queue_is_full_from_isr",
+"pub": true,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "uxSemaphoreGetCount",
+"c1": 5,
+"c1_pin": 5,
+"c2": 5,
+"file": "queue.rs",
+"line": 463,
+"missed_by_c": [],
+"name": "semaphore_count",
+"pub": true,
+"regions": 5,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xSemaphoreGetMutexHolderFromISR",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "queue.rs",
+"line": 473,
+"missed_by_c": [],
+"name": "mutex_holder_from_isr",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 12,
+"c": "xSemaphoreGetMutexHolder",
+"c1": 12,
+"c1_pin": 12,
+"c2": 12,
+"file": "queue.rs",
+"line": 481,
+"missed_by_c": [],
+"name": "mutex_holder",
+"pub": true,
+"regions": 12,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "xQueueSend",
+"c1": 8,
+"c1_pin": 8,
+"c2": 8,
+"file": "queue.rs",
+"line": 495,
+"missed_by_c": [],
+"name": "queue_send",
+"pub": true,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 34,
+"c": "xQueueReset",
+"c1": 29,
+"c1_pin": 29,
+"c2": 0,
+"file": "queue.rs",
+"line": 508,
+"missed_by_c": [
+[
+511,
+52
+],
+[
+513,
+55
+],
+[
+521,
+52
+],
+[
+521,
+57
+],
+[
+521,
+80
+],
+[
+521,
+88
+],
+[
+521,
+90
+]
+],
+"name": "queue_reset",
+"pub": true,
+"regions": 36,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "uxQueueSpacesAvailable",
+"c1": 15,
+"c1_pin": 15,
+"c2": 0,
+"file": "queue.rs",
+"line": 535,
+"missed_by_c": [],
+"name": "queue_spaces_available",
+"pub": true,
+"regions": 15,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xQueueCreateSet",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "queue.rs",
+"line": 559,
+"missed_by_c": [],
+"name": "queue_create_set",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 30,
+"c": "xQueueAddToSet",
+"c1": 27,
+"c1_pin": 27,
+"c2": 0,
+"file": "queue.rs",
+"line": 570,
+"missed_by_c": [
+[
+573,
+40
+],
+[
+574,
+24
+],
+[
+576,
+52
+],
+[
+580,
+43
+]
+],
+"name": "queue_add_to_set",
+"pub": true,
+"regions": 31,
+"twin": "api"
+},
+{
+"any": 22,
+"c": "xQueueRemoveFromSet",
+"c1": 21,
+"c1_pin": 21,
+"c2": 0,
+"file": "queue.rs",
+"line": 591,
+"missed_by_c": [
+[
+600,
+49
+],
+[
+610,
+15
+]
+],
+"name": "queue_remove_from_set",
+"pub": true,
+"regions": 23,
+"twin": "api"
+},
+{
+"any": 18,
+"c": "xQueueSelectFromSet",
+"c1": 16,
+"c1_pin": 16,
+"c2": 0,
+"file": "queue.rs",
+"line": 622,
+"missed_by_c": [
+[
+634,
+17
+],
+[
+634,
+23
+]
+],
+"name": "queue_select_from_set",
+"pub": true,
+"regions": 18,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "xQueueSelectFromSetFromISR",
+"c1": 15,
+"c1_pin": 15,
+"c2": 0,
+"file": "queue.rs",
+"line": 648,
+"missed_by_c": [
+[
+660,
+17
+],
+[
+660,
+23
+]
+],
+"name": "queue_select_from_set_from_isr",
+"pub": true,
+"regions": 17,
+"twin": "api"
+},
+{
+"any": 47,
+"c": "prvNotifyQueueSetContainer",
+"c1": 46,
+"c1_pin": 43,
+"c2": 0,
+"file": "queue.rs",
+"line": 673,
+"missed_by_c": [
+[
+674,
+45
+],
+[
+675,
+50
+],
+[
+678,
+20
+],
+[
+693,
+96
+],
+[
+696,
+92
+]
+],
+"name": "notify_queue_set_container",
+"pub": false,
+"regions": 51,
+"twin": "state"
+},
+{
+"any": 7,
+"c": "xQueueOverwrite",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "queue.rs",
+"line": 714,
+"missed_by_c": [],
+"name": "queue_overwrite",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "xQueueGenericSendFromISR",
+"c1": 15,
+"c1_pin": 15,
+"c2": 15,
+"file": "queue.rs",
+"line": 739,
+"missed_by_c": [],
+"name": "queue_send_generic_from_isr",
+"pub": true,
+"regions": 15,
+"twin": "api"
+},
+{
+"any": 59,
+"c": "",
+"c1": 58,
+"c1_pin": 58,
+"c2": 45,
+"file": "queue.rs",
+"line": 751,
+"missed_by_c": [
+[
+757,
+51
+],
+[
+769,
+75
+],
+[
+774,
+72
+],
+[
+780,
+92
+]
+],
+"name": "send_from_isr_locked",
+"pub": false,
+"regions": 62,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "xQueueSendToBackFromISR",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "queue.rs",
+"line": 793,
+"missed_by_c": [],
+"name": "queue_send_from_isr",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "xQueueSendToFrontFromISR",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "queue.rs",
+"line": 801,
+"missed_by_c": [],
+"name": "queue_send_to_front_from_isr",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "xQueueOverwriteFromISR",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "queue.rs",
+"line": 813,
+"missed_by_c": [],
+"name": "queue_overwrite_from_isr",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xSemaphoreGiveFromISR",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "queue.rs",
+"line": 821,
+"missed_by_c": [],
+"name": "semaphore_give_from_isr",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 13,
+"c": "xQueueReceiveFromISR",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "queue.rs",
+"line": 831,
+"missed_by_c": [],
+"name": "queue_receive_from_isr",
+"pub": true,
+"regions": 13,
+"twin": "api"
+},
+{
+"any": 45,
+"c": "",
+"c1": 44,
+"c1_pin": 44,
+"c2": 0,
+"file": "queue.rs",
+"line": 838,
+"missed_by_c": [
+[
+839,
+51
+],
+[
+855,
+10
+],
+[
+859,
+88
+]
+],
+"name": "receive_from_isr_locked",
+"pub": false,
+"regions": 47,
+"twin": "none"
+},
+{
+"any": 28,
+"c": "xQueuePeekFromISR",
+"c1": 25,
+"c1_pin": 25,
+"c2": 0,
+"file": "queue.rs",
+"line": 876,
+"missed_by_c": [
+[
+890,
+22
+],
+[
+891,
+17
+],
+[
+891,
+23
+]
+],
+"name": "queue_peek_from_isr",
+"pub": true,
+"regions": 28,
+"twin": "api"
+},
+{
+"any": 12,
+"c": "prvIncrementQueueTxLock",
+"c1": 11,
+"c1_pin": 11,
+"c2": 0,
+"file": "queue.rs",
+"line": 898,
+"missed_by_c": [
+[
+908,
+13
+],
+[
+909,
+9
+]
+],
+"name": "increment_tx_lock",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 11,
+"c": "prvIncrementQueueRxLock",
+"c1": 11,
+"c1_pin": 11,
+"c2": 0,
+"file": "queue.rs",
+"line": 913,
+"missed_by_c": [
+[
+923,
+13
+],
+[
+924,
+9
+]
+],
+"name": "increment_rx_lock",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 8,
+"c": "xQueueSendToFront",
+"c1": 8,
+"c1_pin": 8,
+"c2": 8,
+"file": "queue.rs",
+"line": 931,
+"missed_by_c": [],
+"name": "queue_send_to_front",
+"pub": true,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xSemaphoreGive",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "queue.rs",
+"line": 944,
+"missed_by_c": [],
+"name": "semaphore_give",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 8,
+"file": "queue.rs",
+"line": 956,
+"missed_by_c": [],
+"name": "send_generic_outlined",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 117,
+"c": "xQueueGenericSend",
+"c1": 111,
+"c1_pin": 111,
+"c2": 89,
+"file": "queue.rs",
+"line": 1001,
+"missed_by_c": [
+[
+1022,
+17
+],
+[
+1023,
+17
+],
+[
+1023,
+22
+],
+[
+1024,
+24
+],
+[
+1043,
+92
+],
+[
+1049,
+72
+],
+[
+1058,
+55
+]
+],
+"name": "queue_send_generic",
+"pub": true,
+"regions": 120,
+"twin": "api"
+},
+{
+"any": 58,
+"c": "",
+"c1": 57,
+"c1_pin": 57,
+"c2": 52,
+"file": "queue.rs",
+"line": 1104,
+"missed_by_c": [
+[
+1109,
+37
+],
+[
+1124,
+79
+],
+[
+1125,
+37
+],
+[
+1130,
+37
+]
+],
+"name": "queue_send_blocking",
+"pub": false,
+"regions": 61,
+"twin": "none"
+},
+{
+"any": 57,
+"c": "prvCopyDataToQueue",
+"c1": 55,
+"c1_pin": 55,
+"c2": 53,
+"file": "queue.rs",
+"line": 1170,
+"missed_by_c": [
+[
+1212,
+13
+],
+[
+1213,
+51
+],
+[
+1223,
+71
+],
+[
+1224,
+51
+],
+[
+1228,
+13
+],
+[
+1231,
+51
+],
+[
+1233,
+9
+]
+],
+"name": "copy_data_to_queue",
+"pub": false,
+"regions": 62,
+"twin": "state"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 7,
+"file": "queue.rs",
+"line": 1252,
+"missed_by_c": [],
+"name": "take_outlined",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "xQueueReceive",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "queue.rs",
+"line": 1261,
+"missed_by_c": [],
+"name": "queue_receive",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xQueuePeek",
+"c1": 6,
+"c1_pin": 6,
+"c2": 6,
+"file": "queue.rs",
+"line": 1269,
+"missed_by_c": [],
+"name": "queue_peek",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 9,
+"c": "",
+"c1": 9,
+"c1_pin": 9,
+"c2": 9,
+"file": "queue.rs",
+"line": 1281,
+"missed_by_c": [],
+"name": "semaphore_take",
+"pub": true,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 140,
+"c": "",
+"c1": 133,
+"c1_pin": 133,
+"c2": 121,
+"file": "queue.rs",
+"line": 1311,
+"missed_by_c": [
+[
+1345,
+17
+],
+[
+1346,
+17
+],
+[
+1346,
+22
+],
+[
+1347,
+24
+],
+[
+1379,
+17
+],
+[
+1396,
+96
+],
+[
+1396,
+98
+],
+[
+1401,
+51
+],
+[
+1405,
+92
+]
+],
+"name": "queue_take",
+"pub": false,
+"regions": 144,
+"twin": "none"
+},
+{
+"any": 41,
+"c": "",
+"c1": 41,
+"c1_pin": 41,
+"c2": 36,
+"file": "queue.rs",
+"line": 1440,
+"missed_by_c": [
+[
+1458,
+46
+],
+[
+1463,
+37
+]
+],
+"name": "queue_take_blocking",
+"pub": false,
+"regions": 43,
+"twin": "none"
+},
+{
+"any": 45,
+"c": "xQueueReceive",
+"c1": 45,
+"c1_pin": 45,
+"c2": 43,
+"file": "queue.rs",
+"line": 1494,
+"missed_by_c": [
+[
+1501,
+46
+],
+[
+1508,
+71
+],
+[
+1509,
+78
+],
+[
+1510,
+76
+],
+[
+1515,
+17
+]
+],
+"name": "queue_take_timed_out",
+"pub": false,
+"regions": 50,
+"twin": "api"
+},
+{
+"any": 58,
+"c": "xQueueReceive",
+"c1": 57,
+"c1_pin": 57,
+"c2": 55,
+"file": "queue.rs",
+"line": 1524,
+"missed_by_c": [
+[
+1554,
+74
+],
+[
+1555,
+62
+],
+[
+1561,
+82
+],
+[
+1563,
+33
+]
+],
+"name": "queue_take_locked",
+"pub": false,
+"regions": 61,
+"twin": "api"
+},
+{
+"any": 33,
+"c": "prvCopyDataFromQueue",
+"c1": 25,
+"c1_pin": 25,
+"c2": 0,
+"file": "queue.rs",
+"line": 1586,
+"missed_by_c": [
+[
+1596,
+16
+],
+[
+1597,
+21
+],
+[
+1597,
+25
+],
+[
+1597,
+37
+],
+[
+1597,
+49
+],
+[
+1597,
+55
+],
+[
+1601,
+17
+],
+[
+1602,
+13
+],
+[
+1603,
+20
+],
+[
+1616,
+51
+]
+],
+"name": "copy_data_from_queue",
+"pub": false,
+"regions": 35,
+"twin": "state"
+},
+{
+"any": 26,
+"c": "xSemaphoreTakeRecursive",
+"c1": 25,
+"c1_pin": 25,
+"c2": 25,
+"file": "queue.rs",
+"line": 1630,
+"missed_by_c": [
+[
+1636,
+51
+],
+[
+1645,
+55
+]
+],
+"name": "mutex_take_recursive",
+"pub": true,
+"regions": 27,
+"twin": "api"
+},
+{
+"any": 22,
+"c": "xSemaphoreGiveRecursive",
+"c1": 21,
+"c1_pin": 21,
+"c2": 21,
+"file": "queue.rs",
+"line": 1656,
+"missed_by_c": [
+[
+1660,
+51
+],
+[
+1668,
+47
+]
+],
+"name": "mutex_give_recursive",
+"pub": true,
+"regions": 23,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "",
+"c1": 13,
+"c1_pin": 13,
+"c2": 13,
+"file": "queue.rs",
+"line": 1687,
+"missed_by_c": [
+[
+1692,
+13
+],
+[
+1695,
+13
+],
+[
+1696,
+9
+]
+],
+"name": "lock_queue",
+"pub": false,
+"regions": 16,
+"twin": "none"
+},
+{
+"any": 90,
+"c": "prvUnlockQueue",
+"c1": 90,
+"c1_pin": 81,
+"c2": 42,
+"file": "queue.rs",
+"line": 1707,
+"missed_by_c": [
+[
+1730,
+29
+],
+[
+1738,
+27
+],
+[
+1743,
+83
+],
+[
+1743,
+85
+],
+[
+1755,
+58
+],
+[
+1764,
+17
+],
+[
+1779,
+27
+],
+[
+1787,
+56
+],
+[
+1796,
+17
+]
+],
+"name": "unlock_queue",
+"pub": false,
+"regions": 99,
+"twin": "state"
+},
+{
+"any": 47,
+"c": "vQueueWaitForMessageRestricted",
+"c1": 47,
+"c1_pin": 47,
+"c2": 45,
+"file": "queue.rs",
+"line": 1815,
+"missed_by_c": [
+[
+1832,
+68
+],
+[
+1844,
+76
+],
+[
+1846,
+33
+]
+],
+"name": "wait_for_message_restricted",
+"pub": true,
+"regions": 50,
+"twin": "api"
+},
+{
+"any": 14,
+"c": "",
+"c1": 14,
+"c1_pin": 14,
+"c2": 14,
+"file": "queue.rs",
+"line": 1858,
+"missed_by_c": [],
+"name": "is_queue_empty",
+"pub": false,
+"regions": 14,
+"twin": "none"
+},
+{
+"any": 15,
+"c": "prvIsQueueFull",
+"c1": 15,
+"c1_pin": 15,
+"c2": 15,
+"file": "queue.rs",
+"line": 1870,
+"missed_by_c": [],
+"name": "is_queue_full",
+"pub": false,
+"regions": 15,
+"twin": "state"
+},
+{
+"any": 20,
+"c": "prvGetHighestPriorityOfWaitToReceiveList",
+"c1": 20,
+"c1_pin": 20,
+"c2": 20,
+"file": "queue.rs",
+"line": 1882,
+"missed_by_c": [
+[
+1884,
+36
+],
+[
+1887,
+51
+]
+],
+"name": "highest_waiting_priority",
+"pub": false,
+"regions": 22,
+"twin": "state"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "queue.rs",
+"line": 1901,
+"missed_by_c": [],
+"name": "wrap_next",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "queue.rs",
+"line": 1913,
+"missed_by_c": [],
+"name": "wrap_prev",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "queue.rs",
+"line": 1962,
+"missed_by_c": [],
+"name": "raw_queue_create",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "queue.rs",
+"line": 1966,
+"missed_by_c": [],
+"name": "raw_queue_send",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "queue.rs",
+"line": 1970,
+"missed_by_c": [],
+"name": "raw_queue_receive",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "queue.rs",
+"line": 1974,
+"missed_by_c": [],
+"name": "raw_queue_messages_waiting",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "queue.rs",
+"line": 1978,
+"missed_by_c": [],
+"name": "raw_queue_has_room",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "queue.rs",
+"line": 1984,
+"missed_by_c": [
+[
+1984,
+5
+],
+[
+1985,
+9
+],
+[
+1985,
+19
+],
+[
+1986,
+5
+]
+],
+"name": "raw_in_isr",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "queue.rs",
+"line": 1988,
+"missed_by_c": [
+[
+1988,
+5
+],
+[
+1989,
+9
+],
+[
+1989,
+14
+],
+[
+1989,
+34
+],
+[
+1989,
+41
+],
+[
+1990,
+5
+]
+],
+"name": "raw_queue_send_from_isr",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "queue.rs",
+"line": 1992,
+"missed_by_c": [
+[
+1992,
+5
+],
+[
+1993,
+9
+],
+[
+1993,
+14
+],
+[
+1994,
+5
+]
+],
+"name": "raw_mutex_create",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "queue.rs",
+"line": 1996,
+"missed_by_c": [
+[
+1996,
+5
+],
+[
+1997,
+9
+],
+[
+1997,
+14
+],
+[
+1997,
+29
+],
+[
+1997,
+36
+],
+[
+1998,
+5
+]
+],
+"name": "raw_mutex_take",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "queue.rs",
+"line": 2000,
+"missed_by_c": [
+[
+2000,
+5
+],
+[
+2001,
+9
+],
+[
+2001,
+14
+],
+[
+2001,
+29
+],
+[
+2001,
+36
+],
+[
+2002,
+5
+]
+],
+"name": "raw_mutex_give",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "prvBytesInBuffer",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "stream.rs",
+"line": 72,
+"missed_by_c": [],
+"name": "bytes_in_buffer",
+"pub": false,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 14,
+"c": "xStreamBufferSpacesAvailable",
+"c1": 14,
+"c1_pin": 14,
+"c2": 0,
+"file": "stream.rs",
+"line": 87,
+"missed_by_c": [],
+"name": "spaces_available",
+"pub": false,
+"regions": 14,
+"twin": "api"
+},
+{
+"any": 3,
+"c": "prvBytesInBufferMeetTriggerLevel",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "stream.rs",
+"line": 101,
+"missed_by_c": [],
+"name": "meets_trigger",
+"pub": false,
+"regions": 3,
+"twin": "state"
+},
+{
+"any": 6,
+"c": "xStreamBufferCreate",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "stream.rs",
+"line": 136,
+"missed_by_c": [],
+"name": "stream_buffer_create",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "xMessageBufferCreate",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "stream.rs",
+"line": 149,
+"missed_by_c": [
+[
+151,
+20
+]
+],
+"name": "message_buffer_create",
+"pub": true,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 38,
+"c": "",
+"c1": 34,
+"c1_pin": 34,
+"c2": 0,
+"file": "stream.rs",
+"line": 156,
+"missed_by_c": [
+[
+164,
+20
+],
+[
+166,
+41
+],
+[
+169,
+62
+],
+[
+183,
+38
+]
+],
+"name": "new_stream_buffer",
+"pub": false,
+"regions": 38,
+"twin": "none"
+},
+{
+"any": 35,
+"c": "",
+"c1": 34,
+"c1_pin": 34,
+"c2": 0,
+"file": "stream.rs",
+"line": 205,
+"missed_by_c": [
+[
+207,
+56
+],
+[
+215,
+13
+],
+[
+218,
+54
+],
+[
+220,
+20
+]
+],
+"name": "take_bytes",
+"pub": false,
+"regions": 38,
+"twin": "none"
+},
+{
+"any": 46,
+"c": "",
+"c1": 46,
+"c1_pin": 46,
+"c2": 0,
+"file": "stream.rs",
+"line": 229,
+"missed_by_c": [
+[
+235,
+17
+],
+[
+259,
+9
+]
+],
+"name": "give_bytes",
+"pub": false,
+"regions": 48,
+"twin": "none"
+},
+{
+"any": 15,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "stream.rs",
+"line": 262,
+"missed_by_c": [
+[
+265,
+26
+],
+[
+265,
+35
+],
+[
+265,
+35
+],
+[
+266,
+29
+],
+[
+266,
+37
+],
+[
+266,
+37
+],
+[
+266,
+69
+],
+[
+268,
+17
+],
+[
+269,
+13
+]
+],
+"name": "drop_free_block",
+"pub": false,
+"regions": 17,
+"twin": "none"
+},
+{
+"any": 16,
+"c": "vStreamBufferDelete",
+"c1": 15,
+"c1_pin": 15,
+"c2": 0,
+"file": "stream.rs",
+"line": 279,
+"missed_by_c": [
+[
+280,
+46
+]
+],
+"name": "stream_buffer_delete",
+"pub": true,
+"regions": 16,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "xStreamBufferBytesAvailable",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "stream.rs",
+"line": 300,
+"missed_by_c": [
+[
+301,
+40
+]
+],
+"name": "stream_buffer_bytes_available",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xStreamBufferSpacesAvailable",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "stream.rs",
+"line": 308,
+"missed_by_c": [
+[
+309,
+40
+]
+],
+"name": "stream_buffer_spaces_available",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "xStreamBufferIsEmpty",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "stream.rs",
+"line": 316,
+"missed_by_c": [
+[
+317,
+45
+]
+],
+"name": "stream_buffer_is_empty",
+"pub": true,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 12,
+"c": "xStreamBufferIsFull",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "stream.rs",
+"line": 329,
+"missed_by_c": [
+[
+330,
+45
+]
+],
+"name": "stream_buffer_is_full",
+"pub": true,
+"regions": 13,
+"twin": "api"
+},
+{
+"any": 18,
+"c": "xStreamBufferSetTriggerLevel",
+"c1": 17,
+"c1_pin": 17,
+"c2": 0,
+"file": "stream.rs",
+"line": 343,
+"missed_by_c": [
+[
+348,
+50
+],
+[
+371,
+41
+],
+[
+375,
+41
+]
+],
+"name": "stream_buffer_set_trigger_level",
+"pub": true,
+"regions": 20,
+"twin": "api"
+},
+{
+"any": 21,
+"c": "xStreamBufferReset",
+"c1": 20,
+"c1_pin": 20,
+"c2": 0,
+"file": "stream.rs",
+"line": 383,
+"missed_by_c": [
+[
+391,
+18
+]
+],
+"name": "stream_buffer_reset",
+"pub": true,
+"regions": 21,
+"twin": "api"
+},
+{
+"any": 19,
+"c": "xStreamBufferNextMessageLengthBytes",
+"c1": 18,
+"c1_pin": 18,
+"c2": 0,
+"file": "stream.rs",
+"line": 401,
+"missed_by_c": [
+[
+402,
+46
+],
+[
+404,
+20
+]
+],
+"name": "stream_buffer_next_message_length",
+"pub": true,
+"regions": 20,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xTaskCheckForTimeOut",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "stream.rs",
+"line": 428,
+"missed_by_c": [],
+"name": "check_for_time_out",
+"pub": false,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 12,
+"c": "xStreamBufferSend",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "stream.rs",
+"line": 485,
+"missed_by_c": [
+[
+487,
+13
+]
+],
+"name": "blind_call",
+"pub": false,
+"regions": 13,
+"twin": "api"
+},
+{
+"any": 16,
+"c": "xStreamBufferSend",
+"c1": 16,
+"c1_pin": 16,
+"c2": 0,
+"file": "stream.rs",
+"line": 500,
+"missed_by_c": [
+[
+506,
+62
+]
+],
+"name": "stream_buffer_send",
+"pub": true,
+"regions": 17,
+"twin": "api"
+},
+{
+"any": 141,
+"c": "",
+"c1": 139,
+"c1_pin": 139,
+"c2": 0,
+"file": "stream.rs",
+"line": 512,
+"missed_by_c": [
+[
+527,
+49
+],
+[
+550,
+23
+],
+[
+550,
+28
+],
+[
+550,
+40
+],
+[
+550,
+60
+],
+[
+550,
+66
+],
+[
+551,
+39
+],
+[
+553,
+25
+],
+[
+553,
+38
+],
+[
+553,
+50
+],
+[
+553,
+57
+],
+[
+554,
+25
+],
+[
+554,
+30
+],
+[
+557,
+25
+],
+[
+562,
+62
+],
+[
+563,
+35
+],
+[
+572,
+45
+],
+[
+595,
+53
+],
+[
+599,
+49
+],
+[
+613,
+66
+],
+[
+616,
+25
+],
+[
+616,
+38
+],
+[
+616,
+50
+],
+[
+616,
+57
+],
+[
+617,
+25
+],
+[
+617,
+30
+],
+[
+625,
+49
+],
+[
+627,
+72
+],
+[
+642,
+53
+],
+[
+646,
+44
+],
+[
+647,
+13
+]
+],
+"name": "stream_buffer_send_inner",
+"pub": false,
+"regions": 170,
+"twin": "none"
+},
+{
+"any": 46,
+"c": "xStreamBufferSendFromISR",
+"c1": 45,
+"c1_pin": 45,
+"c2": 0,
+"file": "stream.rs",
+"line": 656,
+"missed_by_c": [
+[
+661,
+53
+],
+[
+666,
+43
+],
+[
+670,
+72
+],
+[
+680,
+53
+],
+[
+684,
+61
+]
+],
+"name": "stream_buffer_send_from_isr",
+"pub": true,
+"regions": 50,
+"twin": "api"
+},
+{
+"any": 13,
+"c": "",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "stream.rs",
+"line": 720,
+"missed_by_c": [
+[
+725,
+41
+],
+[
+726,
+53
+],
+[
+734,
+13
+],
+[
+734,
+18
+],
+[
+734,
+36
+],
+[
+735,
+13
+],
+[
+735,
+18
+],
+[
+735,
+36
+],
+[
+735,
+44
+],
+[
+736,
+20
+]
+],
+"name": "after_stream_wait",
+"pub": false,
+"regions": 23,
+"twin": "none"
+},
+{
+"any": 16,
+"c": "xStreamBufferReceive",
+"c1": 16,
+"c1_pin": 16,
+"c2": 0,
+"file": "stream.rs",
+"line": 750,
+"missed_by_c": [
+[
+756,
+62
+]
+],
+"name": "stream_buffer_receive",
+"pub": true,
+"regions": 17,
+"twin": "api"
+},
+{
+"any": 105,
+"c": "",
+"c1": 104,
+"c1_pin": 103,
+"c2": 0,
+"file": "stream.rs",
+"line": 762,
+"missed_by_c": [
+[
+777,
+49
+],
+[
+801,
+66
+],
+[
+803,
+39
+],
+[
+803,
+44
+],
+[
+803,
+62
+],
+[
+803,
+70
+],
+[
+803,
+77
+],
+[
+804,
+30
+],
+[
+804,
+38
+],
+[
+805,
+40
+],
+[
+812,
+62
+],
+[
+813,
+35
+],
+[
+816,
+57
+],
+[
+818,
+32
+],
+[
+822,
+53
+],
+[
+826,
+49
+],
+[
+838,
+66
+],
+[
+840,
+39
+],
+[
+840,
+44
+],
+[
+840,
+62
+],
+[
+840,
+70
+],
+[
+840,
+77
+],
+[
+841,
+30
+],
+[
+841,
+38
+],
+[
+842,
+40
+],
+[
+847,
+53
+],
+[
+852,
+65
+],
+[
+863,
+47
+]
+],
+"name": "stream_buffer_receive_inner",
+"pub": false,
+"regions": 132,
+"twin": "none"
+},
+{
+"any": 29,
+"c": "xStreamBufferReceiveFromISR",
+"c1": 28,
+"c1_pin": 28,
+"c2": 0,
+"file": "stream.rs",
+"line": 873,
+"missed_by_c": [
+[
+878,
+53
+],
+[
+888,
+65
+],
+[
+891,
+64
+],
+[
+892,
+13
+],
+[
+893,
+9
+]
+],
+"name": "stream_buffer_receive_from_isr",
+"pub": true,
+"regions": 33,
+"twin": "api"
+},
+{
+"any": 29,
+"c": "",
+"c1": 29,
+"c1_pin": 29,
+"c2": 0,
+"file": "stream.rs",
+"line": 911,
+"missed_by_c": [
+[
+916,
+51
+],
+[
+918,
+53
+],
+[
+919,
+71
+],
+[
+920,
+45
+]
+],
+"name": "send_completed",
+"pub": false,
+"regions": 33,
+"twin": "none"
+},
+{
+"any": 24,
+"c": "xStreamBufferSendCompletedFromISR",
+"c1": 24,
+"c1_pin": 24,
+"c2": 0,
+"file": "stream.rs",
+"line": 935,
+"missed_by_c": [
+[
+936,
+51
+],
+[
+940,
+49
+],
+[
+941,
+85
+],
+[
+942,
+41
+]
+],
+"name": "send_completed_from_isr",
+"pub": true,
+"regions": 28,
+"twin": "api"
+},
+{
+"any": 12,
+"c": "sbRECEIVE_COMPLETED",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "stream.rs",
+"line": 947,
+"missed_by_c": [
+[
+949,
+51
+],
+[
+951,
+17
+],
+[
+951,
+25
+],
+[
+951,
+38
+],
+[
+951,
+46
+],
+[
+951,
+53
+],
+[
+952,
+21
+],
+[
+952,
+26
+],
+[
+952,
+33
+],
+[
+952,
+42
+],
+[
+952,
+52
+],
+[
+952,
+71
+],
+[
+953,
+13
+],
+[
+953,
+26
+],
+[
+953,
+38
+],
+[
+953,
+45
+]
+],
+"name": "receive_completed",
+"pub": false,
+"regions": 28,
+"twin": "api"
+},
+{
+"any": 9,
+"c": "sbRECEIVE_COMPLETED_FROM_ISR",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "stream.rs",
+"line": 960,
+"missed_by_c": [
+[
+961,
+51
+],
+[
+964,
+9
+],
+[
+965,
+13
+],
+[
+965,
+21
+],
+[
+965,
+34
+],
+[
+965,
+42
+],
+[
+965,
+49
+],
+[
+966,
+17
+],
+[
+966,
+26
+],
+[
+966,
+31
+],
+[
+966,
+47
+],
+[
+966,
+56
+],
+[
+966,
+66
+],
+[
+966,
+85
+],
+[
+967,
+9
+],
+[
+967,
+22
+],
+[
+967,
+34
+],
+[
+967,
+41
+],
+[
+968,
+9
+]
+],
+"name": "receive_completed_from_isr",
+"pub": false,
+"regions": 28,
+"twin": "state"
+},
+{
+"any": 57,
+"c": "prvWriteMessageToBuffer",
+"c1": 57,
+"c1_pin": 57,
+"c2": 0,
+"file": "stream.rs",
+"line": 974,
+"missed_by_c": [
+[
+991,
+44
+]
+],
+"name": "write_message",
+"pub": false,
+"regions": 58,
+"twin": "state"
+},
+{
+"any": 47,
+"c": "prvReadMessageFromBuffer",
+"c1": 47,
+"c1_pin": 47,
+"c2": 0,
+"file": "stream.rs",
+"line": 1020,
+"missed_by_c": [
+[
+1031,
+44
+],
+[
+1054,
+25
+]
+],
+"name": "read_message",
+"pub": false,
+"regions": 49,
+"twin": "state"
+},
+{
+"any": 56,
+"c": "prvWriteBytesToBuffer",
+"c1": 56,
+"c1_pin": 56,
+"c2": 0,
+"file": "stream.rs",
+"line": 1076,
+"missed_by_c": [
+[
+1094,
+13
+],
+[
+1102,
+17
+],
+[
+1107,
+9
+],
+[
+1108,
+9
+]
+],
+"name": "write_bytes_into",
+"pub": false,
+"regions": 60,
+"twin": "state"
+},
+{
+"any": 56,
+"c": "prvReadBytesFromBuffer",
+"c1": 56,
+"c1_pin": 56,
+"c2": 0,
+"file": "stream.rs",
+"line": 1127,
+"missed_by_c": [
+[
+1143,
+13
+],
+[
+1151,
+17
+],
+[
+1156,
+9
+],
+[
+1157,
+9
+]
+],
+"name": "read_bytes_from",
+"pub": false,
+"regions": 60,
+"twin": "state"
+},
+{
+"any": 20,
+"c": "",
+"c1": 20,
+"c1_pin": 20,
+"c2": 0,
+"file": "stream.rs",
+"line": 1172,
+"missed_by_c": [
+[
+1189,
+21
+]
+],
+"name": "read_length_prefix_from",
+"pub": false,
+"regions": 21,
+"twin": "none"
+},
+{
+"any": 10,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 305,
+"missed_by_c": [
+[
+305,
+17
+],
+[
+312,
+29
+],
+[
+312,
+38
+],
+[
+312,
+86
+],
+[
+312,
+93
+],
+[
+315,
+29
+],
+[
+315,
+37
+],
+[
+315,
+44
+],
+[
+315,
+56
+],
+[
+315,
+81
+],
+[
+317,
+21
+],
+[
+318,
+17
+]
+],
+"name": "build",
+"pub": true,
+"regions": 12,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 392,
+"missed_by_c": [
+[
+392,
+9
+],
+[
+392,
+30
+]
+],
+"name": "yield_now",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 393,
+"missed_by_c": [
+[
+393,
+9
+],
+[
+393,
+50
+]
+],
+"name": "yield_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 394,
+"missed_by_c": [
+[
+394,
+9
+],
+[
+395,
+13
+],
+[
+395,
+26
+],
+[
+395,
+30
+],
+[
+395,
+43
+],
+[
+395,
+49
+],
+[
+396,
+9
+]
+],
+"name": "enter_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 397,
+"missed_by_c": [
+[
+397,
+9
+],
+[
+398,
+13
+],
+[
+398,
+26
+],
+[
+398,
+30
+],
+[
+398,
+43
+],
+[
+398,
+49
+],
+[
+399,
+9
+]
+],
+"name": "exit_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 400,
+"missed_by_c": [
+[
+400,
+9
+],
+[
+401,
+13
+],
+[
+402,
+9
+]
+],
+"name": "set_interrupt_mask_from_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 403,
+"missed_by_c": [
+[
+403,
+9
+],
+[
+403,
+63
+]
+],
+"name": "clear_interrupt_mask_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 404,
+"missed_by_c": [
+[
+404,
+9
+],
+[
+405,
+13
+],
+[
+406,
+9
+]
+],
+"name": "in_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 407,
+"missed_by_c": [
+[
+407,
+9
+],
+[
+407,
+50
+]
+],
+"name": "set_in_tick_entry",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 14,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 409,
+"missed_by_c": [
+[
+409,
+9
+],
+[
+410,
+13
+],
+[
+410,
+25
+],
+[
+410,
+29
+],
+[
+410,
+41
+],
+[
+410,
+47
+],
+[
+411,
+13
+],
+[
+412,
+18
+],
+[
+412,
+22
+],
+[
+412,
+33
+],
+[
+412,
+39
+],
+[
+412,
+54
+],
+[
+413,
+13
+],
+[
+414,
+9
+]
+],
+"name": "suppress_ticks_and_sleep",
+"pub": false,
+"regions": 14,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 425,
+"missed_by_c": [
+[
+425,
+9
+],
+[
+425,
+30
+]
+],
+"name": "yield_now",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 426,
+"missed_by_c": [
+[
+426,
+9
+],
+[
+426,
+50
+]
+],
+"name": "yield_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 427,
+"missed_by_c": [
+[
+427,
+9
+],
+[
+428,
+13
+],
+[
+428,
+26
+],
+[
+428,
+30
+],
+[
+428,
+43
+],
+[
+428,
+49
+],
+[
+429,
+9
+]
+],
+"name": "enter_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 430,
+"missed_by_c": [
+[
+430,
+9
+],
+[
+431,
+13
+],
+[
+431,
+26
+],
+[
+431,
+30
+],
+[
+431,
+43
+],
+[
+431,
+49
+],
+[
+432,
+9
+]
+],
+"name": "exit_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 433,
+"missed_by_c": [
+[
+433,
+9
+],
+[
+434,
+13
+],
+[
+435,
+9
+]
+],
+"name": "set_interrupt_mask_from_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 436,
+"missed_by_c": [
+[
+436,
+9
+],
+[
+436,
+63
+]
+],
+"name": "clear_interrupt_mask_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 437,
+"missed_by_c": [
+[
+437,
+9
+],
+[
+438,
+13
+],
+[
+439,
+9
+]
+],
+"name": "in_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 440,
+"missed_by_c": [
+[
+440,
+9
+],
+[
+440,
+50
+]
+],
+"name": "set_in_tick_entry",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 442,
+"missed_by_c": [
+[
+442,
+9
+],
+[
+443,
+13
+],
+[
+443,
+33
+],
+[
+443,
+51
+],
+[
+444,
+9
+]
+],
+"name": "suppress_ticks_and_sleep",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 453,
+"missed_by_c": [
+[
+453,
+9
+],
+[
+453,
+30
+]
+],
+"name": "yield_now",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 454,
+"missed_by_c": [
+[
+454,
+9
+],
+[
+454,
+50
+]
+],
+"name": "yield_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 455,
+"missed_by_c": [
+[
+455,
+9
+],
+[
+456,
+13
+],
+[
+456,
+26
+],
+[
+456,
+30
+],
+[
+456,
+43
+],
+[
+456,
+49
+],
+[
+457,
+9
+]
+],
+"name": "enter_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 458,
+"missed_by_c": [
+[
+458,
+9
+],
+[
+459,
+13
+],
+[
+459,
+26
+],
+[
+459,
+30
+],
+[
+459,
+43
+],
+[
+459,
+49
+],
+[
+460,
+9
+]
+],
+"name": "exit_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 461,
+"missed_by_c": [
+[
+461,
+9
+],
+[
+462,
+13
+],
+[
+463,
+9
+]
+],
+"name": "set_interrupt_mask_from_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 464,
+"missed_by_c": [
+[
+464,
+9
+],
+[
+464,
+63
+]
+],
+"name": "clear_interrupt_mask_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 465,
+"missed_by_c": [
+[
+465,
+9
+],
+[
+466,
+13
+],
+[
+467,
+9
+]
+],
+"name": "in_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 2,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 468,
+"missed_by_c": [
+[
+468,
+9
+],
+[
+468,
+50
+]
+],
+"name": "set_in_tick_entry",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 493,
+"missed_by_c": [
+[
+493,
+9
+],
+[
+494,
+13
+],
+[
+494,
+25
+],
+[
+494,
+29
+],
+[
+494,
+41
+],
+[
+494,
+47
+],
+[
+495,
+9
+]
+],
+"name": "count_yield",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 496,
+"missed_by_c": [
+[
+496,
+9
+],
+[
+496,
+30
+]
+],
+"name": "yield_now",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 497,
+"missed_by_c": [
+[
+497,
+9
+],
+[
+497,
+50
+]
+],
+"name": "yield_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 498,
+"missed_by_c": [
+[
+498,
+9
+],
+[
+499,
+13
+],
+[
+499,
+26
+],
+[
+499,
+30
+],
+[
+499,
+43
+],
+[
+499,
+49
+],
+[
+500,
+9
+]
+],
+"name": "enter_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 501,
+"missed_by_c": [
+[
+501,
+9
+],
+[
+502,
+13
+],
+[
+502,
+26
+],
+[
+502,
+30
+],
+[
+502,
+43
+],
+[
+502,
+49
+],
+[
+503,
+9
+]
+],
+"name": "exit_critical",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 504,
+"missed_by_c": [
+[
+504,
+9
+],
+[
+505,
+13
+],
+[
+506,
+9
+]
+],
+"name": "set_interrupt_mask_from_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 507,
+"missed_by_c": [
+[
+507,
+9
+],
+[
+507,
+63
+]
+],
+"name": "clear_interrupt_mask_from_isr",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 508,
+"missed_by_c": [
+[
+508,
+9
+],
+[
+509,
+13
+],
+[
+510,
+9
+]
+],
+"name": "in_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 511,
+"missed_by_c": [
+[
+511,
+9
+],
+[
+511,
+50
+]
+],
+"name": "set_in_tick_entry",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 2,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 524,
+"missed_by_c": [
+[
+524,
+9
+],
+[
+524,
+61
+]
+],
+"name": "event",
+"pub": false,
+"regions": 2,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 560,
+"missed_by_c": [
+[
+560,
+9
+],
+[
+561,
+13
+],
+[
+561,
+24
+],
+[
+561,
+29
+],
+[
+561,
+30
+],
+[
+562,
+9
+]
+],
+"name": "event",
+"pub": false,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 22,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 577,
+"missed_by_c": [
+[
+577,
+5
+],
+[
+578,
+13
+],
+[
+578,
+26
+],
+[
+579,
+13
+],
+[
+579,
+21
+],
+[
+579,
+43
+],
+[
+579,
+56
+],
+[
+579,
+63
+],
+[
+581,
+13
+],
+[
+582,
+13
+],
+[
+582,
+65
+],
+[
+582,
+86
+],
+[
+583,
+18
+],
+[
+583,
+25
+],
+[
+584,
+13
+],
+[
+584,
+22
+],
+[
+584,
+43
+],
+[
+584,
+57
+],
+[
+584,
+64
+],
+[
+590,
+9
+],
+[
+594,
+17
+],
+[
+595,
+5
+]
+],
+"name": "both_tickless_declarations_build_what_they_declare",
+"pub": false,
+"regions": 22,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 598,
+"missed_by_c": [
+[
+598,
+5
+],
+[
+599,
+9
+],
+[
+599,
+29
+],
+[
+599,
+52
+],
+[
+599,
+68
+],
+[
+600,
+14
+],
+[
+600,
+21
+],
+[
+601,
+5
+]
+],
+"name": "sleepy_kernel",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 39,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 607,
+"missed_by_c": [
+[
+607,
+5
+],
+[
+608,
+13
+],
+[
+608,
+21
+],
+[
+609,
+9
+],
+[
+609,
+11
+],
+[
+609,
+23
+],
+[
+609,
+36
+],
+[
+609,
+43
+],
+[
+610,
+13
+],
+[
+610,
+23
+],
+[
+610,
+25
+],
+[
+610,
+43
+],
+[
+610,
+50
+],
+[
+617,
+9
+],
+[
+617,
+11
+],
+[
+617,
+19
+],
+[
+618,
+14
+],
+[
+618,
+21
+],
+[
+619,
+9
+],
+[
+619,
+11
+],
+[
+619,
+24
+],
+[
+619,
+31
+],
+[
+621,
+13
+],
+[
+621,
+22
+],
+[
+621,
+24
+],
+[
+622,
+9
+],
+[
+622,
+11
+],
+[
+624,
+9
+],
+[
+624,
+20
+],
+[
+624,
+36
+],
+[
+625,
+9
+],
+[
+626,
+13
+],
+[
+626,
+28
+],
+[
+635,
+9
+],
+[
+636,
+13
+],
+[
+636,
+15
+],
+[
+637,
+13
+],
+[
+637,
+20
+],
+[
+640,
+5
+]
+],
+"name": "a_sleeping_port_is_asked_for_the_whole_idle_window",
+"pub": false,
+"regions": 39,
+"twin": "none"
+},
+{
+"any": 38,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 645,
+"missed_by_c": [
+[
+645,
+5
+],
+[
+646,
+13
+],
+[
+647,
+13
+],
+[
+647,
+67
+],
+[
+647,
+90
+],
+[
+648,
+18
+],
+[
+648,
+25
+],
+[
+649,
+9
+],
+[
+649,
+11
+],
+[
+649,
+23
+],
+[
+649,
+36
+],
+[
+649,
+43
+],
+[
+650,
+13
+],
+[
+650,
+23
+],
+[
+650,
+25
+],
+[
+650,
+43
+],
+[
+650,
+50
+],
+[
+657,
+9
+],
+[
+657,
+11
+],
+[
+657,
+19
+],
+[
+658,
+14
+],
+[
+658,
+21
+],
+[
+659,
+9
+],
+[
+659,
+11
+],
+[
+659,
+24
+],
+[
+659,
+31
+],
+[
+661,
+13
+],
+[
+661,
+22
+],
+[
+661,
+24
+],
+[
+662,
+9
+],
+[
+662,
+11
+],
+[
+664,
+9
+],
+[
+664,
+20
+],
+[
+664,
+36
+],
+[
+665,
+9
+],
+[
+665,
+20
+],
+[
+665,
+22
+],
+[
+666,
+5
+]
+],
+"name": "tickless_off_never_asks_the_port_to_sleep",
+"pub": false,
+"regions": 38,
+"twin": "none"
+},
+{
+"any": 37,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 672,
+"missed_by_c": [
+[
+672,
+5
+],
+[
+673,
+13
+],
+[
+673,
+21
+],
+[
+674,
+13
+],
+[
+675,
+13
+],
+[
+677,
+10
+],
+[
+677,
+17
+],
+[
+678,
+9
+],
+[
+678,
+11
+],
+[
+678,
+23
+],
+[
+678,
+36
+],
+[
+678,
+43
+],
+[
+679,
+13
+],
+[
+679,
+23
+],
+[
+679,
+25
+],
+[
+679,
+43
+],
+[
+679,
+50
+],
+[
+686,
+9
+],
+[
+686,
+11
+],
+[
+686,
+19
+],
+[
+687,
+14
+],
+[
+687,
+21
+],
+[
+688,
+9
+],
+[
+688,
+11
+],
+[
+688,
+24
+],
+[
+688,
+31
+],
+[
+690,
+13
+],
+[
+690,
+22
+],
+[
+690,
+24
+],
+[
+691,
+9
+],
+[
+691,
+11
+],
+[
+697,
+9
+],
+[
+698,
+13
+],
+[
+698,
+15
+],
+[
+699,
+13
+],
+[
+699,
+20
+],
+[
+702,
+5
+]
+],
+"name": "the_kernel_clamps_a_port_that_oversleeps",
+"pub": false,
+"regions": 37,
+"twin": "none"
+},
+{
+"any": 77,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 715,
+"missed_by_c": [
+[
+715,
+5
+],
+[
+716,
+13
+],
+[
+716,
+28
+],
+[
+718,
+13
+],
+[
+718,
+26
+],
+[
+719,
+9
+],
+[
+719,
+16
+],
+[
+719,
+28
+],
+[
+719,
+41
+],
+[
+719,
+48
+],
+[
+720,
+13
+],
+[
+720,
+23
+],
+[
+720,
+30
+],
+[
+720,
+48
+],
+[
+720,
+55
+],
+[
+721,
+9
+],
+[
+722,
+14
+],
+[
+722,
+22
+],
+[
+723,
+14
+],
+[
+723,
+21
+],
+[
+724,
+9
+],
+[
+724,
+16
+],
+[
+724,
+29
+],
+[
+724,
+36
+],
+[
+725,
+9
+],
+[
+725,
+16
+],
+[
+726,
+15
+],
+[
+726,
+15
+],
+[
+727,
+16
+],
+[
+727,
+23
+],
+[
+727,
+40
+],
+[
+729,
+13
+],
+[
+732,
+13
+],
+[
+732,
+27
+],
+[
+733,
+13
+],
+[
+734,
+13
+],
+[
+734,
+29
+],
+[
+736,
+10
+],
+[
+736,
+17
+],
+[
+737,
+9
+],
+[
+737,
+17
+],
+[
+737,
+29
+],
+[
+737,
+42
+],
+[
+737,
+49
+],
+[
+738,
+13
+],
+[
+738,
+23
+],
+[
+738,
+31
+],
+[
+738,
+49
+],
+[
+738,
+56
+],
+[
+739,
+9
+],
+[
+740,
+14
+],
+[
+740,
+22
+],
+[
+741,
+14
+],
+[
+741,
+21
+],
+[
+742,
+9
+],
+[
+742,
+17
+],
+[
+742,
+30
+],
+[
+742,
+37
+],
+[
+743,
+9
+],
+[
+743,
+17
+],
+[
+744,
+15
+],
+[
+744,
+15
+],
+[
+745,
+16
+],
+[
+745,
+24
+],
+[
+745,
+41
+],
+[
+747,
+13
+],
+[
+750,
+9
+],
+[
+751,
+13
+],
+[
+755,
+13
+],
+[
+755,
+30
+],
+[
+755,
+37
+],
+[
+755,
+50
+],
+[
+756,
+13
+],
+[
+756,
+31
+],
+[
+756,
+39
+],
+[
+756,
+52
+],
+[
+758,
+9
+],
+[
+762,
+5
+]
+],
+"name": "the_schedule_is_the_same_with_and_without_tickless",
+"pub": false,
+"regions": 78,
+"twin": "none"
+},
+{
+"any": 120,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 805,
+"missed_by_c": [
+[
+805,
+5
+],
+[
+806,
+13
+],
+[
+807,
+13
+],
+[
+807,
+64
+],
+[
+807,
+85
+],
+[
+808,
+18
+],
+[
+808,
+25
+],
+[
+813,
+13
+],
+[
+813,
+21
+],
+[
+813,
+28
+],
+[
+813,
+34
+],
+[
+813,
+40
+],
+[
+813,
+46
+],
+[
+813,
+52
+],
+[
+813,
+58
+],
+[
+813,
+64
+],
+[
+814,
+13
+],
+[
+814,
+23
+],
+[
+815,
+14
+],
+[
+815,
+20
+],
+[
+815,
+29
+],
+[
+815,
+33
+],
+[
+815,
+44
+],
+[
+815,
+48
+],
+[
+815,
+55
+],
+[
+816,
+21
+],
+[
+816,
+23
+],
+[
+816,
+35
+],
+[
+818,
+13
+],
+[
+818,
+23
+],
+[
+818,
+25
+],
+[
+818,
+43
+],
+[
+818,
+50
+],
+[
+823,
+9
+],
+[
+823,
+11
+],
+[
+823,
+19
+],
+[
+823,
+40
+],
+[
+823,
+47
+],
+[
+834,
+13
+],
+[
+834,
+22
+],
+[
+839,
+13
+],
+[
+839,
+27
+],
+[
+840,
+13
+],
+[
+840,
+21
+],
+[
+841,
+18
+],
+[
+842,
+16
+],
+[
+842,
+16
+],
+[
+843,
+17
+],
+[
+844,
+13
+],
+[
+845,
+17
+],
+[
+845,
+27
+],
+[
+845,
+29
+],
+[
+846,
+25
+],
+[
+846,
+34
+],
+[
+846,
+45
+],
+[
+846,
+58
+],
+[
+846,
+64
+],
+[
+847,
+21
+],
+[
+847,
+41
+],
+[
+847,
+54
+],
+[
+847,
+60
+],
+[
+847,
+67
+],
+[
+848,
+21
+],
+[
+848,
+23
+],
+[
+848,
+29
+],
+[
+848,
+44
+],
+[
+848,
+51
+],
+[
+849,
+21
+],
+[
+849,
+21
+],
+[
+851,
+17
+],
+[
+852,
+13
+],
+[
+853,
+13
+],
+[
+853,
+15
+],
+[
+855,
+9
+],
+[
+855,
+23
+],
+[
+855,
+27
+],
+[
+857,
+14
+],
+[
+857,
+17
+],
+[
+857,
+26
+],
+[
+857,
+30
+],
+[
+857,
+37
+],
+[
+858,
+13
+],
+[
+859,
+17
+],
+[
+859,
+19
+],
+[
+859,
+34
+],
+[
+859,
+41
+],
+[
+859,
+48
+],
+[
+866,
+13
+],
+[
+866,
+24
+],
+[
+867,
+13
+],
+[
+867,
+21
+],
+[
+868,
+13
+],
+[
+868,
+26
+],
+[
+869,
+18
+],
+[
+870,
+13
+],
+[
+870,
+15
+],
+[
+871,
+18
+],
+[
+871,
+21
+],
+[
+871,
+30
+],
+[
+871,
+34
+],
+[
+871,
+41
+],
+[
+872,
+20
+],
+[
+873,
+24
+],
+[
+873,
+24
+],
+[
+873,
+26
+],
+[
+873,
+41
+],
+[
+874,
+17
+],
+[
+875,
+21
+],
+[
+876,
+21
+],
+[
+878,
+17
+],
+[
+881,
+9
+],
+[
+881,
+23
+],
+[
+881,
+27
+],
+[
+885,
+13
+],
+[
+885,
+24
+],
+[
+886,
+9
+],
+[
+886,
+14
+],
+[
+887,
+13
+],
+[
+887,
+20
+],
+[
+887,
+25
+],
+[
+888,
+9
+],
+[
+892,
+5
+]
+],
+"name": "ten_blocked_tasks_wake_in_wake_time_order",
+"pub": false,
+"regions": 122,
+"twin": "none"
+},
+{
+"any": 45,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 929,
+"missed_by_c": [
+[
+929,
+5
+],
+[
+930,
+13
+],
+[
+930,
+21
+],
+[
+930,
+41
+],
+[
+930,
+66
+],
+[
+931,
+14
+],
+[
+931,
+21
+],
+[
+932,
+13
+],
+[
+932,
+19
+],
+[
+932,
+21
+],
+[
+932,
+33
+],
+[
+932,
+43
+],
+[
+932,
+50
+],
+[
+933,
+9
+],
+[
+933,
+11
+],
+[
+933,
+29
+],
+[
+933,
+36
+],
+[
+934,
+9
+],
+[
+934,
+20
+],
+[
+934,
+22
+],
+[
+937,
+13
+],
+[
+937,
+22
+],
+[
+937,
+38
+],
+[
+938,
+13
+],
+[
+938,
+20
+],
+[
+938,
+22
+],
+[
+938,
+34
+],
+[
+938,
+44
+],
+[
+938,
+51
+],
+[
+939,
+9
+],
+[
+940,
+13
+],
+[
+940,
+29
+],
+[
+946,
+13
+],
+[
+946,
+22
+],
+[
+946,
+38
+],
+[
+947,
+13
+],
+[
+947,
+21
+],
+[
+947,
+23
+],
+[
+947,
+35
+],
+[
+947,
+46
+],
+[
+947,
+53
+],
+[
+948,
+9
+],
+[
+949,
+13
+],
+[
+949,
+13
+],
+[
+952,
+5
+]
+],
+"name": "creating_a_higher_priority_task_asks_for_a_switch_and_a_lower_one_does_not",
+"pub": false,
+"regions": 45,
+"twin": "none"
+},
+{
+"any": 38,
+"c": "xStreamBufferSetTriggerLevel",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 996,
+"missed_by_c": [
+[
+996,
+5
+],
+[
+997,
+13
+],
+[
+998,
+13
+],
+[
+998,
+31
+],
+[
+998,
+52
+],
+[
+998,
+61
+],
+[
+998,
+68
+],
+[
+1002,
+13
+],
+[
+1002,
+21
+],
+[
+1002,
+23
+],
+[
+1002,
+50
+],
+[
+1002,
+57
+],
+[
+1003,
+9
+],
+[
+1004,
+13
+],
+[
+1004,
+15
+],
+[
+1004,
+47
+],
+[
+1008,
+9
+],
+[
+1009,
+13
+],
+[
+1009,
+15
+],
+[
+1009,
+47
+],
+[
+1014,
+13
+],
+[
+1014,
+20
+],
+[
+1014,
+22
+],
+[
+1014,
+49
+],
+[
+1014,
+56
+],
+[
+1015,
+9
+],
+[
+1015,
+20
+],
+[
+1015,
+22
+],
+[
+1015,
+54
+],
+[
+1016,
+9
+],
+[
+1017,
+13
+],
+[
+1017,
+15
+],
+[
+1017,
+47
+],
+[
+1021,
+9
+],
+[
+1022,
+13
+],
+[
+1022,
+15
+],
+[
+1022,
+47
+],
+[
+1026,
+5
+]
+],
+"name": "the_trigger_level_contract",
+"pub": false,
+"regions": 38,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1028,
+"missed_by_c": [
+[
+1028,
+5
+],
+[
+1029,
+9
+],
+[
+1029,
+16
+],
+[
+1029,
+37
+],
+[
+1029,
+46
+],
+[
+1029,
+53
+],
+[
+1030,
+5
+]
+],
+"name": "kernel",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 39,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1114,
+"missed_by_c": [
+[
+1114,
+5
+],
+[
+1115,
+13
+],
+[
+1116,
+13
+],
+[
+1116,
+30
+],
+[
+1116,
+51
+],
+[
+1116,
+60
+],
+[
+1116,
+67
+],
+[
+1117,
+13
+],
+[
+1117,
+17
+],
+[
+1117,
+19
+],
+[
+1117,
+31
+],
+[
+1117,
+39
+],
+[
+1117,
+46
+],
+[
+1118,
+13
+],
+[
+1118,
+17
+],
+[
+1118,
+19
+],
+[
+1118,
+31
+],
+[
+1118,
+39
+],
+[
+1118,
+46
+],
+[
+1119,
+9
+],
+[
+1119,
+11
+],
+[
+1119,
+29
+],
+[
+1119,
+36
+],
+[
+1121,
+14
+],
+[
+1121,
+25
+],
+[
+1121,
+38
+],
+[
+1122,
+18
+],
+[
+1123,
+16
+],
+[
+1123,
+18
+],
+[
+1123,
+35
+],
+[
+1125,
+13
+],
+[
+1126,
+17
+],
+[
+1126,
+23
+],
+[
+1126,
+25
+],
+[
+1127,
+16
+],
+[
+1127,
+25
+],
+[
+1129,
+23
+],
+[
+1129,
+32
+],
+[
+1131,
+13
+],
+[
+1133,
+9
+],
+[
+1134,
+5
+]
+],
+"name": "turns_over",
+"pub": false,
+"regions": 41,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1153,
+"missed_by_c": [
+[
+1153,
+5
+],
+[
+1154,
+14
+],
+[
+1154,
+17
+],
+[
+1154,
+22
+],
+[
+1155,
+9
+],
+[
+1155,
+17
+],
+[
+1156,
+9
+],
+[
+1156,
+17
+],
+[
+1157,
+5
+]
+],
+"name": "two_ready_tasks_of_equal_priority_take_turns",
+"pub": false,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 54,
+"c": "queueYIELD_IF_USING_PREEMPTION",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1178,
+"missed_by_c": [
+[
+1178,
+5
+],
+[
+1179,
+13
+],
+[
+1179,
+21
+],
+[
+1179,
+41
+],
+[
+1179,
+66
+],
+[
+1180,
+14
+],
+[
+1180,
+21
+],
+[
+1181,
+13
+],
+[
+1181,
+18
+],
+[
+1181,
+20
+],
+[
+1181,
+32
+],
+[
+1181,
+41
+],
+[
+1181,
+48
+],
+[
+1182,
+13
+],
+[
+1182,
+18
+],
+[
+1182,
+20
+],
+[
+1182,
+32
+],
+[
+1182,
+41
+],
+[
+1182,
+48
+],
+[
+1183,
+13
+],
+[
+1183,
+17
+],
+[
+1183,
+19
+],
+[
+1183,
+35
+],
+[
+1183,
+42
+],
+[
+1184,
+9
+],
+[
+1184,
+11
+],
+[
+1184,
+29
+],
+[
+1184,
+36
+],
+[
+1188,
+9
+],
+[
+1188,
+20
+],
+[
+1188,
+22
+],
+[
+1189,
+9
+],
+[
+1190,
+13
+],
+[
+1190,
+22
+],
+[
+1190,
+24
+],
+[
+1190,
+38
+],
+[
+1193,
+9
+],
+[
+1193,
+11
+],
+[
+1194,
+9
+],
+[
+1194,
+20
+],
+[
+1194,
+22
+],
+[
+1197,
+13
+],
+[
+1197,
+22
+],
+[
+1197,
+38
+],
+[
+1198,
+9
+],
+[
+1198,
+17
+],
+[
+1199,
+13
+],
+[
+1199,
+15
+],
+[
+1199,
+26
+],
+[
+1202,
+13
+],
+[
+1202,
+21
+],
+[
+1202,
+37
+],
+[
+1202,
+43
+],
+[
+1202,
+58
+],
+[
+1203,
+9
+],
+[
+1207,
+5
+]
+],
+"name": "a_send_that_wakes_a_higher_priority_receiver_asks_for_a_switch",
+"pub": false,
+"regions": 56,
+"twin": "state"
+},
+{
+"any": 45,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1218,
+"missed_by_c": [
+[
+1218,
+5
+],
+[
+1219,
+13
+],
+[
+1219,
+21
+],
+[
+1219,
+41
+],
+[
+1219,
+66
+],
+[
+1220,
+14
+],
+[
+1220,
+21
+],
+[
+1221,
+13
+],
+[
+1221,
+19
+],
+[
+1221,
+21
+],
+[
+1221,
+33
+],
+[
+1221,
+42
+],
+[
+1221,
+49
+],
+[
+1222,
+13
+],
+[
+1222,
+19
+],
+[
+1222,
+21
+],
+[
+1222,
+33
+],
+[
+1222,
+42
+],
+[
+1222,
+49
+],
+[
+1223,
+13
+],
+[
+1223,
+17
+],
+[
+1223,
+19
+],
+[
+1223,
+35
+],
+[
+1223,
+42
+],
+[
+1224,
+9
+],
+[
+1224,
+11
+],
+[
+1224,
+29
+],
+[
+1224,
+36
+],
+[
+1231,
+9
+],
+[
+1232,
+13
+],
+[
+1233,
+17
+],
+[
+1233,
+19
+],
+[
+1233,
+33
+],
+[
+1238,
+9
+],
+[
+1238,
+11
+],
+[
+1240,
+13
+],
+[
+1240,
+22
+],
+[
+1240,
+38
+],
+[
+1241,
+9
+],
+[
+1241,
+17
+],
+[
+1242,
+13
+],
+[
+1242,
+15
+],
+[
+1242,
+26
+],
+[
+1245,
+9
+],
+[
+1246,
+13
+],
+[
+1246,
+29
+],
+[
+1250,
+5
+]
+],
+"name": "a_send_asks_for_nothing_when_the_higher_priority_task_never_waited",
+"pub": false,
+"regions": 47,
+"twin": "none"
+},
+{
+"any": 15,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1253,
+"missed_by_c": [
+[
+1253,
+5
+],
+[
+1254,
+14
+],
+[
+1254,
+17
+],
+[
+1254,
+22
+],
+[
+1258,
+14
+],
+[
+1258,
+18
+],
+[
+1258,
+24
+],
+[
+1258,
+25
+],
+[
+1258,
+27
+],
+[
+1258,
+31
+],
+[
+1258,
+35
+],
+[
+1259,
+9
+],
+[
+1260,
+13
+],
+[
+1260,
+13
+],
+[
+1263,
+5
+]
+],
+"name": "neither_equal_priority_task_starves_the_other",
+"pub": false,
+"regions": 15,
+"twin": "none"
+},
+{
+"any": 13,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1271,
+"missed_by_c": [
+[
+1271,
+5
+],
+[
+1272,
+9
+],
+[
+1273,
+9
+],
+[
+1274,
+9
+],
+[
+1275,
+9
+],
+[
+1279,
+9
+],
+[
+1284,
+9
+],
+[
+1286,
+13
+],
+[
+1291,
+9
+],
+[
+1292,
+13
+],
+[
+1296,
+9
+],
+[
+1298,
+13
+],
+[
+1301,
+5
+]
+],
+"name": "the_geometry_is_derived_from_the_declaration",
+"pub": false,
+"regions": 13,
+"twin": "none"
+},
+{
+"any": 17,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1307,
+"missed_by_c": [
+[
+1307,
+5
+],
+[
+1308,
+13
+],
+[
+1308,
+21
+],
+[
+1309,
+13
+],
+[
+1309,
+22
+],
+[
+1309,
+42
+],
+[
+1309,
+50
+],
+[
+1309,
+57
+],
+[
+1311,
+9
+],
+[
+1311,
+17
+],
+[
+1312,
+9
+],
+[
+1312,
+17
+],
+[
+1313,
+9
+],
+[
+1314,
+9
+],
+[
+1314,
+20
+],
+[
+1314,
+22
+],
+[
+1315,
+5
+]
+],
+"name": "a_declared_system_builds_and_the_kernel_accepts_its_geometry",
+"pub": false,
+"regions": 17,
+"twin": "none"
+},
+{
+"any": 23,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1319,
+"missed_by_c": [
+[
+1319,
+5
+],
+[
+1320,
+13
+],
+[
+1320,
+21
+],
+[
+1321,
+13
+],
+[
+1321,
+26
+],
+[
+1321,
+46
+],
+[
+1321,
+54
+],
+[
+1321,
+61
+],
+[
+1322,
+9
+],
+[
+1322,
+17
+],
+[
+1322,
+26
+],
+[
+1322,
+26
+],
+[
+1323,
+9
+],
+[
+1323,
+17
+],
+[
+1323,
+26
+],
+[
+1323,
+26
+],
+[
+1324,
+9
+],
+[
+1324,
+20
+],
+[
+1324,
+32
+],
+[
+1324,
+36
+],
+[
+1325,
+9
+],
+[
+1325,
+20
+],
+[
+1325,
+33
+],
+[
+1325,
+37
+],
+[
+1326,
+5
+]
+],
+"name": "the_declared_queues_move_their_own_type",
+"pub": false,
+"regions": 25,
+"twin": "none"
+},
+{
+"any": 12,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1341,
+"missed_by_c": [
+[
+1341,
+5
+],
+[
+1361,
+13
+],
+[
+1361,
+24
+],
+[
+1362,
+13
+],
+[
+1362,
+23
+],
+[
+1364,
+13
+],
+[
+1364,
+21
+],
+[
+1365,
+9
+],
+[
+1366,
+9
+],
+[
+1367,
+13
+],
+[
+1372,
+9
+],
+[
+1376,
+5
+]
+],
+"name": "a_declared_kernel_is_sized_for_what_was_declared",
+"pub": false,
+"regions": 12,
+"twin": "none"
+},
+{
+"any": 28,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "system.rs",
+"line": 1385,
+"missed_by_c": [
+[
+1385,
+5
+],
+[
+1386,
+13
+],
+[
+1386,
+21
+],
+[
+1387,
+13
+],
+[
+1387,
+26
+],
+[
+1387,
+46
+],
+[
+1387,
+54
+],
+[
+1387,
+61
+],
+[
+1388,
+13
+],
+[
+1388,
+18
+],
+[
+1389,
+13
+],
+[
+1390,
+17
+],
+[
+1390,
+26
+],
+[
+1390,
+26
+],
+[
+1390,
+38
+],
+[
+1394,
+13
+],
+[
+1394,
+18
+],
+[
+1395,
+13
+],
+[
+1396,
+17
+],
+[
+1396,
+26
+],
+[
+1396,
+26
+],
+[
+1396,
+39
+],
+[
+1401,
+9
+],
+[
+1401,
+17
+],
+[
+1401,
+26
+],
+[
+1401,
+26
+],
+[
+1402,
+9
+],
+[
+1402,
+17
+],
+[
+1402,
+26
+],
+[
+1402,
+26
+],
+[
+1403,
+9
+],
+[
+1404,
+5
+]
+],
+"name": "every_declared_slot_is_usable_and_there_is_not_one_spare",
+"pub": false,
+"regions": 32,
+"twin": "none"
+},
+{
+"any": 14,
+"c": "",
+"c1": 14,
+"c1_pin": 13,
+"c2": 0,
+"file": "timer.rs",
+"line": 85,
+"missed_by_c": [],
+"name": "id",
+"pub": true,
+"regions": 14,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "timer.rs",
+"line": 102,
+"missed_by_c": [],
+"name": "is_from_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 0,
+"file": "timer.rs",
+"line": 106,
+"missed_by_c": [],
+"name": "is_start_or_reset",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 0,
+"file": "timer.rs",
+"line": 113,
+"missed_by_c": [],
+"name": "is_stop",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 4,
+"c1_pin": 4,
+"c2": 0,
+"file": "timer.rs",
+"line": 117,
+"missed_by_c": [],
+"name": "is_change_period",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "timer.rs",
+"line": 139,
+"missed_by_c": [],
+"name": "default",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "timer.rs",
+"line": 201,
+"missed_by_c": [],
+"name": "new",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 3,
+"c1_pin": 3,
+"c2": 0,
+"file": "timer.rs",
+"line": 206,
+"missed_by_c": [],
+"name": "get",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "pxCurrentTimerList",
+"c1": 8,
+"c1_pin": 8,
+"c2": 8,
+"file": "timer.rs",
+"line": 246,
+"missed_by_c": [],
+"name": "timer_list",
+"pub": false,
+"regions": 8,
+"twin": "state"
+},
+{
+"any": 8,
+"c": "",
+"c1": 8,
+"c1_pin": 8,
+"c2": 8,
+"file": "timer.rs",
+"line": 251,
+"missed_by_c": [],
+"name": "overflow_timer_list",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "timer.rs",
+"line": 258,
+"missed_by_c": [],
+"name": "timer_item",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 44,
+"c": "xTimerCreate",
+"c1": 41,
+"c1_pin": 41,
+"c2": 0,
+"file": "timer.rs",
+"line": 272,
+"missed_by_c": [
+[
+281,
+20
+],
+[
+299,
+38
+],
+[
+301,
+46
+],
+[
+315,
+13
+],
+[
+322,
+66
+]
+],
+"name": "timer_create",
+"pub": true,
+"regions": 46,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "",
+"c1": 15,
+"c1_pin": 15,
+"c2": 14,
+"file": "timer.rs",
+"line": 350,
+"missed_by_c": [
+[
+358,
+21
+],
+[
+358,
+27
+]
+],
+"name": "check_for_valid_list_and_queue",
+"pub": false,
+"regions": 17,
+"twin": "none"
+},
+{
+"any": 14,
+"c": "pvTimerGetTimerID",
+"c1": 14,
+"c1_pin": 14,
+"c2": 0,
+"file": "timer.rs",
+"line": 371,
+"missed_by_c": [],
+"name": "timer_id",
+"pub": true,
+"regions": 14,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "vTimerSetTimerID",
+"c1": 15,
+"c1_pin": 0,
+"c2": 0,
+"file": "timer.rs",
+"line": 383,
+"missed_by_c": [],
+"name": "timer_set_id",
+"pub": true,
+"regions": 15,
+"twin": "api"
+},
+{
+"any": 8,
+"c": "xTimerGetPeriod",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "timer.rs",
+"line": 396,
+"missed_by_c": [],
+"name": "timer_period",
+"pub": true,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 13,
+"c": "xTimerIsTimerActive",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "timer.rs",
+"line": 404,
+"missed_by_c": [],
+"name": "timer_is_active",
+"pub": true,
+"regions": 13,
+"twin": "api"
+},
+{
+"any": 10,
+"c": "xTimerGetExpiryTime",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "timer.rs",
+"line": 418,
+"missed_by_c": [
+[
+419,
+35
+]
+],
+"name": "timer_expiry_time",
+"pub": true,
+"regions": 10,
+"twin": "api"
+},
+{
+"any": 13,
+"c": "xTimerGetReloadMode",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "timer.rs",
+"line": 427,
+"missed_by_c": [],
+"name": "timer_auto_reload",
+"pub": true,
+"regions": 13,
+"twin": "api"
+},
+{
+"any": 17,
+"c": "vTimerSetReloadMode",
+"c1": 17,
+"c1_pin": 17,
+"c2": 0,
+"file": "timer.rs",
+"line": 441,
+"missed_by_c": [],
+"name": "timer_set_auto_reload",
+"pub": true,
+"regions": 17,
+"twin": "api"
+},
+{
+"any": 39,
+"c": "xTimerGenericCommandFromTask",
+"c1": 36,
+"c1_pin": 36,
+"c2": 0,
+"file": "timer.rs",
+"line": 460,
+"missed_by_c": [
+[
+475,
+13
+],
+[
+475,
+18
+],
+[
+475,
+37
+],
+[
+475,
+44
+],
+[
+475,
+53
+],
+[
+476,
+20
+],
+[
+491,
+34
+],
+[
+500,
+17
+],
+[
+500,
+23
+]
+],
+"name": "timer_command",
+"pub": true,
+"regions": 45,
+"twin": "api"
+},
+{
+"any": 10,
+"c": "xTimerStart",
+"c1": 10,
+"c1_pin": 10,
+"c2": 0,
+"file": "timer.rs",
+"line": 508,
+"missed_by_c": [],
+"name": "timer_start",
+"pub": true,
+"regions": 10,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "xTimerStop",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "timer.rs",
+"line": 517,
+"missed_by_c": [],
+"name": "timer_stop",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 10,
+"c": "xTimerReset",
+"c1": 10,
+"c1_pin": 0,
+"c2": 0,
+"file": "timer.rs",
+"line": 525,
+"missed_by_c": [],
+"name": "timer_reset",
+"pub": true,
+"regions": 10,
+"twin": "api"
+},
+{
+"any": 11,
+"c": "xTimerChangePeriod",
+"c1": 10,
+"c1_pin": 10,
+"c2": 0,
+"file": "timer.rs",
+"line": 540,
+"missed_by_c": [
+[
+547,
+20
+]
+],
+"name": "timer_change_period",
+"pub": true,
+"regions": 11,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "xTimerDelete",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "timer.rs",
+"line": 556,
+"missed_by_c": [],
+"name": "timer_delete",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 10,
+"c": "xTimerStartFromISR",
+"c1": 10,
+"c1_pin": 10,
+"c2": 0,
+"file": "timer.rs",
+"line": 564,
+"missed_by_c": [],
+"name": "timer_start_from_isr",
+"pub": true,
+"regions": 10,
+"twin": "api"
+},
+{
+"any": 6,
+"c": "xTimerStopFromISR",
+"c1": 6,
+"c1_pin": 6,
+"c2": 0,
+"file": "timer.rs",
+"line": 573,
+"missed_by_c": [],
+"name": "timer_stop_from_isr",
+"pub": true,
+"regions": 6,
+"twin": "api"
+},
+{
+"any": 10,
+"c": "xTimerResetFromISR",
+"c1": 10,
+"c1_pin": 10,
+"c2": 0,
+"file": "timer.rs",
+"line": 581,
+"missed_by_c": [],
+"name": "timer_reset_from_isr",
+"pub": true,
+"regions": 10,
+"twin": "api"
+},
+{
+"any": 7,
+"c": "xTimerChangePeriodFromISR",
+"c1": 7,
+"c1_pin": 7,
+"c2": 0,
+"file": "timer.rs",
+"line": 590,
+"missed_by_c": [],
+"name": "timer_change_period_from_isr",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 22,
+"c": "xTimerGenericCommandFromISR",
+"c1": 22,
+"c1_pin": 22,
+"c2": 0,
+"file": "timer.rs",
+"line": 610,
+"missed_by_c": [
+[
+617,
+13
+],
+[
+617,
+18
+],
+[
+617,
+37
+],
+[
+617,
+44
+],
+[
+617,
+53
+],
+[
+618,
+20
+],
+[
+626,
+68
+]
+],
+"name": "timer_command_from_isr",
+"pub": true,
+"regions": 29,
+"twin": "api"
+},
+{
+"any": 10,
+"c": "xTimerPendFunctionCall",
+"c1": 10,
+"c1_pin": 10,
+"c2": 0,
+"file": "timer.rs",
+"line": 635,
+"missed_by_c": [],
+"name": "timer_pend_function_call",
+"pub": true,
+"regions": 10,
+"twin": "api"
+},
+{
+"any": 9,
+"c": "xTimerPendFunctionCallFromISR",
+"c1": 9,
+"c1_pin": 9,
+"c2": 0,
+"file": "timer.rs",
+"line": 662,
+"missed_by_c": [],
+"name": "timer_pend_function_call_from_isr",
+"pub": true,
+"regions": 9,
+"twin": "api"
+},
+{
+"any": 26,
+"c": "",
+"c1": 24,
+"c1_pin": 24,
+"c2": 0,
+"file": "timer.rs",
+"line": 678,
+"missed_by_c": [
+[
+684,
+13
+],
+[
+695,
+13
+],
+[
+704,
+66
+]
+],
+"name": "trace_command_send",
+"pub": false,
+"regions": 27,
+"twin": "none"
+},
+{
+"any": 19,
+"c": "",
+"c1": 18,
+"c1_pin": 18,
+"c2": 0,
+"file": "timer.rs",
+"line": 713,
+"missed_by_c": [
+[
+725,
+13
+],
+[
+735,
+13
+]
+],
+"name": "trace_command_send_for",
+"pub": false,
+"regions": 20,
+"twin": "none"
+},
+{
+"any": 17,
+"c": "",
+"c1": 16,
+"c1_pin": 16,
+"c2": 0,
+"file": "timer.rs",
+"line": 749,
+"missed_by_c": [
+[
+752,
+30
+]
+],
+"name": "post_timer_message",
+"pub": false,
+"regions": 17,
+"twin": "none"
+},
+{
+"any": 15,
+"c": "",
+"c1": 14,
+"c1_pin": 14,
+"c2": 0,
+"file": "timer.rs",
+"line": 760,
+"missed_by_c": [
+[
+767,
+33
+],
+[
+768,
+17
+],
+[
+768,
+23
+]
+],
+"name": "post_timer_message_from_isr",
+"pub": false,
+"regions": 17,
+"twin": "none"
+},
+{
+"any": 12,
+"c": "",
+"c1": 12,
+"c1_pin": 12,
+"c2": 0,
+"file": "timer.rs",
+"line": 783,
+"missed_by_c": [
+[
+788,
+13
+]
+],
+"name": "stage_timer_message",
+"pub": false,
+"regions": 13,
+"twin": "none"
+},
+{
+"any": 5,
+"c": "",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "timer.rs",
+"line": 795,
+"missed_by_c": [],
+"name": "commit_timer_message",
+"pub": false,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 8,
+"c": "uxQueueSpacesAvailable",
+"c1": 8,
+"c1_pin": 8,
+"c2": 0,
+"file": "timer.rs",
+"line": 806,
+"missed_by_c": [],
+"name": "timer_queue_has_room",
+"pub": false,
+"regions": 8,
+"twin": "api"
+},
+{
+"any": 15,
+"c": "prvGetNextExpireTime",
+"c1": 15,
+"c1_pin": 15,
+"c2": 12,
+"file": "timer.rs",
+"line": 816,
+"missed_by_c": [],
+"name": "timer_next_expire",
+"pub": true,
+"regions": 15,
+"twin": "state"
+},
+{
+"any": 7,
+"c": "",
+"c1": 7,
+"c1_pin": 7,
+"c2": 7,
+"file": "timer.rs",
+"line": 829,
+"missed_by_c": [],
+"name": "overflow_timer_list_is_empty",
+"pub": true,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 10,
+"c": "prvSampleTimeNow",
+"c1": 10,
+"c1_pin": 10,
+"c2": 10,
+"file": "timer.rs",
+"line": 840,
+"missed_by_c": [
+[
+844,
+13
+],
+[
+844,
+18
+],
+[
+844,
+38
+]
+],
+"name": "timer_sample_time_now",
+"pub": true,
+"regions": 13,
+"twin": "state"
+},
+{
+"any": 0,
+"c": "prvSwitchTimerLists",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "timer.rs",
+"line": 852,
+"missed_by_c": [
+[
+852,
+5
+],
+[
+853,
+15
+],
+[
+853,
+16
+],
+[
+853,
+27
+],
+[
+854,
+17
+],
+[
+854,
+24
+],
+[
+854,
+35
+],
+[
+854,
+46
+],
+[
+854,
+51
+],
+[
+854,
+65
+],
+[
+855,
+13
+],
+[
+855,
+18
+],
+[
+855,
+40
+],
+[
+855,
+62
+],
+[
+857,
+9
+],
+[
+858,
+9
+],
+[
+859,
+5
+]
+],
+"name": "switch_timer_lists",
+"pub": false,
+"regions": 17,
+"twin": "state"
+},
+{
+"any": 35,
+"c": "prvProcessExpiredTimer",
+"c1": 35,
+"c1_pin": 35,
+"c2": 0,
+"file": "timer.rs",
+"line": 866,
+"missed_by_c": [
+[
+869,
+20
+],
+[
+877,
+20
+],
+[
+885,
+53
+],
+[
+888,
+9
+]
+],
+"name": "process_expired_timer",
+"pub": true,
+"regions": 39,
+"twin": "state"
+},
+{
+"any": 28,
+"c": "prvReloadTimer",
+"c1": 23,
+"c1_pin": 23,
+"c2": 0,
+"file": "timer.rs",
+"line": 895,
+"missed_by_c": [
+[
+908,
+79
+],
+[
+910,
+13
+],
+[
+911,
+13
+],
+[
+912,
+13
+],
+[
+912,
+18
+],
+[
+912,
+29
+]
+],
+"name": "reload_timer",
+"pub": false,
+"regions": 29,
+"twin": "state"
+},
+{
+"any": 25,
+"c": "",
+"c1": 25,
+"c1_pin": 25,
+"c2": 0,
+"file": "timer.rs",
+"line": 917,
+"missed_by_c": [
+[
+920,
+23
+]
+],
+"name": "fire_timer",
+"pub": false,
+"regions": 26,
+"twin": "none"
+},
+{
+"any": 34,
+"c": "prvInsertTimerInActiveList",
+"c1": 31,
+"c1_pin": 31,
+"c2": 0,
+"file": "timer.rs",
+"line": 939,
+"missed_by_c": [
+[
+952,
+43
+],
+[
+959,
+16
+],
+[
+959,
+16
+],
+[
+960,
+24
+],
+[
+961,
+13
+],
+[
+962,
+17
+],
+[
+962,
+24
+],
+[
+962,
+29
+],
+[
+963,
+13
+],
+[
+963,
+24
+],
+[
+963,
+31
+],
+[
+963,
+37
+],
+[
+963,
+43
+],
+[
+963,
+50
+],
+[
+965,
+38
+],
+[
+966,
+24
+],
+[
+969,
+50
+]
+],
+"name": "insert_timer_in_active_list",
+"pub": true,
+"regions": 48,
+"twin": "state"
+},
+{
+"any": 119,
+"c": "prvProcessReceivedCommands",
+"c1": 98,
+"c1_pin": 98,
+"c2": 0,
+"file": "timer.rs",
+"line": 1004,
+"missed_by_c": [
+[
+1007,
+41
+],
+[
+1024,
+20
+],
+[
+1033,
+60
+],
+[
+1038,
+13
+],
+[
+1045,
+83
+],
+[
+1046,
+21
+],
+[
+1046,
+28
+],
+[
+1048,
+22
+],
+[
+1048,
+30
+],
+[
+1049,
+22
+],
+[
+1049,
+30
+],
+[
+1050,
+22
+],
+[
+1051,
+20
+],
+[
+1052,
+21
+],
+[
+1052,
+26
+],
+[
+1052,
+39
+],
+[
+1052,
+46
+],
+[
+1052,
+54
+],
+[
+1052,
+58
+],
+[
+1053,
+34
+],
+[
+1053,
+39
+],
+[
+1053,
+39
+],
+[
+1053,
+70
+],
+[
+1055,
+17
+],
+[
+1056,
+17
+],
+[
+1056,
+22
+],
+[
+1056,
+33
+],
+[
+1061,
+13
+],
+[
+1066,
+13
+],
+[
+1073,
+78
+],
+[
+1091,
+9
+]
+],
+"name": "process_one_timer_command",
+"pub": true,
+"regions": 129,
+"twin": "state"
+},
+{
+"any": 11,
+"c": "",
+"c1": 11,
+"c1_pin": 11,
+"c2": 0,
+"file": "timer.rs",
+"line": 1096,
+"missed_by_c": [
+[
+1098,
+43
+]
+],
+"name": "timer_of_item",
+"pub": false,
+"regions": 12,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 254,
+"missed_by_c": [
+[
+254,
+5
+],
+[
+255,
+12
+],
+[
+256,
+20
+],
+[
+257,
+9
+],
+[
+258,
+9
+],
+[
+259,
+5
+]
+],
+"name": "with",
+"pub": true,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 283,
+"missed_by_c": [
+[
+283,
+5
+],
+[
+284,
+9
+],
+[
+284,
+18
+],
+[
+284,
+24
+],
+[
+285,
+5
+]
+],
+"name": "is_ok",
+"pub": true,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 289,
+"missed_by_c": [
+[
+289,
+5
+],
+[
+290,
+15
+],
+[
+291,
+13
+],
+[
+291,
+25
+],
+[
+292,
+13
+],
+[
+292,
+33
+],
+[
+292,
+57
+],
+[
+294,
+5
+]
+],
+"name": "into_value",
+"pub": true,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "xSemaphoreCreateMutex",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 401,
+"missed_by_c": [
+[
+401,
+5
+],
+[
+403,
+21
+],
+[
+403,
+28
+],
+[
+403,
+46
+],
+[
+404,
+20
+],
+[
+404,
+33
+],
+[
+406,
+5
+]
+],
+"name": "new",
+"pub": true,
+"regions": 7,
+"twin": "api"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 411,
+"missed_by_c": [
+[
+411,
+5
+],
+[
+412,
+9
+],
+[
+413,
+5
+]
+],
+"name": "handle",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 19,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 420,
+"missed_by_c": [
+[
+420,
+5
+],
+[
+426,
+13
+],
+[
+427,
+13
+],
+[
+427,
+20
+],
+[
+427,
+35
+],
+[
+427,
+48
+],
+[
+430,
+20
+],
+[
+431,
+9
+],
+[
+435,
+13
+],
+[
+435,
+22
+],
+[
+437,
+14
+],
+[
+438,
+14
+],
+[
+439,
+14
+],
+[
+439,
+30
+],
+[
+439,
+32
+],
+[
+440,
+17
+],
+[
+440,
+17
+],
+[
+441,
+9
+],
+[
+442,
+5
+]
+],
+"name": "with",
+"pub": true,
+"regions": 19,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 461,
+"missed_by_c": [
+[
+461,
+5
+],
+[
+462,
+9
+],
+[
+462,
+18
+],
+[
+462,
+24
+],
+[
+463,
+5
+]
+],
+"name": "is_ok",
+"pub": true,
+"regions": 5,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 466,
+"missed_by_c": [
+[
+466,
+5
+],
+[
+467,
+15
+],
+[
+468,
+13
+],
+[
+468,
+32
+],
+[
+469,
+13
+],
+[
+469,
+30
+],
+[
+471,
+5
+]
+],
+"name": "woken",
+"pub": true,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "xQueueCreate",
+"c1": 4,
+"c1_pin": 4,
+"c2": 0,
+"file": "typed.rs",
+"line": 653,
+"missed_by_c": [
+[
+655,
+47
+]
+],
+"name": "create",
+"pub": true,
+"regions": 5,
+"twin": "api"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 664,
+"missed_by_c": [
+[
+664,
+5
+],
+[
+665,
+9
+],
+[
+666,
+5
+]
+],
+"name": "handle",
+"pub": true,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 26,
+"c": "xQueueSendToBack",
+"c1": 20,
+"c1_pin": 20,
+"c2": 0,
+"file": "typed.rs",
+"line": 673,
+"missed_by_c": [
+[
+678,
+26
+],
+[
+678,
+33
+],
+[
+678,
+48
+],
+[
+678,
+64
+],
+[
+679,
+38
+],
+[
+680,
+22
+],
+[
+686,
+9
+],
+[
+692,
+13
+],
+[
+695,
+21
+],
+[
+695,
+29
+],
+[
+695,
+40
+],
+[
+695,
+48
+],
+[
+695,
+54
+],
+[
+696,
+24
+],
+[
+696,
+31
+],
+[
+697,
+46
+],
+[
+697,
+57
+],
+[
+698,
+30
+],
+[
+698,
+41
+],
+[
+700,
+34
+]
+],
+"name": "send",
+"pub": true,
+"regions": 40,
+"twin": "api"
+},
+{
+"any": 13,
+"c": "xQueueReceive",
+"c1": 13,
+"c1_pin": 13,
+"c2": 0,
+"file": "typed.rs",
+"line": 710,
+"missed_by_c": [
+[
+711,
+59
+],
+[
+716,
+30
+]
+],
+"name": "receive",
+"pub": true,
+"regions": 15,
+"twin": "api"
+},
+{
+"any": 21,
+"c": "xQueueSendToBackFromISR",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 730,
+"missed_by_c": [
+[
+730,
+5
+],
+[
+731,
+13
+],
+[
+731,
+22
+],
+[
+732,
+12
+],
+[
+732,
+13
+],
+[
+733,
+21
+],
+[
+733,
+21
+],
+[
+734,
+20
+],
+[
+735,
+9
+],
+[
+736,
+13
+],
+[
+736,
+20
+],
+[
+737,
+21
+],
+[
+737,
+29
+],
+[
+737,
+29
+],
+[
+737,
+54
+],
+[
+739,
+9
+],
+[
+740,
+15
+],
+[
+740,
+15
+],
+[
+740,
+22
+],
+[
+741,
+16
+],
+[
+742,
+17
+],
+[
+742,
+29
+],
+[
+742,
+34
+],
+[
+743,
+17
+],
+[
+745,
+29
+],
+[
+745,
+29
+],
+[
+745,
+40
+],
+[
+746,
+22
+],
+[
+746,
+32
+],
+[
+748,
+25
+],
+[
+751,
+5
+]
+],
+"name": "send_from_isr",
+"pub": true,
+"regions": 31,
+"twin": "api"
+},
+{
+"any": 5,
+"c": "uxQueueMessagesWaiting",
+"c1": 5,
+"c1_pin": 5,
+"c2": 0,
+"file": "typed.rs",
+"line": 757,
+"missed_by_c": [],
+"name": "len",
+"pub": true,
+"regions": 5,
+"twin": "api"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 765,
+"missed_by_c": [
+[
+765,
+5
+],
+[
+766,
+12
+],
+[
+766,
+17
+],
+[
+766,
+21
+],
+[
+766,
+28
+],
+[
+767,
+5
+]
+],
+"name": "is_empty",
+"pub": true,
+"regions": 6,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 808,
+"missed_by_c": [
+[
+808,
+9
+],
+[
+809,
+13
+],
+[
+810,
+13
+],
+[
+811,
+9
+]
+],
+"name": "raw_queue_create",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 812,
+"missed_by_c": [
+[
+812,
+9
+],
+[
+813,
+13
+],
+[
+814,
+16
+],
+[
+815,
+24
+],
+[
+816,
+13
+],
+[
+817,
+13
+],
+[
+818,
+13
+],
+[
+819,
+13
+],
+[
+820,
+9
+]
+],
+"name": "raw_queue_send",
+"pub": false,
+"regions": 9,
+"twin": "none"
+},
+{
+"any": 7,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 821,
+"missed_by_c": [
+[
+821,
+9
+],
+[
+822,
+13
+],
+[
+823,
+16
+],
+[
+824,
+24
+],
+[
+825,
+13
+],
+[
+826,
+13
+],
+[
+827,
+13
+],
+[
+828,
+9
+]
+],
+"name": "raw_queue_receive",
+"pub": false,
+"regions": 8,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 829,
+"missed_by_c": [
+[
+829,
+9
+],
+[
+830,
+13
+],
+[
+831,
+13
+],
+[
+832,
+9
+]
+],
+"name": "raw_queue_messages_waiting",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 833,
+"missed_by_c": [
+[
+833,
+9
+],
+[
+834,
+13
+],
+[
+835,
+9
+]
+],
+"name": "raw_queue_has_room",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 836,
+"missed_by_c": [
+[
+836,
+9
+],
+[
+837,
+13
+],
+[
+838,
+9
+]
+],
+"name": "raw_in_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 839,
+"missed_by_c": [
+[
+839,
+9
+],
+[
+840,
+13
+],
+[
+841,
+16
+],
+[
+841,
+40
+],
+[
+844,
+13
+],
+[
+845,
+13
+],
+[
+846,
+9
+]
+],
+"name": "raw_queue_send_from_isr",
+"pub": false,
+"regions": 7,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 847,
+"missed_by_c": [
+[
+847,
+9
+],
+[
+848,
+13
+],
+[
+849,
+9
+]
+],
+"name": "raw_mutex_create",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 850,
+"missed_by_c": [
+[
+850,
+9
+],
+[
+851,
+13
+],
+[
+852,
+13
+],
+[
+853,
+9
+]
+],
+"name": "raw_mutex_take",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 4,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 854,
+"missed_by_c": [
+[
+854,
+9
+],
+[
+855,
+13
+],
+[
+856,
+13
+],
+[
+857,
+9
+]
+],
+"name": "raw_mutex_give",
+"pub": false,
+"regions": 4,
+"twin": "none"
+},
+{
+"any": 22,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 861,
+"missed_by_c": [
+[
+861,
+5
+],
+[
+862,
+13
+],
+[
+862,
+17
+],
+[
+863,
+13
+],
+[
+863,
+21
+],
+[
+863,
+45
+],
+[
+863,
+48
+],
+[
+864,
+9
+],
+[
+864,
+17
+],
+[
+864,
+17
+],
+[
+864,
+33
+],
+[
+865,
+9
+],
+[
+866,
+9
+],
+[
+868,
+13
+],
+[
+868,
+25
+],
+[
+868,
+25
+],
+[
+868,
+27
+],
+[
+869,
+25
+],
+[
+869,
+31
+],
+[
+870,
+30
+],
+[
+872,
+9
+],
+[
+873,
+9
+],
+[
+874,
+5
+]
+],
+"name": "a_typed_send_is_one_send_and_a_receive_is_one_receive",
+"pub": false,
+"regions": 23,
+"twin": "none"
+},
+{
+"any": 17,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 877,
+"missed_by_c": [
+[
+877,
+5
+],
+[
+880,
+13
+],
+[
+880,
+17
+],
+[
+881,
+13
+],
+[
+881,
+21
+],
+[
+881,
+45
+],
+[
+881,
+48
+],
+[
+882,
+9
+],
+[
+882,
+17
+],
+[
+882,
+17
+],
+[
+882,
+33
+],
+[
+883,
+15
+],
+[
+883,
+15
+],
+[
+884,
+24
+],
+[
+884,
+46
+],
+[
+884,
+55
+],
+[
+885,
+25
+],
+[
+887,
+9
+],
+[
+888,
+5
+]
+],
+"name": "a_refused_send_is_still_exactly_one_send",
+"pub": false,
+"regions": 19,
+"twin": "none"
+},
+{
+"any": 17,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 891,
+"missed_by_c": [
+[
+891,
+5
+],
+[
+892,
+13
+],
+[
+892,
+17
+],
+[
+897,
+13
+],
+[
+897,
+21
+],
+[
+897,
+45
+],
+[
+897,
+48
+],
+[
+898,
+13
+],
+[
+898,
+20
+],
+[
+898,
+30
+],
+[
+898,
+39
+],
+[
+898,
+39
+],
+[
+898,
+67
+],
+[
+899,
+9
+],
+[
+900,
+9
+],
+[
+901,
+9
+],
+[
+902,
+5
+]
+],
+"name": "a_typed_isr_send_is_one_from_isr_send",
+"pub": false,
+"regions": 17,
+"twin": "none"
+},
+{
+"any": 9,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 905,
+"missed_by_c": [
+[
+905,
+5
+],
+[
+906,
+13
+],
+[
+906,
+17
+],
+[
+911,
+9
+],
+[
+911,
+17
+],
+[
+911,
+27
+],
+[
+911,
+34
+],
+[
+911,
+66
+],
+[
+912,
+9
+],
+[
+913,
+5
+]
+],
+"name": "the_capability_is_refused_outside_interrupt_context",
+"pub": false,
+"regions": 10,
+"twin": "none"
+},
+{
+"any": 19,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 916,
+"missed_by_c": [
+[
+916,
+5
+],
+[
+917,
+13
+],
+[
+917,
+17
+],
+[
+918,
+13
+],
+[
+918,
+23
+],
+[
+918,
+34
+],
+[
+918,
+45
+],
+[
+919,
+13
+],
+[
+919,
+20
+],
+[
+919,
+28
+],
+[
+919,
+33
+],
+[
+919,
+43
+],
+[
+920,
+13
+],
+[
+921,
+13
+],
+[
+922,
+9
+],
+[
+923,
+9
+],
+[
+924,
+9
+],
+[
+925,
+9
+],
+[
+926,
+5
+]
+],
+"name": "a_mutex_with_is_one_take_and_one_give",
+"pub": false,
+"regions": 19,
+"twin": "none"
+},
+{
+"any": 15,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 929,
+"missed_by_c": [
+[
+929,
+5
+],
+[
+963,
+13
+],
+[
+963,
+17
+],
+[
+964,
+13
+],
+[
+964,
+23
+],
+[
+964,
+34
+],
+[
+964,
+44
+],
+[
+965,
+13
+],
+[
+965,
+20
+],
+[
+965,
+28
+],
+[
+965,
+33
+],
+[
+965,
+43
+],
+[
+966,
+9
+],
+[
+966,
+17
+],
+[
+966,
+22
+],
+[
+967,
+5
+]
+],
+"name": "a_mutex_that_cannot_be_taken_does_not_run_the_closure",
+"pub": false,
+"regions": 16,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 932,
+"missed_by_c": [
+[
+932,
+13
+],
+[
+933,
+17
+],
+[
+934,
+13
+]
+],
+"name": "raw_queue_create",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 935,
+"missed_by_c": [
+[
+935,
+13
+],
+[
+936,
+17
+],
+[
+937,
+13
+]
+],
+"name": "raw_queue_send",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 938,
+"missed_by_c": [
+[
+938,
+13
+],
+[
+939,
+17
+],
+[
+940,
+13
+]
+],
+"name": "raw_queue_receive",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 941,
+"missed_by_c": [
+[
+941,
+13
+],
+[
+942,
+17
+],
+[
+943,
+13
+]
+],
+"name": "raw_queue_messages_waiting",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 944,
+"missed_by_c": [
+[
+944,
+13
+],
+[
+945,
+17
+],
+[
+946,
+13
+]
+],
+"name": "raw_queue_has_room",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 947,
+"missed_by_c": [
+[
+947,
+13
+],
+[
+948,
+17
+],
+[
+949,
+13
+]
+],
+"name": "raw_in_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 950,
+"missed_by_c": [
+[
+950,
+13
+],
+[
+951,
+17
+],
+[
+952,
+13
+]
+],
+"name": "raw_queue_send_from_isr",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 953,
+"missed_by_c": [
+[
+953,
+13
+],
+[
+954,
+17
+],
+[
+955,
+13
+]
+],
+"name": "raw_mutex_create",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 3,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 956,
+"missed_by_c": [
+[
+956,
+13
+],
+[
+957,
+17
+],
+[
+958,
+13
+]
+],
+"name": "raw_mutex_take",
+"pub": false,
+"regions": 3,
+"twin": "none"
+},
+{
+"any": 0,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c2": 0,
+"file": "typed.rs",
+"line": 959,
+"missed_by_c": [
+[
+959,
+13
+],
+[
+960,
+17
+]
+],
+"name": "raw_mutex_give",
+"pub": false,
+"regions": 2,
+"twin": "none"
+}
+]
+}

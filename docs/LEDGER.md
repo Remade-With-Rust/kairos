@@ -16645,3 +16645,42 @@ publication (`imports.lock`; the trusted-publisher entry already covered it).
 Unchanged and not republished: port 0.3.1 and the network crates. The
 READMEs carry the two-core numbers: the kernel's table, core's paragraph,
 the demo's pointer, and the umbrella's line under the rv32 table.
+
+## ★ 2026-10-02 — the API census: what the C differential actually judges, measured
+
+**Method.** `tools/api-census` (new): LLVM source-based coverage
+(`-C instrument-coverage`, rustc 1.98.0, `llvm-tools`) over four groups of runs,
+each region attributed by source line to the innermost function holding it (so
+inlining and generics hide nothing). C1: the 25 conformance pins (2,000 ticks).
+C1L: `kairos-sim` at 100,000 ticks on the 26 scenarios `kairos conform --all`
+proved identical to the live C kernel in the same session (18.4 million lines;
+each re-run refused unless its trace length matches the compared one). C2: the
+two-core corpus and both two-core differentials. ANY: every other test. A C twin
+is a name the pinned FreeRTOS headers declare. Output: `docs/API-COVERAGE.md`,
+its data file, and a README block, all verified by `census.py --check`.
+
+| 118 public APIs with a FreeRTOS twin | one core | two cores |
+|---|---:|---:|
+| entered by a run compared to the C | **115** | **41** |
+| every code region executed | 55 | 22 |
+| never entered | 3 | 77 |
+
+Across the kernel, 2,195 of 9,193 code regions are executed by no compared run.
+
+**Findings.** (1) H10: on two cores, every timer, event-group, buffer,
+notification and queue-set API is uncompared — the real gap, invisible because
+H2 closed before SMP existed. (2) H11: `vTaskStepTick` is uncompared on one core
+too (Test7 is disabled in the oracle). (3) H12: `timer_reset` and `timer_set_id`
+are compared only at full length — the CI pins stop before TimerDemo's Test6, so
+a regression there would pass CI. (4) The README's "22 public APIs" sentence
+(2026-09-19) was stale; it is now generated.
+
+**Kill tests.** Removing the `ApiSweep` pin was predicted to flip its six APIs to
+never-compared: it flipped exactly those six and one other region. Hand-editing
+one README count, and one census row, each fails `--check`. The first kill-test
+attempt ran NOTHING (`GROUPS` is a reserved bash variable) and the renderer
+reported every API unjudged; both are fixed, and the renderer now refuses a
+missing group.
+
+**Also.** `kairos conform --all --ticks 100000`: all 26 scenarios identical to
+the C on this day's kernel (0.3.2).

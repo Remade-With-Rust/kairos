@@ -58,3 +58,7 @@ oracle/FreeRTOS-Plus-TCP/
 /tools/vertical/.peer.py
 /tools/vertical/.peer.*.out
 /tools/vertical/.rates
+# tools/api-census: LLVM coverage profiles and exports (~20MB), regenerable.
+# The census's committed outputs are docs/API-COVERAGE.md and its data file.
+tools/api-census/out/
+tools/api-census/out-kill/
