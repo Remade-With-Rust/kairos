@@ -1,0 +1,241 @@
+# Every API against the C — the API differential mission
+
+**Written 2026-10-02.** Read this first; it supersedes the "22 public APIs"
+sentence in the umbrella README (which predates three closed holes).
+
+---
+
+## 0. Mission and promise
+
+**Every public kernel API that has a FreeRTOS twin is judged against the C
+kernel, on one core and on two, by a run that would fail if the Rust decided
+differently — and the census that says so is produced by a tool, not a grep.**
+
+The one-line test for every change in this mission: *does it make a public
+API's behaviour COMPARED to FreeRTOS where it was not, on a run a stranger can
+reproduce, with a poison that proves the comparison bites?*
+
+---
+
+## 1. Where we are (2026-10-02)
+
+The README's line — *"22 public APIs reach the C shim without ever being diffed
+against the C kernel"* — was written 2026-09-19 and is **stale**. Since then
+`HOLES.md` closed H1 (the instruments block), H2 (the API differential: six APIs
+closed by the KAIROS-authored `ApiSweep` oracle, five shown to have no C twin)
+and H4 (the mutant survey, nine of nine files). What is actually open:
+
+| surface | public fns | judged against C, one core | judged against C, two cores |
+|---|---:|---|---|
+| tasks, scheduler (`kernel.rs`) | 62 | yes — 22-scenario corpus + ApiSweep | **partly** — 9 scenarios + 2 random differentials, ~11 operations |
+| queues, semaphores, mutexes (`queue.rs`) | 36 | yes | **partly** — semtest, BlockQ, PollQ, countsem, recmutex, QPeek, GenQTest |
+| software timers (`timer.rs`) | 28 | yes — TimerDemo, TaskNotify, ApiSweep | **no** |
+| event groups (`events.rs`) | 11 | yes | **no** |
+| stream / message buffers (`stream.rs`) | 15 | yes — StreamBuffer*, MessageBuffer* | **no** |
+| task notifications | (in `kernel.rs`) | yes — TaskNotify | **no** |
+| queue sets, overwrite, abort-delay | (in `queue.rs`, `kernel.rs`) | yes | **no** |
+| ISR variants (`*_from_isr`) | ~20 | yes, via the sim's ISR hook | **one** (`xSemaphoreGiveFromISR`) |
+| typed / async faces (`typed.rs`) | 15 | indirectly (thin wrappers) | indirectly |
+| diagnostics with no C twin | 5 | n/a by construction (`HOLES.md` H2) | n/a |
+
+Three things the current evidence cannot say, and this plan exists to fix:
+
+1. **The census is a grep.** `HOLES.md` *Method* names its two failure modes
+   (indirect reach, constructor spelling) and says the honest fix is coverage
+   instrumentation. `llvm-tools` is now installed; nothing uses it.
+2. **"Called" is not "judged per arm."** A scenario that calls `xQueueSend`
+   only on a queue with room never compares the full arm, the timeout arm or
+   the wake-a-waiter arm. Function-level coverage overstates.
+3. **SMP arrived after H2 closed.** Two cores were never re-censused. Fifteen
+   one-core scenarios — every timer, event-group, buffer, notification and
+   queue-set scenario — have never run on two cores against the C.
+
+---
+
+## 2. Strategy that does not change
+
+**Three oracles, in increasing strength, all against the pinned FreeRTOS
+V11.3.1** (`ORACLES.md`):
+
+| oracle | what it judges | exists |
+|---|---|---|
+| **A. Demo scenarios** | upstream `Demo/Common/Minimal` behaviour, trace + exits + the demo's own checks | 22 one-core, 9 two-core |
+| **B. Authored sweeps** | APIs no demo reaches; a KAIROS-written C program diffed like a scenario | `ApiSweep` (6 APIs) |
+| **C. Generative differential** | seeded random call scripts the C runs FIRST, replayed by Rust, state compared after EVERY call | two-core only, ~11 operations (`smp_differential`) |
+
+C is the one that scales: it reaches arms no human wrote a test for. A and B
+stay because they judge *whole behaviours* a random script never composes.
+
+**Claims discipline.** An API is "judged" only when a run (i) executes it,
+(ii) compares its result to the C's, and (iii) has been seen to FAIL on a
+planted one-line change to that API. Coverage without (ii) is "reached";
+(ii) without (iii) is "unproven". The README's counts are generated from the
+census table, never typed.
+
+**What a differential cannot judge — said out loud, not hidden:**
+
+- **Invalid-argument arms.** Passing a deleted handle to FreeRTOS is undefined
+  behaviour, so there is no C answer to compare. These stay under the
+  no-panic suite (`tests/no_panic.rs`) and contract tests. They are counted in
+  their own column, never as "judged".
+- **APIs with no C twin** (the five in `HOLES.md` H2, the typed/async faces).
+  Judged by a *wrapper-equivalence* test instead: each wrapper is checked to
+  issue exactly the C-twinned call sequence it claims to.
+
+**Non-goals.** Core affinity and `configRUN_MULTIPLE_PRIORITIES = 0` (not
+implemented — out of scope until they are); more than two cores; timing on
+silicon (the kernel's and port's benches own that).
+
+---
+
+## 3. The product surface
+
+What a user of the result sees:
+
+- `docs/API-COVERAGE.md` — one row per public API: C twin, one-core verdict,
+  two-core verdict, arms judged / arms total, which oracle, poison status.
+  Regenerated by `tools/api-census`; CI fails if it is stale (`--check`).
+- The kernel README's "Conformance" section quotes that table's totals.
+- `kairos conform --api` runs the generative differential locally.
+
+---
+
+## 4. Finished work this mission builds on
+
+| date | what | where |
+|---|---|---|
+| 2026-09-19..21 | H2 closed: TaskNotify, StreamBufferDemo, MessageBufferDemo, QueueSet; `ApiSweep` authored; 5 no-twin APIs justified | `HOLES.md` H2 |
+| 2026-09-21 | H4: mutants, nine of nine files accounted for | `HOLES.md` H4 |
+| 2026-10-02 | two-core corpus (9 scenarios); `smp_differential` with blocking waits via ucontext coroutines | LEDGER 2026-10-02 |
+| 2026-10-02 | `bench/smp-ir` probe discipline: every gate + one-core instrument per change | LEDGER 2026-10-02 |
+
+---
+
+## 5. Remaining work — bricks in order
+
+### P0 — Measure, don't grep: the coverage census
+
+- Build the C-diffed runs (one-core corpus, ApiSweep, two-core corpus, both
+  SMP differentials) with `-C instrument-coverage`; merge with
+  `llvm-profdata`; export with `llvm-cov export --format=json`.
+- `tools/api-census` (Python, stdlib only) maps **regions** — not just
+  function entry — onto the 172 public functions and their internal arms, and
+  writes `docs/API-COVERAGE.md` with the columns in §3.
+- Separate runs per oracle, so the table can say *which* oracle judged an arm.
+- **Fix the README sentence the same day**, from the census, not by hand.
+
+### P1 — The generative API differential (the core of the mission)
+
+Generalise `smp_differential` from ~11 operations to the whole C-twinned surface:
+
+- **One C driver, two builds.** `oracle/api/driver.c` executes a seeded script
+  against real FreeRTOS built one-core AND `configNUMBER_OF_CORES 2`, writing
+  after every call: the return value, every out-parameter, and a **state
+  digest** — each task's state and priority, every list's order and cursor,
+  queue contents, timer states and expiries, event bits, notification values,
+  the tick. Plus the trace, as today.
+- **A grammar, not a list.** Scripts are generated from a typed grammar that
+  only ever produces calls the C defines: live handles only, ISR-only calls
+  from the driver's ISR context, blocking calls through the existing ucontext
+  coroutine mechanism (proven in `smp_block.trace`). Every C-twinned API is a
+  production; every documented arm (full, empty, timeout, wake, overwrite,
+  already-expired, pending-from-ISR...) has a precondition the generator can
+  steer toward.
+- **Coverage-guided weights.** P0's census reports arms not yet reached; the
+  generator's weights are retuned until every arm is reached or justified in
+  the census's "unreachable" column. This is the step that turns random
+  scripts into a sophisticated oracle instead of a noisy one.
+- **Pinned and replayable.** 32 seeds x 20,000 steps per build, traces stored
+  as zstd frames beside the existing ones; a failure names its seed and step.
+  Rust replays the same script and compares after every call.
+- **Poisoned.** For each API family, a planted one-line kernel change must
+  fail the differential at a recorded step, and the census records it.
+
+### P2 — The two-core corpus, completed
+
+Port the fifteen one-core scenarios that have never run on two cores
+(AbortDelay, ApiSweep, EventGroupsDemo, IntQueue, IntSemTest,
+MessageBufferAMP, MessageBufferDemo, QueueOverwrite, QueueSet,
+QueueSetPolling, StreamBufferDemo, StreamBufferInterrupt, TaskNotify,
+TimerDemo, death) to the two-core contract. As with the first nine, a scenario that
+fails its own single-core check on two cores is acceptable **only if the C
+fails identically, at the same line**. This judges whole behaviours P1 never
+composes — the timer daemon on a second core, a notification crossing cores.
+
+### P3 — Authored sweeps for what neither reaches
+
+Whatever P0 still reports unjudged after P1 and P2 gets a sweep in the
+`ApiSweep` style (one-core and two-core builds): a short KAIROS-written C
+program, diffed like a scenario. The expectation from H2 is that this list is
+short; the census decides.
+
+### P4 — The faces with no C twin
+
+- Wrapper-equivalence tests for `typed.rs` and the async face: each call
+  recorded at the kernel boundary, compared to the C-twinned sequence it claims.
+- The five diagnostics keep their unit tests; the census labels them.
+
+### P5 — Mutants, per API, judged by the new oracles
+
+`cargo mutants` per file with the corpus + P1 as the oracle (the H4 method),
+reported per API in the census. Target: no surviving non-equivalent mutant
+in an API marked "judged". Survivors are either a missing arm (back to P1) or
+recorded as equivalent with the reason.
+
+### P6 — Ship it
+
+Census in CI (`--check`), README and `HOLES.md` regenerated from it, LEDGER
+entry, kernel/demo patch releases from clean clones.
+
+### Owner-only steps
+
+| step | why it is yours |
+|---|---|
+| decide the four open questions below | they bind scope |
+| allow the C oracle to run in CI (pthreads, Linux runner) for nightly fresh seeds | CI minutes, and it makes the oracle part of the public pipeline |
+
+### Open decisions
+
+| # | question | recommendation |
+|---|---|---|
+| D1 | Invalid-argument arms have no C answer. Count them as a separate "contract-only" column, or drive the C past them with a guard? | separate column — a guard would be testing our guard, not FreeRTOS |
+| D2 | Run P1 nightly with fresh seeds in CI, or only pinned seeds per commit? | both: pinned per commit, fresh nightly, a failing fresh seed becomes a new pin |
+| D3 | P2's single-core-only demos: port all fifteen even where the demo's own check fails on two cores? | yes, under the existing "fails identically" rule — the trace still judges the kernel |
+| D4 | Should the C ABI (`rusty_rtos-capi`) get its own two-core run? | not in this mission — capi has no SMP face yet; record as a follow-on |
+
+---
+
+## 6. Phases and kill tests
+
+| phase | done when | kill test a stranger can run |
+|---|---|---|
+| P0 | `docs/API-COVERAGE.md` generated for all 172 functions, per arm, per oracle | delete one call site in a scenario; the census marks that API unjudged |
+| P1 | every C-twinned API is a grammar production; every arm reached or justified; 32 seeds x 20k steps identical, both builds | plant one-line changes in a queue arm, a timer arm and an ISR arm; each fails at a named seed and step |
+| P2 | all fifteen run on two cores, identical to the C (or failing identically) | change one count in a pin; `smp_conformance` fails |
+| P3 | census shows no C-twinned API unjudged without a sweep or a written reason | as P1, per swept API |
+| P4 | every typed/async wrapper has an equivalence test | swap two calls inside one wrapper; its test fails |
+| P5 | per-API mutant report; no unexplained survivor in a "judged" API | re-run cargo-mutants on one file; the report matches the census |
+| P6 | census `--check` in CI; README/HOLES generated | edit a count in the README by hand; CI fails |
+
+---
+
+## 7. Decision log
+
+| date | decision |
+|---|---|
+| 2026-10-02 | The README's "22 APIs" sentence is stale; it is replaced by the census, not by a hand-edited number. |
+| 2026-10-02 | "Judged" requires execute + compare + a poison seen to fail. Reached-but-not-compared and compared-but-unpoisoned are reported separately. |
+| 2026-10-02 | The generative differential is driven by the C first and replayed by Rust, as `smp_differential` is, so the oracle never depends on the implementation under test. |
+
+---
+
+## 8. Appendix: ground truth
+
+- Oracle: FreeRTOS V11.3.1, pinned in `ORACLES.md`; one-core harness
+  `oracle/harness`, two-core `oracle/harness-smp`, SMP driver
+  `rusty_rtos_kernel/oracle/smp`.
+- Coverage: `llvm-tools` component installed (Windows); `cargo-llvm-cov` is
+  not, and is not needed: `RUSTFLAGS=-C instrument-coverage` +
+  `llvm-profdata merge` + `llvm-cov export`.
+- Standing rules: every kernel change runs `bench/smp-ir/probe.sh` (all gates,
+  both instruments, the one-core rows, fmt); releases from clean clones.
