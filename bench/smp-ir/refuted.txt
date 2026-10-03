@@ -76,3 +76,11 @@ refuted 23a: switch_context_smp #[inline(always)] into switch_context.
 refuted 24a: the idle adjustment written as `prio - bit` instead of a
   conditional saturating_sub. +0 on every shape: LLVM canonicalises both
   to the same shl/sar sign-mask sequence.
+
+== 2026-10-03, the one-core round (m.sh + tick-work/rows.sh) ==
+
+refuted R1: SimPort::take_tick peeks before clearing instead of
+  `replace(false)`. Host one-core kernel rows +0 exactly and SMP A +0:
+  LLVM already emits the same load/store/compare for both. rv32 sim port
+  mixed: twelve rows -1..-3, queue_roundtrip +6, recv_empty +1. Not a
+  win on any instrument that ships (the real port has no such flag).

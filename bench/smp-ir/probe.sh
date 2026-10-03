@@ -5,6 +5,7 @@
 #
 #     sh bench/smp-ir/probe.sh            # gates + measure + diff
 #     sh bench/smp-ir/probe.sh keep       # ... and make this the new baseline
+#     sh bench/smp-ir/probe.sh gates      # the gates alone
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 # `keep` PROMOTES the measurement already taken; it never measures. Deciding
@@ -34,6 +35,8 @@ for r in rusty_rtos_core rusty_rtos_kernel rusty_rtos_demo; do
     ( cd "$ROOT/$r" && cargo fmt --all --check >/dev/null 2>&1 ) || fail "fmt $r"
 done
 echo "gates: ok"
+# `gates`: stop here -- for a candidate m.sh has already priced.
+[ "${1:-}" = gates ] && exit 0
 
 wsl -e bash -lc "cd /mnt/f/coding/rusty_RTOS && sh bench/smp-ir/run.sh after >/dev/null 2>&1 && sh bench/smp-ir/run.sh diff"
 
