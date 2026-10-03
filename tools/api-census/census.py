@@ -163,6 +163,24 @@ def regions(group):
     return out
 
 
+# Plan decision D1: an arm that only ever answers an ERROR -- a stale handle, a
+# refused argument -- has no C answer to compare against, so the C-compared runs
+# cannot judge it and it is not a gap in them. A region counts as such ONLY when
+# its code begins with an error construct; anything else stays a gap. The test
+# can miss contract arms (an `Ok(false)` refusal, say) but cannot call a real arm
+# one, so the column it feeds can understate and never overclaim.
+CONTRACT = re.compile(r"^(\?|Err\(|return Err\b|Err\(e\) =>)")
+
+
+def is_contract(src, f, line, col):
+    text = src.get(f)
+    if text is None:
+        text = src[f] = open(os.path.join(SRC, f), encoding="utf-8").read().splitlines()
+    if not 0 < line <= len(text):
+        return False
+    return bool(CONTRACT.match(text[line - 1][col - 1:].lstrip()))
+
+
 def measure():
     decl = declared_in_headers()
     if decl is None:
@@ -198,6 +216,7 @@ def measure():
                 per[(f, name, a)] = {"file": f, "name": name, "pub": True, "line": a,
                                      "doc": doc, "regions": []}
     rows = []
+    src = {}
     for rec in per.values():
         m = CNAME.search(rec["doc"]) if rec["doc"].startswith("`") else None
         cname = m.group(1) if m else ""
@@ -210,10 +229,16 @@ def measure():
         two = [r[4] for r in rs]
         anyc = [r[2] or r[3] or r[4] or r[5] for r in rs]
         missed = [[r[0], r[1]] for r, a, b in zip(rs, one, two) if not (a or b)]
+        contract = [is_contract(src, rec["file"], r[0], r[1]) for r in rs]
         rows.append({"file": rec["file"], "name": rec["name"], "pub": rec["pub"], "line": rec["line"],
                      "c": cname, "twin": twin, "regions": n,
                      "c1": sum(one), "c1_pin": sum(1 for r in rs if r[2]),
-                     "c2": sum(two), "any": sum(anyc), "missed_by_c": missed})
+                     "c2": sum(two), "any": sum(anyc), "missed_by_c": missed,
+                     # D1: compared OR contract-only, per column
+                     "c1k": sum(1 for o, k in zip(one, contract) if o or k),
+                     "c2k": sum(1 for o, k in zip(two, contract) if o or k),
+                     "contract_missed": sum(1 for r, a, b, k in zip(rs, one, two, contract)
+                                            if k and not (a or b))})
     rows.sort(key=lambda r: (r["file"], r["line"]))
     meta = {"long": []}
     mp = os.path.join(OUT, "C1L.meta")
@@ -289,10 +314,18 @@ def render(rows, meta):
     for label, pred in (
             ("entered", lambda r, c: r[c] > 0),
             ("every arm executed", lambda r, c: r["regions"] > 0 and r[c] == r["regions"]),
+            ("every arm executed, or contract-only (D1)",
+             lambda r, c: r["regions"] > 0 and r.get(c + "k", r[c]) == r["regions"]),
             ("never entered", lambda r, c: r[c] == 0)):
         s.append("| %s | %d | %d | %d |" % (label, count(api, lambda r: pred(r, "c1")),
                                              count(api, lambda r: pred(r, "c2")),
                                              count(api, lambda r: pred(r, "any"))))
+    s.append("")
+    s.append("*Contract-only* (plan decision D1): a region whose code begins with an error "
+             "construct (`?`, `Err(`, `return Err`) -- a stale handle, a refused argument -- has no "
+             "C answer to compare against. The test is deliberately narrow: it can leave a "
+             "contract arm counted as a gap, never the reverse. Such arms are judged by the "
+             "kernel's own tests, which the *any run* column counts.")
     s.append("")
     long_only = [r for r in api if r["c1"] > 0 and r["c1_pin"] == 0]
     s.append("Of the one-core column, **%d** C-twinned APIs are entered ONLY by the full-length runs "
@@ -332,15 +365,15 @@ def render(rows, meta):
              "first. Lines are where each unexecuted region starts. This is the target list for the "
              "generative differential (plan P1).")
     s.append("")
-    s.append("| function | file | unexecuted / regions | at lines |")
-    s.append("|---|---|---:|---|")
+    s.append("| function | file | unexecuted / regions | of them contract-only | at lines |")
+    s.append("|---|---|---:|---:|---|")
     arms = sorted((r for r in rows if r["missed_by_c"]), key=lambda r: (-len(r["missed_by_c"]), r["file"], r["line"]))
     for r in arms:
         lines = sorted({m[0] for m in r["missed_by_c"]})
         shown = ", ".join(str(x) for x in lines[:12]) + (" ..." if len(lines) > 12 else "")
-        s.append("| `%s`%s | `%s:%d` | %d / %d | %s |" % (r["name"], "" if r["pub"] else " (internal)",
-                                                        r["file"], r["line"], len(r["missed_by_c"]),
-                                                        r["regions"], shown))
+        s.append("| `%s`%s | `%s:%d` | %d / %d | %d | %s |" % (r["name"], "" if r["pub"] else " (internal)",
+                                                             r["file"], r["line"], len(r["missed_by_c"]),
+                                                             r["regions"], r.get("contract_missed", 0), shown))
     s.append("")
     return "\n".join(s)
 

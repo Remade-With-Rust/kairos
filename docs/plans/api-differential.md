@@ -122,7 +122,7 @@ What a user of the result sees:
 - Separate runs per oracle, so the table can say *which* oracle judged an arm.
 - **Fix the README sentence the same day**, from the census, not by hand.
 
-### P1 — The generative API differential (the core of the mission)
+### P1 — The generative API differential (the core of the mission) — DONE 2026-10-02
 
 Generalise `smp_differential` from ~11 operations to the whole C-twinned surface:
 
@@ -204,10 +204,13 @@ one core 116 / 57. The seven never compared on two cores are typed wrappers
 **P1's kill test, scored.** "Plant one-line changes in a queue arm, a timer
 arm and an ISR arm; each fails at a named seed and step": met many times over
 -- every family's poison, plus the wrap and abort and resume ones, each at a
-recorded step. "Every arm reached or justified": the classification above;
-the contract-only arms still want their own census column (D1), which is the
-one piece of P1 not built. "32 seeds x 20k steps identical": 160 fresh seeds
-x 28k steps x 2 builds, identical; four pinned.
+recorded step. "Every arm reached or justified": the classification above,
+and the census now carries D1's contract-only column -- a region whose code
+begins with an error construct (`?`, `Err(`, `return Err`) has no C answer;
+the test can leave a contract arm counted as a gap, never the reverse. With
+those set aside, **85** C-twinned APIs are fully judged on one core and **77**
+on two (57 and 53 counting every arm). "32 seeds x 20k steps identical": 160
+fresh seeds x 28k steps x 2 builds, identical; four pinned. **P1 passes.**
 
 ### P2 — The two-core corpus, completed
 
@@ -268,7 +271,7 @@ entry, kernel/demo patch releases from clean clones.
 | phase | done when | kill test a stranger can run |
 |---|---|---|
 | P0 — **passed 2026-10-02** | `docs/API-COVERAGE.md` generated for all 176 public functions, per arm, per oracle | remove one ORACLE (the `ApiSweep` pin): exactly the APIs only it reaches must flip to never-compared. Predicted its six; measured exactly those six, and one region elsewhere. (Deleting a call site, as first written, changes the trace, so the pinned comparison fails and the census rightly refuses the run.) |
-| P1 | every C-twinned API is a grammar production; every arm reached or justified; 32 seeds x 20k steps identical, both builds | plant one-line changes in a queue arm, a timer arm and an ISR arm; each fails at a named seed and step |
+| P1 — **passed 2026-10-02** | every C-twinned API is a grammar production; every arm reached or justified; 32 seeds x 20k steps identical, both builds | plant one-line changes in a queue arm, a timer arm and an ISR arm; each fails at a named seed and step |
 | P2 | all fifteen run on two cores, identical to the C (or failing identically) | change one count in a pin; `smp_conformance` fails |
 | P3 | census shows no C-twinned API unjudged without a sweep or a written reason | as P1, per swept API |
 | P4 | every typed/async wrapper has an equivalence test | swap two calls inside one wrapper; its test fails |
