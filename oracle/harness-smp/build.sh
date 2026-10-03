@@ -30,3 +30,8 @@ cc -O0 -g -Wall -Wno-unused-parameter -DprojCOVERAGE_TEST=0 -DKAIROS_SMP=1 ${KAI
    "$here/port.c" "$root/oracle/harness/main.c" "$root/oracle/harness/kairos_trace.c" \
    "$root/oracle/harness/ApiSweep.c" $demos
 echo "built $root/oracle/build/smp/corpus"
+# MessageBufferAMP replaces sbSEND_COMPLETED, a global macro, so it gets a
+# binary of its own -- as the one-core oracle does (`kairos oracle build`).
+# shellcheck disable=SC2086
+cc -O0 -g -Wall -Wno-unused-parameter -DprojCOVERAGE_TEST=0 -DKAIROS_SMP=1 -DKAIROS_AMP=1 ${KAIROS_SMP_CFLAGS:-}    -I"$here" -I"$root/oracle/harness" -I"$k/include" -I"$d/include"    -o "$root/oracle/build/smp/corpus-amp" -pthread    "$k/tasks.c" "$k/queue.c" "$k/list.c" "$k/timers.c" "$k/event_groups.c" "$k/stream_buffer.c"    "$k/portable/MemMang/heap_3.c"    "$here/port.c" "$root/oracle/harness/main.c" "$root/oracle/harness/kairos_trace.c"    "$root/oracle/harness/ApiSweep.c" $demos "$d/Minimal/MessageBufferAMP.c"
+echo "built $root/oracle/build/smp/corpus-amp"

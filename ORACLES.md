@@ -131,15 +131,33 @@ Rust side is `rusty_rtos_demo`'s `src/smp.rs` (`--features smp`).
 5. **Ticks land on core 0 between turns**, one every two turns -- never
    inside a call.
 
+6. **Contract v2's blind call holds on two cores too**: a top-level
+   `xStreamBufferSend` / `xStreamBufferReceive` that returns without a
+   critical section costs one empty one (the port does it from the call's
+   return hook), so a non-blocking reader polling an empty buffer ends its
+   turn instead of holding the token for ever.
+7. **What counts as a call** follows the C kernel, not the call's name: a
+   `FromISR` call made from a TASK leaves a critical section on two cores
+   (`vTaskExitCriticalFromISR` shares the task-level nesting), so it ends
+   the turn; `taskYIELD_WITHIN_API()` (the timer daemon's) does not.
+8. **A yield an interrupt asks for** (`portYIELD_FROM_ISR`) only marks a
+   switch pending; it is taken where interrupts are next enabled with
+   nothing in the way, which for a handler run from a task's call is that
+   core's next turn.
+
 The trace format is v1's. The critical-exit count is NOT compared: under
 this contract exits decide only whether a call ends a turn, which the trace
 proves line by line, and the two kernels' `configASSERT` probes differ. A
 demo `configASSERT` that fires ends the run with `fail assert <file>:<line>`
 on both sides.
 
-**The corpus (2026-10-02):** semtest, dynamic, PollQ, BlockQ, countsem,
-recmutex, blocktim, QPeek and GenQTest, identical at 20,000 ticks
-(`rusty_rtos_demo/crates/rusty_rtos_demo-core/tests/smp_conformance.rs`).
+**The corpus (2026-10-02):** twenty-three of the twenty-four one-core
+scenarios, identical at 20,000 ticks
+(`rusty_rtos_demo/crates/rusty_rtos_demo-core/tests/smp_conformance.rs`) --
+everything but `death`, whose own code is undefined on two cores (it hands a
+task a pointer to a handle written only after that task can already run on
+the other core, and deletes a freed TCB; the C segfaults). `MessageBufferAMP`
+comes from `oracle/build/smp/corpus-amp`, as on one core.
 
 ```sh
 sh oracle/harness-smp/build.sh                         # WSL

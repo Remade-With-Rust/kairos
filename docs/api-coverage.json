@@ -196,8 +196,8 @@
 "c1": 23,
 "c1_pin": 23,
 "c1k": 25,
-"c2": 19,
-"c2k": 21,
+"c2": 23,
+"c2k": 25,
 "contract_missed": 2,
 "file": "events.rs",
 "line": 133,
@@ -1473,8 +1473,8 @@
 "c1": 48,
 "c1_pin": 48,
 "c1k": 50,
-"c2": 49,
-"c2k": 51,
+"c2": 50,
+"c2k": 52,
 "contract_missed": 2,
 "file": "kernel.rs",
 "line": 1198,
@@ -2110,20 +2110,20 @@
 "twin": "none"
 },
 {
-"any": 15,
+"any": 33,
 "c": "portYIELD",
-"c1": 15,
-"c1_pin": 15,
-"c1k": 15,
-"c2": 13,
-"c2k": 13,
+"c1": 18,
+"c1_pin": 18,
+"c1k": 18,
+"c2": 30,
+"c2k": 30,
 "contract_missed": 0,
 "file": "kernel.rs",
 "line": 1568,
 "missed_by_c": [],
 "name": "port_yield",
 "pub": false,
-"regions": 15,
+"regions": 33,
 "twin": "api"
 },
 {
@@ -2136,7 +2136,7 @@
 "c2k": 4,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1600,
+"line": 1624,
 "missed_by_c": [],
 "name": "task_yield",
 "pub": true,
@@ -2153,54 +2153,54 @@
 "c2k": 56,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 1619,
+"line": 1643,
 "missed_by_c": [
 [
-1658,
+1682,
 21
 ],
 [
-1658,
+1682,
 28
 ],
 [
-1659,
+1683,
 17
 ],
 [
-1659,
+1683,
 22
 ],
 [
-1660,
+1684,
 17
 ],
 [
-1660,
+1684,
 28
 ],
 [
-1660,
+1684,
 34
 ],
 [
-1660,
+1684,
 40
 ],
 [
-1661,
+1685,
 24
 ],
 [
-1673,
+1697,
 62
 ],
 [
-1694,
+1718,
 13
 ],
 [
-1698,
+1722,
 58
 ]
 ],
@@ -2219,10 +2219,10 @@
 "c2k": 34,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 1703,
+"line": 1727,
 "missed_by_c": [
 [
-1724,
+1748,
 46
 ]
 ],
@@ -2241,10 +2241,10 @@
 "c2k": 22,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 1764,
+"line": 1788,
 "missed_by_c": [
 [
-1765,
+1789,
 47
 ]
 ],
@@ -2263,18 +2263,18 @@
 "c2k": 8,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 1814,
+"line": 1838,
 "missed_by_c": [
 [
-1818,
+1842,
 47
 ],
 [
-1822,
+1846,
 46
 ],
 [
-1824,
+1848,
 72
 ]
 ],
@@ -2293,26 +2293,26 @@
 "c2k": 73,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 1855,
+"line": 1879,
 "missed_by_c": [
 [
-1859,
+1883,
 67
 ],
 [
-1862,
+1886,
 13
 ],
 [
-1866,
+1890,
 46
 ],
 [
-1868,
+1892,
 72
 ],
 [
-1887,
+1911,
 17
 ]
 ],
@@ -2331,14 +2331,14 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1898,
+"line": 1922,
 "missed_by_c": [
 [
-1901,
+1925,
 13
 ],
 [
-1903,
+1927,
 13
 ]
 ],
@@ -2357,7 +2357,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1911,
+"line": 1935,
 "missed_by_c": [],
 "name": "current_of",
 "pub": false,
@@ -2374,7 +2374,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1917,
+"line": 1941,
 "missed_by_c": [],
 "name": "priority_on",
 "pub": false,
@@ -2391,14 +2391,14 @@
 "c2k": 10,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1922,
+"line": 1946,
 "missed_by_c": [
 [
-1925,
+1949,
 9
 ],
 [
-1928,
+1952,
 9
 ]
 ],
@@ -2417,7 +2417,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1931,
+"line": 1955,
 "missed_by_c": [],
 "name": "idle_of",
 "pub": false,
@@ -2434,7 +2434,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1935,
+"line": 1959,
 "missed_by_c": [],
 "name": "pending_on",
 "pub": false,
@@ -2451,10 +2451,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1939,
+"line": 1963,
 "missed_by_c": [
 [
-1942,
+1966,
 9
 ]
 ],
@@ -2473,7 +2473,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1945,
+"line": 1969,
 "missed_by_c": [],
 "name": "requested_on",
 "pub": false,
@@ -2490,10 +2490,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1949,
+"line": 1973,
 "missed_by_c": [
 [
-1952,
+1976,
 9
 ]
 ],
@@ -2512,7 +2512,7 @@
 "c2k": 8,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1957,
+"line": 1981,
 "missed_by_c": [],
 "name": "running_core",
 "pub": false,
@@ -2529,7 +2529,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1963,
+"line": 1987,
 "missed_by_c": [],
 "name": "held_by_any_core",
 "pub": false,
@@ -2546,10 +2546,10 @@
 "c2k": 15,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1974,
+"line": 1998,
 "missed_by_c": [
 [
-1976,
+2000,
 13
 ]
 ],
@@ -2568,7 +2568,7 @@
 "c2k": 55,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 1997,
+"line": 2021,
 "missed_by_c": [],
 "name": "yield_for_task",
 "pub": false,
@@ -2585,10 +2585,10 @@
 "c2k": 8,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2051,
+"line": 2075,
 "missed_by_c": [
 [
-2054,
+2078,
 9
 ]
 ],
@@ -2607,7 +2607,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2059,
+"line": 2083,
 "missed_by_c": [],
 "name": "held_core",
 "pub": false,
@@ -2624,7 +2624,7 @@
 "c2k": 4,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2068,
+"line": 2092,
 "missed_by_c": [],
 "name": "take_core_yields",
 "pub": true,
@@ -2641,66 +2641,66 @@
 "c2k": 82,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2091,
+"line": 2115,
 "missed_by_c": [
 [
-2115,
+2139,
 21
 ],
 [
-2119,
+2143,
 13
 ],
 [
-2119,
+2143,
 38
 ],
 [
-2120,
+2144,
 21
 ],
 [
-2120,
+2144,
 28
 ],
 [
-2120,
+2144,
 33
 ],
 [
-2120,
+2144,
 44
 ],
 [
-2121,
+2145,
 20
 ],
 [
-2121,
+2145,
 41
 ],
 [
-2122,
+2146,
 21
 ],
 [
-2122,
+2146,
 38
 ],
 [
-2124,
+2148,
 21
 ],
 [
-2126,
+2150,
 13
 ],
 [
-2150,
+2174,
 25
 ],
 [
-2173,
+2197,
 24
 ]
 ],
@@ -2719,10 +2719,10 @@
 "c2k": 17,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2188,
+"line": 2212,
 "missed_by_c": [
 [
-2196,
+2220,
 9
 ]
 ],
@@ -2741,10 +2741,10 @@
 "c2k": 19,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2204,
+"line": 2228,
 "missed_by_c": [
 [
-2217,
+2241,
 9
 ]
 ],
@@ -2763,38 +2763,38 @@
 "c2k": 39,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2224,
+"line": 2248,
 "missed_by_c": [
 [
-2227,
+2251,
 13
 ],
 [
-2227,
+2251,
 18
 ],
 [
-2227,
+2251,
 33
 ],
 [
-2228,
+2252,
 13
 ],
 [
-2234,
+2258,
 13
 ],
 [
-2234,
+2258,
 18
 ],
 [
-2234,
+2258,
 29
 ],
 [
-2235,
+2259,
 13
 ]
 ],
@@ -2813,54 +2813,54 @@
 "c2k": 5,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2247,
+"line": 2271,
 "missed_by_c": [
 [
-2283,
+2307,
 13
-],
-[
-2283,
-18
-],
-[
-2283,
-29
-],
-[
-2284,
-13
-],
-[
-2297,
-25
-],
-[
-2297,
-30
-],
-[
-2297,
-41
-],
-[
-2298,
-25
-],
-[
-2306,
-13
-],
-[
-2306,
-18
-],
-[
-2306,
-29
 ],
 [
 2307,
+18
+],
+[
+2307,
+29
+],
+[
+2308,
+13
+],
+[
+2321,
+25
+],
+[
+2321,
+30
+],
+[
+2321,
+41
+],
+[
+2322,
+25
+],
+[
+2330,
+13
+],
+[
+2330,
+18
+],
+[
+2330,
+29
+],
+[
+2331,
 13
 ]
 ],
@@ -2875,14 +2875,14 @@
 "c1": 22,
 "c1_pin": 22,
 "c1k": 22,
-"c2": 0,
-"c2k": 0,
+"c2": 17,
+"c2k": 17,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2338,
+"line": 2362,
 "missed_by_c": [
 [
-2366,
+2390,
 24
 ]
 ],
@@ -2901,10 +2901,10 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2382,
+"line": 2406,
 "missed_by_c": [
 [
-2391,
+2415,
 20
 ]
 ],
@@ -2919,11 +2919,11 @@
 "c1": 11,
 "c1_pin": 11,
 "c1k": 11,
-"c2": 0,
-"c2k": 0,
+"c2": 10,
+"c2k": 10,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2414,
+"line": 2438,
 "missed_by_c": [],
 "name": "resume_pending_owed",
 "pub": false,
@@ -2936,106 +2936,106 @@
 "c1": 123,
 "c1_pin": 123,
 "c1k": 123,
-"c2": 0,
-"c2k": 0,
+"c2": 42,
+"c2k": 42,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2427,
+"line": 2451,
 "missed_by_c": [
 [
-2442,
+2466,
 13
 ],
 [
-2453,
+2477,
 13
-],
-[
-2472,
-17
-],
-[
-2482,
-17
 ],
 [
 2496,
 17
 ],
 [
-2510,
+2506,
 17
-],
-[
-2511,
-17
-],
-[
-2513,
-29
-],
-[
-2513,
-37
-],
-[
-2513,
-37
-],
-[
-2513,
-68
-],
-[
-2515,
-17
-],
-[
-2516,
-21
-],
-[
-2516,
-28
-],
-[
-2517,
-17
-],
-[
-2517,
-22
-],
-[
-2518,
-17
-],
-[
-2518,
-28
-],
-[
-2519,
-21
 ],
 [
 2520,
-21
+17
 ],
 [
-2525,
-24
+2534,
+17
 ],
 [
 2535,
 17
 ],
 [
-2552,
+2537,
+29
+],
+[
+2537,
+37
+],
+[
+2537,
+37
+],
+[
+2537,
+68
+],
+[
+2539,
 17
 ],
 [
+2540,
+21
+],
+[
+2540,
+28
+],
+[
+2541,
+17
+],
+[
+2541,
+22
+],
+[
+2542,
+17
+],
+[
+2542,
+28
+],
+[
+2543,
+21
+],
+[
+2544,
+21
+],
+[
+2549,
+24
+],
+[
 2559,
+17
+],
+[
+2576,
+17
+],
+[
+2583,
 20
 ]
 ],
@@ -3054,22 +3054,22 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2571,
+"line": 2595,
 "missed_by_c": [
 [
-2574,
+2598,
 13
 ],
 [
-2581,
+2605,
 13
 ],
 [
-2585,
+2609,
 13
 ],
 [
-2593,
+2617,
 9
 ]
 ],
@@ -3079,29 +3079,29 @@
 "twin": "none"
 },
 {
-"any": 55,
+"any": 58,
 "c": "",
-"c1": 55,
-"c1_pin": 55,
-"c1k": 55,
-"c2": 22,
-"c2k": 22,
+"c1": 56,
+"c1_pin": 56,
+"c1k": 56,
+"c2": 58,
+"c2k": 58,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2605,
+"line": 2629,
 "missed_by_c": [
 [
-2665,
+2697,
 78
 ],
 [
-2671,
+2703,
 9
 ]
 ],
 "name": "trace_failure_or_owe",
 "pub": false,
-"regions": 57,
+"regions": 60,
 "twin": "none"
 },
 {
@@ -3114,10 +3114,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2698,
+"line": 2730,
 "missed_by_c": [
 [
-2701,
+2733,
 21
 ]
 ],
@@ -3136,10 +3136,10 @@
 "c2k": 8,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2708,
+"line": 2740,
 "missed_by_c": [
 [
-2715,
+2747,
 9
 ]
 ],
@@ -3154,14 +3154,14 @@
 "c1": 17,
 "c1_pin": 17,
 "c1k": 17,
-"c2": 0,
-"c2k": 0,
+"c2": 15,
+"c2k": 15,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2732,
+"line": 2764,
 "missed_by_c": [
 [
-2739,
+2771,
 13
 ]
 ],
@@ -3176,14 +3176,14 @@
 "c1": 7,
 "c1_pin": 7,
 "c1k": 7,
-"c2": 0,
-"c2k": 0,
+"c2": 7,
+"c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2743,
+"line": 2775,
 "missed_by_c": [
 [
-2746,
+2778,
 9
 ]
 ],
@@ -3202,7 +3202,7 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2751,
+"line": 2783,
 "missed_by_c": [],
 "name": "owe_yield",
 "pub": false,
@@ -3219,14 +3219,14 @@
 "c2k": 28,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2771,
+"line": 2803,
 "missed_by_c": [
 [
-2802,
+2834,
 13
 ],
 [
-2805,
+2837,
 13
 ]
 ],
@@ -3245,10 +3245,10 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2811,
+"line": 2843,
 "missed_by_c": [
 [
-2814,
+2846,
 9
 ]
 ],
@@ -3267,10 +3267,10 @@
 "c2k": 34,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 2818,
+"line": 2850,
 "missed_by_c": [
 [
-2854,
+2886,
 17
 ]
 ],
@@ -3289,46 +3289,46 @@
 "c2k": 109,
 "contract_missed": 2,
 "file": "kernel.rs",
-"line": 2915,
+"line": 2947,
 "missed_by_c": [
 [
-2923,
+2955,
 20
 ],
 [
-2935,
+2967,
 21
 ],
 [
-2938,
+2970,
 21
 ],
 [
-2939,
+2971,
 17
 ],
 [
-2941,
+2973,
 13
-],
-[
-2952,
-67
-],
-[
-2953,
-13
-],
-[
-2980,
-17
 ],
 [
 2984,
-13
+67
 ],
 [
 2985,
+13
+],
+[
+3012,
+17
+],
+[
+3016,
+13
+],
+[
+3017,
 9
 ]
 ],
@@ -3347,42 +3347,42 @@
 "c2k": 98,
 "contract_missed": 2,
 "file": "kernel.rs",
-"line": 3018,
+"line": 3050,
 "missed_by_c": [
 [
-3025,
+3057,
 20
 ],
 [
-3038,
+3070,
 21
 ],
 [
-3039,
+3071,
 17
 ],
 [
-3041,
+3073,
 13
 ],
 [
-3051,
+3083,
 67
 ],
 [
-3052,
+3084,
 13
 ],
 [
-3091,
+3123,
 17
 ],
 [
-3095,
+3127,
 13
 ],
 [
-3096,
+3128,
 9
 ]
 ],
@@ -3401,7 +3401,7 @@
 "c2k": 28,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3124,
+"line": 3156,
 "missed_by_c": [],
 "name": "task_get_handle",
 "pub": true,
@@ -3418,10 +3418,10 @@
 "c2k": 18,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 3149,
+"line": 3181,
 "missed_by_c": [
 [
-3157,
+3189,
 20
 ]
 ],
@@ -3440,10 +3440,10 @@
 "c2k": 24,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 3171,
+"line": 3203,
 "missed_by_c": [
 [
-3179,
+3211,
 20
 ]
 ],
@@ -3462,18 +3462,18 @@
 "c2k": 30,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 3199,
+"line": 3231,
 "missed_by_c": [
 [
-3207,
+3239,
 20
 ],
 [
-3216,
+3248,
 19
 ],
 [
-3216,
+3248,
 32
 ]
 ],
@@ -3492,18 +3492,18 @@
 "c2k": 38,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 3223,
+"line": 3255,
 "missed_by_c": [
 [
-3231,
+3263,
 20
 ],
 [
-3240,
+3272,
 33
 ],
 [
-3241,
+3273,
 25
 ]
 ],
@@ -3522,38 +3522,38 @@
 "c2k": 77,
 "contract_missed": 5,
 "file": "kernel.rs",
-"line": 3245,
+"line": 3277,
 "missed_by_c": [
 [
-3256,
+3288,
 50
 ],
 [
-3259,
-13
-],
-[
-3274,
-13
-],
-[
 3291,
+13
+],
+[
+3306,
+13
+],
+[
+3323,
 69
 ],
 [
-3293,
+3325,
 87
 ],
 [
-3295,
+3327,
 46
 ],
 [
-3297,
+3329,
 17
 ],
 [
-3298,
+3330,
 50
 ]
 ],
@@ -3572,18 +3572,18 @@
 "c2k": 28,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 3332,
+"line": 3364,
 "missed_by_c": [
 [
-3334,
+3366,
 20
 ],
 [
-3343,
+3375,
 17
 ],
 [
-3344,
+3376,
 13
 ]
 ],
@@ -3602,10 +3602,10 @@
 "c2k": 25,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 3364,
+"line": 3396,
 "missed_by_c": [
 [
-3366,
+3398,
 20
 ]
 ],
@@ -3624,22 +3624,22 @@
 "c2k": 28,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 3383,
+"line": 3415,
 "missed_by_c": [
 [
-3390,
+3422,
 20
 ],
 [
-3401,
+3433,
 25
 ],
 [
-3403,
+3435,
 17
 ],
 [
-3403,
+3435,
 23
 ]
 ],
@@ -3658,7 +3658,7 @@
 "c2k": 5,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3418,
+"line": 3450,
 "missed_by_c": [],
 "name": "notify_wait_pending",
 "pub": true,
@@ -3675,10 +3675,10 @@
 "c2k": 10,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 3424,
+"line": 3456,
 "missed_by_c": [
 [
-3425,
+3457,
 51
 ]
 ],
@@ -3697,10 +3697,10 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3434,
+"line": 3466,
 "missed_by_c": [
 [
-3438,
+3470,
 9
 ]
 ],
@@ -3719,10 +3719,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3447,
+"line": 3479,
 "missed_by_c": [
 [
-3450,
+3482,
 9
 ]
 ],
@@ -3741,7 +3741,7 @@
 "c2k": 13,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3456,
+"line": 3488,
 "missed_by_c": [],
 "name": "waiting_on",
 "pub": false,
@@ -3758,7 +3758,7 @@
 "c2k": 8,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3466,
+"line": 3498,
 "missed_by_c": [],
 "name": "held",
 "pub": false,
@@ -3775,10 +3775,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3471,
+"line": 3503,
 "missed_by_c": [
 [
-3474,
+3506,
 9
 ]
 ],
@@ -3797,7 +3797,7 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3478,
+"line": 3510,
 "missed_by_c": [],
 "name": "stream_sample",
 "pub": false,
@@ -3814,10 +3814,10 @@
 "c2k": 4,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3484,
+"line": 3516,
 "missed_by_c": [
 [
-3492,
+3524,
 20
 ]
 ],
@@ -3836,14 +3836,14 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3512,
+"line": 3544,
 "missed_by_c": [
 [
-3523,
+3555,
 13
 ],
 [
-3525,
+3557,
 9
 ]
 ],
@@ -3862,10 +3862,10 @@
 "c2k": 9,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3536,
+"line": 3568,
 "missed_by_c": [
 [
-3538,
+3570,
 20
 ]
 ],
@@ -3884,10 +3884,10 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3546,
+"line": 3578,
 "missed_by_c": [
 [
-3549,
+3581,
 9
 ]
 ],
@@ -3906,10 +3906,10 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3560,
+"line": 3592,
 "missed_by_c": [
 [
-3562,
+3594,
 20
 ]
 ],
@@ -3928,34 +3928,34 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3570,
+"line": 3602,
 "missed_by_c": [
 [
-3570,
+3602,
 5
 ],
 [
-3571,
+3603,
 19
 ],
 [
-3571,
+3603,
 26
 ],
 [
-3571,
+3603,
 26
 ],
 [
-3571,
+3603,
 54
 ],
 [
-3573,
+3605,
 9
 ],
 [
-3574,
+3606,
 5
 ]
 ],
@@ -3974,7 +3974,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3576,
+"line": 3608,
 "missed_by_c": [],
 "name": "notify_blocked",
 "pub": false,
@@ -3991,10 +3991,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3583,
+"line": 3615,
 "missed_by_c": [
 [
-3586,
+3618,
 9
 ]
 ],
@@ -4013,7 +4013,7 @@
 "c2k": 13,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3589,
+"line": 3621,
 "missed_by_c": [],
 "name": "notify_state_of",
 "pub": false,
@@ -4030,7 +4030,7 @@
 "c2k": 12,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3597,
+"line": 3629,
 "missed_by_c": [],
 "name": "notified_value_of",
 "pub": false,
@@ -4047,7 +4047,7 @@
 "c2k": 3,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3611,
+"line": 3643,
 "missed_by_c": [],
 "name": "tick_count_from_isr",
 "pub": true,
@@ -4064,7 +4064,7 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3618,
+"line": 3650,
 "missed_by_c": [],
 "name": "missed_yield",
 "pub": false,
@@ -4081,7 +4081,7 @@
 "c2k": 9,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3628,
+"line": 3660,
 "missed_by_c": [],
 "name": "run_tick_hook",
 "pub": false,
@@ -4098,7 +4098,7 @@
 "c2k": 3,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3640,
+"line": 3672,
 "missed_by_c": [],
 "name": "tick_hook",
 "pub": true,
@@ -4115,7 +4115,7 @@
 "c2k": 3,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3645,
+"line": 3677,
 "missed_by_c": [],
 "name": "tick_hook_mut",
 "pub": true,
@@ -4132,34 +4132,34 @@
 "c2k": 59,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3654,
+"line": 3686,
 "missed_by_c": [
 [
-3660,
+3692,
 13
 ],
 [
-3669,
+3701,
 17
 ],
 [
-3670,
+3702,
 24
 ],
 [
-3673,
-24
-],
-[
-3680,
-24
-],
-[
-3692,
+3705,
 24
 ],
 [
 3712,
+24
+],
+[
+3724,
+24
+],
+[
+3744,
 17
 ]
 ],
@@ -4178,7 +4178,7 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3729,
+"line": 3761,
 "missed_by_c": [],
 "name": "switch_delayed_lists",
 "pub": false,
@@ -4195,7 +4195,7 @@
 "c2k": 13,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 3774,
+"line": 3806,
 "missed_by_c": [],
 "name": "reset_next_task_unblock_time",
 "pub": false,
@@ -4212,10 +4212,10 @@
 "c2k": 31,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 3789,
+"line": 3821,
 "missed_by_c": [
 [
-3797,
+3829,
 68
 ]
 ],
@@ -4234,22 +4234,22 @@
 "c2k": 55,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 3828,
+"line": 3860,
 "missed_by_c": [
 [
-3830,
+3862,
 20
 ],
 [
-3835,
+3867,
 48
 ],
 [
-3852,
+3884,
 17
 ],
 [
-3856,
+3888,
 42
 ]
 ],
@@ -4268,34 +4268,34 @@
 "c2k": 71,
 "contract_missed": 4,
 "file": "kernel.rs",
-"line": 3870,
+"line": 3902,
 "missed_by_c": [
 [
-3889,
+3921,
 13
 ],
 [
-3903,
+3935,
 20
 ],
 [
-3909,
+3941,
 9
 ],
 [
-3918,
+3950,
 64
 ],
 [
-3931,
+3963,
 51
 ],
 [
-3962,
+3994,
 58
 ],
 [
-3976,
+4008,
 17
 ]
 ],
@@ -4305,67 +4305,63 @@
 "twin": "state"
 },
 {
-"any": 96,
+"any": 97,
 "c": "vTaskSuspend",
 "c1": 66,
 "c1_pin": 66,
 "c1k": 69,
-"c2": 83,
-"c2k": 86,
+"c2": 85,
+"c2k": 88,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 3992,
+"line": 4024,
 "missed_by_c": [
 [
-3998,
+4030,
 17
 ],
 [
-3998,
+4030,
 22
 ],
 [
-3999,
+4031,
 24
 ],
 [
-4007,
+4039,
 43
 ],
 [
-4010,
+4042,
 64
 ],
 [
-4036,
+4068,
 13
 ],
 [
-4061,
-13
-],
-[
-4072,
+4104,
 23
 ],
 [
-4072,
+4104,
 23
 ],
 [
-4072,
+4104,
 34
 ],
 [
-4072,
+4104,
 38
 ],
 [
-4072,
+4104,
 94
 ],
 [
-4074,
+4106,
 13
 ]
 ],
@@ -4384,22 +4380,22 @@
 "c2k": 45,
 "contract_missed": 4,
 "file": "kernel.rs",
-"line": 4083,
+"line": 4115,
 "missed_by_c": [
 [
-4094,
+4126,
 20
 ],
 [
-4098,
+4130,
 44
 ],
 [
-4101,
+4133,
 50
 ],
 [
-4105,
+4137,
 54
 ]
 ],
@@ -4418,18 +4414,18 @@
 "c2k": 19,
 "contract_missed": 2,
 "file": "kernel.rs",
-"line": 4121,
+"line": 4153,
 "missed_by_c": [
 [
-4122,
+4154,
 56
 ],
 [
-4125,
+4157,
 70
 ],
 [
-4127,
+4159,
 20
 ]
 ],
@@ -4448,26 +4444,26 @@
 "c2k": 85,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 4156,
+"line": 4188,
 "missed_by_c": [
 [
-4159,
+4191,
 34
 ],
 [
-4168,
+4200,
 12
 ],
 [
-4170,
+4202,
 9
 ],
 [
-4202,
+4234,
 72
 ],
 [
-4233,
+4265,
 26
 ]
 ],
@@ -4486,10 +4482,10 @@
 "c2k": 25,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4249,
+"line": 4281,
 "missed_by_c": [
 [
-4260,
+4292,
 25
 ]
 ],
@@ -4508,14 +4504,14 @@
 "c2k": 18,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4271,
+"line": 4303,
 "missed_by_c": [
 [
-4298,
+4330,
 9
 ],
 [
-4309,
+4341,
 9
 ]
 ],
@@ -4534,7 +4530,7 @@
 "c2k": 8,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4325,
+"line": 4357,
 "missed_by_c": [],
 "name": "check_tasks_waiting_termination",
 "pub": true,
@@ -4551,58 +4547,58 @@
 "c2k": 124,
 "contract_missed": 10,
 "file": "kernel.rs",
-"line": 4351,
+"line": 4383,
 "missed_by_c": [
 [
-4358,
+4390,
 17
 ],
 [
-4358,
+4390,
 22
 ],
 [
-4359,
+4391,
 24
 ],
 [
-4366,
+4398,
 49
 ],
 [
-4384,
+4416,
 62
 ],
 [
-4386,
+4418,
 56
 ],
 [
-4389,
+4421,
 69
 ],
 [
-4391,
+4423,
 50
 ],
 [
-4395,
+4427,
 68
 ],
 [
-4397,
+4429,
 46
 ],
 [
-4399,
+4431,
 56
 ],
 [
-4411,
+4443,
 64
 ],
 [
-4417,
+4449,
 21
 ]
 ],
@@ -4621,7 +4617,7 @@
 "c2k": 3,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4430,
+"line": 4462,
 "missed_by_c": [],
 "name": "suspend_all",
 "pub": true,
@@ -4638,10 +4634,10 @@
 "c2k": 8,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4447,
+"line": 4479,
 "missed_by_c": [
 [
-4451,
+4483,
 13
 ]
 ],
@@ -4660,22 +4656,22 @@
 "c2k": 28,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4459,
+"line": 4491,
 "missed_by_c": [
 [
-4463,
+4495,
 17
 ],
 [
-4466,
+4498,
 17
 ],
 [
-4471,
+4503,
 17
 ],
 [
-4492,
+4524,
 9
 ]
 ],
@@ -4694,10 +4690,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4502,
+"line": 4534,
 "missed_by_c": [
 [
-4504,
+4536,
 13
 ]
 ],
@@ -4716,7 +4712,7 @@
 "c2k": 11,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4512,
+"line": 4544,
 "missed_by_c": [],
 "name": "unwind_pended_ticks_loop",
 "pub": false,
@@ -4733,7 +4729,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4532,
+"line": 4564,
 "missed_by_c": [],
 "name": "note_exits",
 "pub": false,
@@ -4750,7 +4746,7 @@
 "c2k": 4,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4542,
+"line": 4574,
 "missed_by_c": [],
 "name": "resume_all",
 "pub": true,
@@ -4767,10 +4763,10 @@
 "c2k": 27,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4550,
+"line": 4582,
 "missed_by_c": [
 [
-4565,
+4597,
 21
 ]
 ],
@@ -4789,10 +4785,10 @@
 "c2k": 32,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4595,
+"line": 4627,
 "missed_by_c": [
 [
-4642,
+4674,
 20
 ]
 ],
@@ -4811,10 +4807,10 @@
 "c2k": 17,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4662,
+"line": 4694,
 "missed_by_c": [
 [
-4682,
+4714,
 9
 ]
 ],
@@ -4833,7 +4829,7 @@
 "c2k": 7,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4686,
+"line": 4718,
 "missed_by_c": [],
 "name": "wait_inherited",
 "pub": false,
@@ -4850,10 +4846,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4697,
+"line": 4729,
 "missed_by_c": [
 [
-4700,
+4732,
 9
 ]
 ],
@@ -4872,62 +4868,62 @@
 "c2k": 58,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4733,
+"line": 4765,
 "missed_by_c": [
 [
-4748,
+4780,
 13
 ],
 [
-4748,
+4780,
 18
 ],
 [
-4749,
+4781,
 20
 ],
 [
-4756,
+4788,
 13
 ],
 [
-4769,
+4801,
 21
 ],
 [
-4769,
+4801,
 39
 ],
 [
-4770,
+4802,
 21
 ],
 [
-4774,
+4806,
 21
 ],
 [
-4774,
+4806,
 36
 ],
 [
-4775,
+4807,
 21
 ],
 [
-4786,
+4818,
 62
 ],
 [
-4787,
+4819,
 21
 ],
 [
-4788,
+4820,
 21
 ],
 [
-4804,
+4836,
 23
 ]
 ],
@@ -4946,14 +4942,14 @@
 "c2k": 19,
 "contract_missed": 2,
 "file": "kernel.rs",
-"line": 4821,
+"line": 4853,
 "missed_by_c": [
 [
-4829,
+4861,
 67
 ],
 [
-4830,
+4862,
 42
 ]
 ],
@@ -4972,22 +4968,22 @@
 "c2k": 31,
 "contract_missed": 4,
 "file": "kernel.rs",
-"line": 4843,
+"line": 4875,
 "missed_by_c": [
 [
-4849,
+4881,
 67
 ],
 [
-4850,
+4882,
 49
 ],
 [
-4853,
+4885,
 42
 ],
 [
-4854,
+4886,
 44
 ]
 ],
@@ -5006,14 +5002,14 @@
 "c2k": 18,
 "contract_missed": 2,
 "file": "kernel.rs",
-"line": 4869,
+"line": 4901,
 "missed_by_c": [
 [
-4875,
+4907,
 34
 ],
 [
-4877,
+4909,
 88
 ]
 ],
@@ -5032,18 +5028,18 @@
 "c2k": 23,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 4884,
+"line": 4916,
 "missed_by_c": [
 [
-4886,
+4918,
 43
 ],
 [
-4887,
+4919,
 47
 ],
 [
-4889,
+4921,
 84
 ]
 ],
@@ -5062,7 +5058,7 @@
 "c2k": 14,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4895,
+"line": 4927,
 "missed_by_c": [],
 "name": "take_event_resume",
 "pub": false,
@@ -5079,14 +5075,14 @@
 "c2k": 8,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4913,
+"line": 4945,
 "missed_by_c": [
 [
-4918,
+4950,
 13
 ],
 [
-4920,
+4952,
 9
 ]
 ],
@@ -5105,26 +5101,26 @@
 "c2k": 19,
 "contract_missed": 2,
 "file": "kernel.rs",
-"line": 4936,
+"line": 4968,
 "missed_by_c": [
 [
-4949,
+4981,
 13
 ],
 [
-4949,
+4981,
 18
 ],
 [
-4949,
+4981,
 29
 ],
 [
-4950,
+4982,
 20
 ],
 [
-4956,
+4988,
 52
 ]
 ],
@@ -5143,7 +5139,7 @@
 "c2k": 4,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4962,
+"line": 4994,
 "missed_by_c": [],
 "name": "yield_or_owe",
 "pub": false,
@@ -5160,10 +5156,10 @@
 "c2k": 6,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 4971,
+"line": 5003,
 "missed_by_c": [
 [
-4974,
+5006,
 9
 ]
 ],
@@ -5178,34 +5174,34 @@
 "c1": 56,
 "c1_pin": 56,
 "c1k": 62,
-"c2": 62,
-"c2k": 68,
+"c2": 63,
+"c2k": 69,
 "contract_missed": 6,
 "file": "kernel.rs",
-"line": 4983,
+"line": 5015,
 "missed_by_c": [
 [
-4989,
+5021,
 48
 ],
 [
-4997,
+5029,
 63
 ],
 [
-4999,
+5031,
 38
 ],
 [
-5001,
+5033,
 60
 ],
 [
-5002,
+5034,
 48
 ],
 [
-5009,
+5041,
 60
 ]
 ],
@@ -5224,30 +5220,30 @@
 "c2k": 63,
 "contract_missed": 3,
 "file": "kernel.rs",
-"line": 5022,
+"line": 5054,
 "missed_by_c": [
 [
-5038,
+5070,
 30
 ],
 [
-5045,
+5077,
 20
 ],
 [
-5052,
+5084,
 45
 ],
 [
-5055,
+5087,
 62
 ],
 [
-5056,
+5088,
 44
 ],
 [
-5065,
+5097,
 13
 ]
 ],
@@ -5266,30 +5262,30 @@
 "c2k": 68,
 "contract_missed": 5,
 "file": "kernel.rs",
-"line": 5073,
+"line": 5105,
 "missed_by_c": [
 [
-5079,
+5111,
 20
 ],
 [
-5082,
+5114,
 48
 ],
 [
-5109,
+5141,
 47
 ],
 [
-5110,
+5142,
 54
 ],
 [
-5112,
+5144,
 38
 ],
 [
-5114,
+5146,
 48
 ]
 ],
@@ -5308,30 +5304,30 @@
 "c2k": 40,
 "contract_missed": 1,
 "file": "kernel.rs",
-"line": 5133,
+"line": 5165,
 "missed_by_c": [
 [
-5142,
+5174,
 20
 ],
 [
-5142,
+5174,
 48
 ],
 [
-5142,
+5174,
 62
 ],
 [
-5144,
+5176,
 17
 ],
 [
-5156,
+5188,
 68
 ],
 [
-5161,
+5193,
 9
 ]
 ],
@@ -5350,30 +5346,30 @@
 "c2k": 0,
 "contract_missed": 0,
 "file": "kernel.rs",
-"line": 5173,
+"line": 5205,
 "missed_by_c": [
 [
-5173,
+5205,
 5
 ],
 [
-5174,
+5206,
 15
 ],
 [
-5174,
+5206,
 15
 ],
 [
-5175,
+5207,
 21
 ],
 [
-5176,
+5208,
 24
 ],
 [
-5178,
+5210,
 5
 ]
 ],
@@ -5392,38 +5388,38 @@
 "c2k": 37,
 "contract_missed": 5,
 "file": "kernel.rs",
-"line": 5188,
+"line": 5220,
 "missed_by_c": [
 [
-5189,
+5221,
 47
 ],
 [
-5190,
+5222,
 20
 ],
 [
-5200,
+5232,
 20
 ],
 [
-5200,
+5232,
 24
 ],
 [
-5205,
+5237,
 46
 ],
 [
-5207,
+5239,
 68
 ],
 [
-5209,
+5241,
 44
 ],
 [
-5215,
+5247,
 13
 ]
 ],
@@ -5775,8 +5771,8 @@
 "c1": 17,
 "c1_pin": 17,
 "c1k": 18,
-"c2": 16,
-"c2k": 17,
+"c2": 17,
+"c2k": 18,
 "contract_missed": 1,
 "file": "queue.rs",
 "line": 214,
@@ -7731,8 +7727,8 @@
 "c1": 34,
 "c1_pin": 34,
 "c1k": 36,
-"c2": 25,
-"c2k": 27,
+"c2": 34,
+"c2k": 36,
 "contract_missed": 2,
 "file": "stream.rs",
 "line": 213,
@@ -7765,8 +7761,8 @@
 "c1": 46,
 "c1_pin": 46,
 "c1k": 46,
-"c2": 34,
-"c2k": 34,
+"c2": 46,
+"c2k": 46,
 "contract_missed": 0,
 "file": "stream.rs",
 "line": 237,
@@ -7791,40 +7787,12 @@
 "c1": 8,
 "c1_pin": 8,
 "c1k": 8,
-"c2": 8,
-"c2k": 8,
+"c2": 15,
+"c2k": 15,
 "contract_missed": 0,
 "file": "stream.rs",
 "line": 270,
 "missed_by_c": [
-[
-273,
-26
-],
-[
-273,
-35
-],
-[
-273,
-35
-],
-[
-274,
-29
-],
-[
-274,
-37
-],
-[
-274,
-37
-],
-[
-274,
-69
-],
 [
 276,
 17
@@ -8020,8 +7988,8 @@
 "c1": 13,
 "c1_pin": 13,
 "c1k": 13,
-"c2": 4,
-"c2k": 4,
+"c2": 13,
+"c2k": 13,
 "contract_missed": 0,
 "file": "stream.rs",
 "line": 475,
@@ -8037,8 +8005,8 @@
 "c1": 17,
 "c1_pin": 17,
 "c1k": 17,
-"c2": 15,
-"c2k": 15,
+"c2": 17,
+"c2k": 17,
 "contract_missed": 0,
 "file": "stream.rs",
 "line": 490,
@@ -8054,8 +8022,8 @@
 "c1": 167,
 "c1_pin": 167,
 "c1k": 180,
-"c2": 153,
-"c2k": 166,
+"c2": 154,
+"c2k": 167,
 "contract_missed": 13,
 "file": "stream.rs",
 "line": 502,
@@ -8328,8 +8296,8 @@
 "c1": 17,
 "c1_pin": 17,
 "c1k": 17,
-"c2": 15,
-"c2k": 15,
+"c2": 17,
+"c2k": 17,
 "contract_missed": 0,
 "file": "stream.rs",
 "line": 773,
@@ -8505,8 +8473,8 @@
 "c1": 29,
 "c1_pin": 29,
 "c1k": 33,
-"c2": 28,
-"c2k": 32,
+"c2": 29,
+"c2k": 33,
 "contract_missed": 4,
 "file": "stream.rs",
 "line": 934,
@@ -13472,8 +13440,8 @@
 "c1": 43,
 "c1_pin": 43,
 "c1k": 46,
-"c2": 37,
-"c2k": 40,
+"c2": 43,
+"c2k": 46,
 "contract_missed": 3,
 "file": "timer.rs",
 "line": 272,
@@ -13652,8 +13620,8 @@
 "c1": 52,
 "c1_pin": 52,
 "c1k": 53,
-"c2": 51,
-"c2k": 52,
+"c2": 52,
+"c2k": 53,
 "contract_missed": 1,
 "file": "timer.rs",
 "line": 460,
@@ -13940,8 +13908,8 @@
 "c1": 25,
 "c1_pin": 25,
 "c1k": 25,
-"c2": 4,
-"c2k": 4,
+"c2": 25,
+"c2k": 25,
 "contract_missed": 0,
 "file": "timer.rs",
 "line": 693,
@@ -13966,8 +13934,8 @@
 "c1": 19,
 "c1_pin": 19,
 "c1k": 19,
-"c2": 4,
-"c2k": 4,
+"c2": 19,
+"c2k": 19,
 "contract_missed": 0,
 "file": "timer.rs",
 "line": 728,
@@ -14312,66 +14280,114 @@
 "twin": "state"
 },
 {
-"any": 119,
+"any": 11,
 "c": "prvProcessReceivedCommands",
-"c1": 118,
-"c1_pin": 118,
-"c1k": 122,
-"c2": 113,
-"c2k": 117,
-"contract_missed": 4,
+"c1": 11,
+"c1_pin": 11,
+"c1k": 13,
+"c2": 11,
+"c2k": 13,
+"contract_missed": 2,
 "file": "timer.rs",
 "line": 1019,
 "missed_by_c": [
 [
-1022,
-41
+1020,
+48
 ],
 [
-1039,
-20
+1021,
+30
 ],
 [
-1048,
-60
-],
-[
-1053,
-13
-],
-[
-1060,
-83
-],
-[
-1067,
-58
-],
-[
-1070,
-17
-],
-[
-1076,
-13
-],
-[
-1081,
-13
-],
-[
-1088,
-78
-],
-[
-1106,
-9
+1024,
+52
 ]
 ],
 "name": "process_one_timer_command",
 "pub": true,
-"regions": 129,
+"regions": 14,
 "twin": "state"
+},
+{
+"any": 12,
+"c": "",
+"c1": 12,
+"c1_pin": 12,
+"c1k": 12,
+"c2": 12,
+"c2k": 12,
+"contract_missed": 0,
+"file": "timer.rs",
+"line": 1047,
+"missed_by_c": [
+[
+1055,
+34
+]
+],
+"name": "timer_receive_command",
+"pub": true,
+"regions": 13,
+"twin": "none"
+},
+{
+"any": 105,
+"c": "",
+"c1": 104,
+"c1_pin": 104,
+"c1k": 108,
+"c2": 99,
+"c2k": 103,
+"contract_missed": 4,
+"file": "timer.rs",
+"line": 1065,
+"missed_by_c": [
+[
+1074,
+20
+],
+[
+1083,
+60
+],
+[
+1088,
+13
+],
+[
+1095,
+83
+],
+[
+1102,
+58
+],
+[
+1105,
+17
+],
+[
+1111,
+13
+],
+[
+1116,
+13
+],
+[
+1123,
+78
+],
+[
+1141,
+9
+]
+],
+"name": "timer_execute_command",
+"pub": true,
+"regions": 114,
+"twin": "none"
 },
 {
 "any": 11,
@@ -14383,10 +14399,10 @@
 "c2k": 12,
 "contract_missed": 1,
 "file": "timer.rs",
-"line": 1111,
+"line": 1146,
 "missed_by_c": [
 [
-1113,
+1148,
 43
 ]
 ],

@@ -223,6 +223,23 @@ fails its own single-core check on two cores is acceptable **only if the C
 fails identically, at the same line**. This judges whole behaviours P1 never
 composes — the timer daemon on a second core, a notification crossing cores.
 
+**DONE 2026-10-02: fourteen of the fifteen, so twenty-three of twenty-four on
+two cores, identical to the C at 20,000 ticks** (trace digests, line and byte
+counts, verdicts with yield counts; a poisoned pin is seen to fail). Eight
+fail their own checks, identically, at the same line. The fifteenth, `death`,
+is undefined on two cores in its OWN code (a handle read before it is
+written, then a freed TCB deleted; the C segfaults) and is recorded as such,
+not ported. Five passed on first contact, thanks to P1's fixes.
+
+What it took, by layer:
+
+| layer | change |
+|---|---|
+| kernel | a trace line the C prints after a switch inside the call is owed on a COMMITTING port too (the switch lands after the call there, not at the yield); on two cores a yield inside a critical section PENDS and the exit yields, and under a suspended scheduler the switch is not requested (the C's declines); `timer_receive_command` / `timer_execute_command` split the daemon's receive from the command, carrying the message by value |
+| C two-core harness | contract v2's blind call (a polling stream-buffer reader froze the C); the `MessageBufferAMP` binary; the debug log names the call that ended a turn |
+| two-core runner | the daemon's internal yield does not end a turn; timer callbacks run deferred, a kernel call a step; a task's owed line is paid before its next call; a task-context `FromISR` call's critical section counts; an interrupt's yield waits for the core's next turn; yields count as the C counts them |
+| demo ports | four "call + statement" steps split, because on two cores the statement after a call belongs to the next turn (`ApiSweep`'s ready flag, `TaskNotify`'s timer handle, `IntQueue`'s state checks); `TimerDemo` and `EventGroupsDemo` model the `configASSERT`s their C has |
+
 ### P3 — Authored sweeps for what neither reaches
 
 Whatever P0 still reports unjudged after P1 and P2 gets a sweep in the
@@ -272,7 +289,7 @@ entry, kernel/demo patch releases from clean clones.
 |---|---|---|
 | P0 — **passed 2026-10-02** | `docs/API-COVERAGE.md` generated for all 176 public functions, per arm, per oracle | remove one ORACLE (the `ApiSweep` pin): exactly the APIs only it reaches must flip to never-compared. Predicted its six; measured exactly those six, and one region elsewhere. (Deleting a call site, as first written, changes the trace, so the pinned comparison fails and the census rightly refuses the run.) |
 | P1 — **passed 2026-10-02** | every C-twinned API is a grammar production; every arm reached or justified; 32 seeds x 20k steps identical, both builds | plant one-line changes in a queue arm, a timer arm and an ISR arm; each fails at a named seed and step |
-| P2 | all fifteen run on two cores, identical to the C (or failing identically) | change one count in a pin; `smp_conformance` fails |
+| P2 — **passed 2026-10-02** | all fifteen run on two cores, identical to the C (or failing identically) -- fourteen; `death` is undefined on two cores in its own code | change one count in a pin; `smp_conformance` fails |
 | P3 | census shows no C-twinned API unjudged without a sweep or a written reason | as P1, per swept API |
 | P4 | every typed/async wrapper has an equivalence test | swap two calls inside one wrapper; its test fails |
 | P5 | per-API mutant report; no unexplained survivor in a "judged" API | re-run cargo-mutants on one file; the report matches the census |

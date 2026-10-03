@@ -142,7 +142,7 @@ against the C kernel, in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md):
 | 119 public APIs with a FreeRTOS twin | entered by a run compared to the C | every arm executed |
 |---|---:|---:|
 | one core | **116** | 57 |
-| two cores | **112** | 53 |
+| two cores | **112** | 55 |
 
 The 3 never compared on one core, and the 7 never compared on two, are named there; closing them is [`docs/plans/api-differential.md`](docs/plans/api-differential.md).
 <!-- API-CENSUS:END -->

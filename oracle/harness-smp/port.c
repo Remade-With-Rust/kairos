@@ -35,6 +35,8 @@ typedef struct Thread
     /* Resumed inside a call it was PREEMPTED in: that call's return is
      * not a turn boundary (the Rust side finished it in the earlier step). */
     int iTail;
+    /* The top-level call in progress, for KAIROS_SMP_DEBUG. */
+    const char * pcApi;
     /* The call in progress has blocked (a BLOCKING_* / *_BLOCK event). */
     int iBlocking;
 } Thread_t;
@@ -60,7 +62,9 @@ static void prvEndTurn( const char * pcWhy )
 
     if( getenv( "KAIROS_SMP_DEBUG" ) != NULL )
     {
-        fprintf( stderr, "#   end %s depth=%d\n", pcWhy, pxMe->iDepth );
+        fprintf( stderr, "#   end %s depth=%d%s%s\n", pcWhy, pxMe->iDepth,
+                 ( pxMe->pcApi != NULL && pcWhy[ 0 ] == 'c' ) ? " " : "",
+                 ( pxMe->pcApi != NULL && pcWhy[ 0 ] == 'c' ) ? pxMe->pcApi : "" );
     }
 
     sem_post( &xDriver );
@@ -244,7 +248,7 @@ void vPortCriticalExited( BaseType_t xCoreID )
     }
 }
 
-void vPortApiEnter( void )
+void vPortApiEnter( const char * pcName )
 {
     Thread_t * pxMe = pxSelf;
 
@@ -256,8 +260,18 @@ void vPortApiEnter( void )
     {
         pxMe->ulApiBase = ulKairosExits;
         pxMe->iBlocking = 0;
+        pxMe->pcApi = pcName;
     }
     pxMe->iDepth++;
+}
+
+/* The calls contract v2 charges when they take no critical section: see
+ * vPortApiReturn. */
+static int prvIsBlindCall( const char * pcApi )
+{
+    return ( pcApi != NULL ) &&
+           ( ( strcmp( pcApi, "xStreamBufferSend" ) == 0 ) ||
+             ( strcmp( pcApi, "xStreamBufferReceive" ) == 0 ) );
 }
 
 void vPortApiReturn( void )
@@ -277,6 +291,21 @@ void vPortApiReturn( void )
         if( pxMe->iTail )
         {
             pxMe->iTail = 0;
+        }
+        else if( ( ulKairosExits == pxMe->ulApiBase ) && prvIsBlindCall( pxMe->pcApi ) )
+        {
+            /* Contract v2's blind call, as the one-core port's
+             * vPortKairosApiReturn: a stream-buffer send or receive that
+             * returned without a critical section costs one empty one -- a
+             * non-blocking reader polling an empty buffer would otherwise
+             * hold the token for ever. Port-internal, so the API hooks of
+             * the section itself do not count; its exit does, and ends the
+             * turn as any call's would. */
+            xInPort = 1;
+            taskENTER_CRITICAL();
+            taskEXIT_CRITICAL();
+            xInPort = 0;
+            prvEndTurn( "call" );
         }
         else if( ulKairosExits > pxMe->ulApiBase )
         {
@@ -384,10 +413,10 @@ BaseType_t xPortStartScheduler( void )
         smp_core = c;
         if( getenv( "KAIROS_SMP_DEBUG" ) != NULL )
         {
-            fprintf( stderr, "# turn %lu core %d cur0=%s cur1=%s pend=%d%d lock=%d\n", ulTurn, c,
+            fprintf( stderr, "# turn %lu core %d cur0=%s cur1=%s pend=%d%d lock=%d y=%lu\n", ulTurn, c,
                      pcTaskGetName( xTaskGetCurrentTaskHandleForCore( 0 ) ),
                      pcTaskGetName( xTaskGetCurrentTaskHandleForCore( 1 ) ),
-                     xSwitchPending[ 0 ], xSwitchPending[ 1 ], iTaskLockOwner );
+                     xSwitchPending[ 0 ], xSwitchPending[ 1 ], iTaskLockOwner, ulKairosYields );
         }
         if( iTaskLockOwner != -1 && iTaskLockOwner != c )
         {

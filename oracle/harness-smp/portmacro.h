@@ -105,7 +105,7 @@ void vPortReleaseTaskLock( BaseType_t xCoreID );
 
 /* The API-boundary hooks every traceENTER_* / traceRETURN_* expands to
  * (api_hooks.h, generated), and the block marker. */
-void vPortApiEnter( void );
+void vPortApiEnter( const char * pcName );
 void vPortApiReturn( void );
 void vPortBlocking( void );
 

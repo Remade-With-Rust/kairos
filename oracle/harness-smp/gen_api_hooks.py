@@ -31,7 +31,9 @@ for m in re.finditer(r"#define\s+(trace(ENTER|RETURN)_\w+)\s*\(([^)]*)\)", src):
     if name in seen or name.split("_", 1)[1] in INTERNAL:
         continue
     seen.add(name)
-    hook = "vPortApiEnter()" if kind == "ENTER" else "vPortApiReturn()"
+    # The name is for KAIROS_SMP_DEBUG only: it says which call ended a turn.
+    fname = name.split("_", 1)[1]
+    hook = f'vPortApiEnter( "{fname}" )' if kind == "ENTER" else "vPortApiReturn()"
 
     out.append(f"#define {name}( {args} )    {hook}" if args else f"#define {name}()    {hook}")
 out.append("#endif")
