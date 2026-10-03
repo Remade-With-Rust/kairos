@@ -62,3 +62,5 @@ oracle/FreeRTOS-Plus-TCP/
 # The census's committed outputs are docs/API-COVERAGE.md and its data file.
 tools/api-census/out/
 tools/api-census/out-kill/
+# rows.sh measurements: regenerable, and the baseline is a local choice.
+bench/tick-work/out/

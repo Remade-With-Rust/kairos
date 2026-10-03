@@ -111,7 +111,10 @@ run_rust() {
 
 # ------------------------------------------------------------ the compare ---
 field() { printf '%s\n' "$2" | grep "^ROW $1 " | sed 's/.*median=\([0-9]*\).*/\1/'; }
-anchor() { printf '%s\n' "$1" | grep '^ANCHOR ' | head -1; }
+# The Rust arm also names its port (`port=SimPort` or `port=RiscvPort`,
+# kernel a9ca58f): a label, not work, so it is dropped before the compare.
+# Until it was, PARITY failed on every run and the bench measured nothing.
+anchor() { printf '%s\n' "$1" | grep '^ANCHOR ' | head -1 | sed 's/ port=[A-Za-z]*//'; }
 
 echo "building and running the C arm (FreeRTOS V11.3.1, oracle, unmodified)"
 build_c 1 "$BUILD/c1.elf" || { echo "FAIL: the C arm would not build"; exit 1; }
