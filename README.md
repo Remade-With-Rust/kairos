@@ -145,6 +145,8 @@ against the C kernel, in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md):
 | two cores | **113** | 56 |
 
 **Every arm of 119 of the 119 is judged** -- compared on either build, contract-only, proved by the typed face's equivalence test, or carrying a written reason the census checks. The 2 never compared on one core, and the 6 never compared on two, are named in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md); the mission is [`docs/plans/api-differential.md`](docs/plans/api-differential.md).
+
+**Mutants (cargo-mutants, plan P5):** in those APIs 503 viable, 474 killed, 29 equivalent with a written reason, **0 unexplained**.
 <!-- API-CENSUS:END -->
 
 | Milestone | |

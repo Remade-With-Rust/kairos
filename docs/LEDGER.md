@@ -16724,3 +16724,36 @@ equivalent mutant: `step_tick`'s critical section (no yield can be pending and
 no interrupt land inside it).
 
 H10, H11 and H12 are closed.
+
+## ★ 2026-10-03 — mutants per API: none unexplained in a judged API (API differential P5)
+
+**Measured** by `cargo mutants` 27.1.0 over every kernel-core file (1,763
+mutants, 303 unviable), judged by three oracles in turn: the kernel's own
+tests -- the API differential's scripts, pins and sweeps on one core and two,
+the equivalence test, the SMP differential, the unit suite (run A, parallel
+copies); the corpus, one-core pins and two-core `smp_conformance`, on A's
+survivors (run B, in place, its bridge proved by a poison); and `kairos
+conform` at 100,000 ticks on chosen survivors (run C). Code the 64-bit host
+does not compile is judged at i686.
+
+| | viable | killed | equivalent | unexplained |
+|---|---:|---:|---:|---:|
+| the 119 C-twinned APIs | 503 | 474 | 29 (8 on oracle evidence) | **0** |
+| kernel-wide | 1,460 | 1,369 | 90 (21 on oracle evidence) | 1 (H14) |
+
+**A thirteenth Kairos defect, at 32 bits.** The survey's survivors in
+`Split64`'s 32-bit half led to running the API differential at i686 -- and
+to finding that it had only ever compared at 64 bits. `oracle/api/run.sh`
+now builds the C `-m32` as well and pins its traces; the first 32-bit
+comparison found that a message length prefix wider than `size_t`
+(PosixDemoConfig's 8 on rv32) was written in four bytes and counted as
+eight, so a receive took one byte of the message. Fixed; at i686 the API
+differential is identical to FreeRTOS on both builds.
+
+**Also:** a third authored sweep (`wrapcmd`, a timer command across the
+wrap); ~40 unit tests against named survivors (both allocation arenas, the
+queue lock, the ISR semaphore paths, tickless thresholds, geometry bounds,
+counters); 86 written equivalences, the evidence-only ones in classes of
+their own. **Kill test:** `name.rs` re-run fresh, 13 of 13 verdicts
+identical to the census's. H13 (the corpus at 32 bits) and H14 (one internal
+mutant) are open.

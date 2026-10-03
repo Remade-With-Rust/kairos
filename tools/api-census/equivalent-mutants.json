@@ -1,0 +1,687 @@
+{
+  "classes": {
+    "same-value": "at the only input where the mutated test decides differently, both arms compute the same thing: an equal value written over itself, a block copied onto itself, a clamp that changes nothing at its boundary, a lock flag already unlocked, a prefix written the same either way.",
+    "unreachable-input": "the mutation differs only for an input this code cannot be handed: a core id at or past the core count, a command id of zero, the slot of an idle task (idle tasks are never deleted), a zero-length message stored, a name longer than the validation window, a zero-core configuration (refused).",
+    "unused-value": "the mutated value is never read on the path it is computed for.",
+    "redundant-guard": "the same condition is decided again where it matters -- the C's own double sampling, a frame that end_wait has already cleared, an arm the caller's context makes false -- so the mutated guard only moves where the answer is reached.",
+    "fast-path": "the guard chooses a short path whose answer the long path also gives; it exists for speed.",
+    "c-undefined": "differs only for input the C configASSERTs against (event bits in the control byte, a mutex holder deleted while it holds), where FreeRTOS has no defined answer.",
+    "interrupt-window": "differs only if an interrupt lands between two reads inside one call; the oracles deliver interrupts between calls (as reasons.json's class of the same name).",
+    "yield-window": "two cores: differs only while a core asked to yield has not yet taken it; every harness takes a requested yield at the end of the step that asked (as reasons.json).",
+    "pre-scheduler": "differs only before the scheduler starts, which no compared run steps through (as reasons.json).",
+    "core-gate": "EVIDENCE, NOT PROOF. `C::NUMBER_OF_CORES > 1` (or its pair) relaxed so a one-core build takes the two-core path: every one-core oracle -- the API differential's scripts, pins and sweeps against FreeRTOS built one-core, at both pointer widths, and the 26-scenario corpus -- passes with it. The two-core code run with one core decides what the one-core code decides wherever any oracle looks. Listed site by site so it can be revisited.",
+    "oracle-evidence": "EVIDENCE, NOT PROOF, on the two-core side: every two-core oracle -- smp_conformance's scenarios, smp_differential, the API differential's two-core scripts, pins and sweeps at both pointer widths -- passes with it, and no argument from the code alone closes it. Listed so it can be revisited."
+  },
+  "mutants": [
+    {
+      "file": "events.rs",
+      "fn": "event_group_set_bits",
+      "text": "u64::from(current) | UNBLOCKED_DUE_TO_BIT_SET,",
+      "replacement": "^",
+      "class": "c-undefined",
+      "why": "group bits are 24-bit unless a caller sets the control byte, which xEventGroupSetBits configASSERTs against; below it the operands share no bit"
+    },
+    {
+      "file": "events.rs",
+      "fn": "event_group_wait_bits",
+      "text": "u64::from(wait_for) | control,",
+      "replacement": "^",
+      "class": "c-undefined",
+      "why": "wait bits in the control byte are what xEventGroupWaitBits configASSERTs against; otherwise disjoint from the control flags"
+    },
+    {
+      "file": "events.rs",
+      "fn": "event_group_sync",
+      "text": "u64::from(wait_for) | CLEAR_EVENTS_ON_EXIT | WAIT_FOR_ALL_BITS,",
+      "replacement": "^",
+      "class": "c-undefined",
+      "why": "as event_group_wait_bits: disjoint unless the caller passes control-byte bits, which xEventGroupSync configASSERTs against"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "place_on_unordered_event_list",
+      "text": ".set_value(item, value | EVENT_LIST_ITEM_VALUE_IN_USE)?;",
+      "replacement": "^",
+      "class": "c-undefined",
+      "why": "bit 31 is in the control byte, which a wait value has clear unless the caller broke the configASSERT"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "remove_from_unordered_event_list",
+      "text": ".set_value(item, value | EVENT_LIST_ITEM_VALUE_IN_USE)?;",
+      "replacement": "^",
+      "class": "c-undefined",
+      "why": "as place_on_unordered_event_list"
+    },
+    {
+      "file": "timer.rs",
+      "fn": "get",
+      "text": "(self.hi as u64) << 32 | self.lo as u64",
+      "replacement": "^",
+      "class": "same-value",
+      "why": "the high word shifted up and the low word share no bit, so | and ^ agree"
+    },
+    {
+      "file": "name.rs",
+      "fn": "as_str",
+      "text": "let window = if end <= WINDOW { WINDOW } else { NAME_CAPACITY };",
+      "replacement": ">",
+      "class": "same-value",
+      "why": "NAME_CAPACITY is 16, the window: both arms pick 16 (the existing test guards the coupling)"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "current_on",
+      "text": "if core < Self::cores() {",
+      "replacement": "<=",
+      "class": "same-value",
+      "why": "at core == cores() the slot past the configured cores is never written, so current_of answers NULL, as the else arm does"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "core",
+      "text": "(usize::from(self.port.core_id()) & (MAX_CORES - 1)).min(MAX_CORES - 1)",
+      "replacement": "+",
+      "class": "unreachable-input",
+      "why": "a port's core id is below the core count (0 or 1): the masks and the clamp all leave it alone"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "core",
+      "text": "(usize::from(self.port.core_id()) & (MAX_CORES - 1)).min(MAX_CORES - 1)",
+      "replacement": "/",
+      "class": "unreachable-input",
+      "why": "as above: min(2) leaves a core id of 0 or 1 unchanged"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "state_of",
+      "text": "if C::NUMBER_OF_CORES > 1 && self.running_core(task).is_some() {",
+      "replacement": ">=",
+      "class": "redundant-guard",
+      "why": "on one core the running task returned Running at the shortcut above, and no other task has a running core"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "enter_critical",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "unused-value",
+      "why": "on one core the per-core nesting is written and never read: its readers (port_yield's SMP arm, leave_critical_smp) sit behind the same > 1 gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "expected_idle_time",
+      "text": "let due = self.current_priority() > Self::IDLE_PRIORITY",
+      "replacement": "<",
+      "class": "redundant-guard",
+      "why": "called only from the idle task, current at the idle priority, so the first arm is false either way; the other two arms are tested"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "port_yield",
+      "text": "if C::NUMBER_OF_CORES > 1 && P::COMMITS_SWITCH {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "port_yield",
+      "text": "if C::NUMBER_OF_CORES > 1 && P::COMMITS_SWITCH {",
+      "replacement": "||",
+      "class": "core-gate",
+      "why": "a one-core committing port pends a yield taken inside a section, as a PendSV does"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "create_task",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": "<",
+      "class": "unreachable-input",
+      "why": "clearing F_IDLE matters only in a slot an idle task held, and idle tasks are never deleted"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "create_task",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": "==",
+      "class": "unreachable-input",
+      "why": "as above; and on one core F_IDLE is read by nothing"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "create_task",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "unused-value",
+      "why": "on one core F_IDLE is read by nothing"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "add_new_task_to_ready_list",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "add_task_to_ready_list",
+      "text": "if priority > self.top_ready_priority {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "at equality it writes top_ready_priority over itself"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "start_scheduler_smp",
+      "text": "passive_idle: if cores > 1 {",
+      "replacement": ">=",
+      "class": "unreachable-input",
+      "why": "this runs only for a two-core build, where cores is 2 and both tests are true"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "cores",
+      "text": "if n < 1 {",
+      "replacement": "<=",
+      "class": "same-value",
+      "why": "at n == 1 both arms answer 1"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "cores",
+      "text": "if n < 1 {",
+      "replacement": "==",
+      "class": "unreachable-input",
+      "why": "differs only at n == 0, which Config::validate refuses"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "cores",
+      "text": "} else if n > MAX_CORES {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "at n == MAX_CORES both arms answer MAX_CORES"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "select_for_core",
+      "text": "if c < Self::cores() {",
+      "replacement": "<=",
+      "class": "unreachable-input",
+      "why": "select_for_core runs only on two-core builds, where cores() is MAX_CORES and c never reaches it"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "select_for_core",
+      "text": "if c < Self::cores() && !task.is_null() {",
+      "replacement": "<=",
+      "class": "pre-scheduler",
+      "why": "the not-yet-running branch: a switch made before the start"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "select_for_core",
+      "text": "if c < Self::cores() && !task.is_null() {",
+      "replacement": "==",
+      "class": "pre-scheduler"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "select_for_core",
+      "text": "if c < Self::cores() && !task.is_null() {",
+      "replacement": ">",
+      "class": "pre-scheduler"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "select_for_core",
+      "text": "if c < Self::cores() && !task.is_null() {",
+      "replacement": "||",
+      "class": "pre-scheduler"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "select_for_core",
+      "text": "if c < Self::cores() && !task.is_null() {",
+      "replacement": "",
+      "class": "pre-scheduler"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "switch_context_smp",
+      "text": "if incoming.index() != outgoing.index() {",
+      "replacement": "==",
+      "class": "oracle-evidence",
+      "why": "hand_over on a switch to a different task: on the committing ports every two-core oracle runs, its unwinding half folds away, and its first-start resets were not observed to matter"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "resume_pending",
+      "text": "if P::COMMITS_SWITCH || self.unwinding.is_null() {",
+      "replacement": "&&",
+      "class": "fast-path",
+      "why": "the cold half runs settle_unwind and the owed body in full, which this skip only short-cuts when both have nothing to do"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "settle_unwind",
+      "text": "if owed > 0 {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "owing zero exits marks the task as owing, and resume_pending then replays nothing"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "increment_tick",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "notify_take",
+      "text": "if should_block && !already_yielded {",
+      "replacement": "||",
+      "class": "interrupt-window",
+      "why": "should_block false and already_yielded true each need an interrupt inside the call"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "notify_locked",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "waiting_on",
+      "text": ".is_ok_and(|t| t.wait.entry_set && t.wait.queue == queue)",
+      "replacement": "||",
+      "class": "unreachable-input",
+      "why": "end_wait resets a finished frame to its default (queue NULL), and a task has one unfinished call, inside which a frame is for the timer queue"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "wake_due_tasks",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "abort_delay",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "add_current_task_to_delayed_list",
+      "text": "if wake_at < now {",
+      "replacement": "<=",
+      "class": "unreachable-input",
+      "why": "wake_at == now needs a block of zero ticks or of exactly 2^32, and neither reaches the delayed list"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "add_current_task_to_delayed_list",
+      "text": "if wake_at < self.next_unblock_time & Self::MAX_DELAY {",
+      "replacement": "<=",
+      "class": "same-value",
+      "why": "at equality it writes next_unblock_time over itself"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "suspend",
+      "text": "} else if self.lists.len(Self::suspended_list()).unwrap_or(0) != self.task_count {",
+      "replacement": "==",
+      "class": "pre-scheduler"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "task_delete",
+      "text": "let holder = if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "task_delete",
+      "text": "if C::NUMBER_OF_CORES > 1 && !self.awaiting_reap.is_null() {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "task_delete",
+      "text": "Some(core) if self.running_core(target) == Some(core) => {",
+      "replacement": "true",
+      "class": "yield-window",
+      "why": "differs only for a holder core already asked to yield"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "check_tasks_waiting_termination",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "set_priority",
+      "text": "let mut smp_yield_for = C::NUMBER_OF_CORES > 1 && new_priority > base;",
+      "replacement": ">=",
+      "col": 56,
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "set_priority",
+      "text": "let mut smp_yield_for = C::NUMBER_OF_CORES > 1 && new_priority > base;",
+      "replacement": "||",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "set_priority",
+      "text": "let mut smp_yield_for = C::NUMBER_OF_CORES > 1 && new_priority > base;",
+      "replacement": ">=",
+      "col": 76,
+      "class": "redundant-guard",
+      "why": "read only inside `if base != new_priority`, so equality never reaches it"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "set_priority",
+      "text": "let smp_yield_core = if C::NUMBER_OF_CORES > 1 && new_priority < base {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "set_priority",
+      "text": "let smp_yield_core = if C::NUMBER_OF_CORES > 1 && new_priority < base {",
+      "replacement": "<=",
+      "class": "redundant-guard",
+      "why": "read only inside `if base != new_priority`"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "set_priority",
+      "text": "if new_priority > base {",
+      "replacement": ">=",
+      "class": "redundant-guard",
+      "why": "inside `if base != new_priority`, so equality never reaches it"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "set_priority",
+      "text": "let raise = tcb.base_priority == tcb.priority || new_priority > tcb.priority;",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "at equality set_task_priority writes the priority it already has"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "resume_all_inline",
+      "text": "if self.suspended_depth == 0 && self.task_count > 0 {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "task_count is 0 only inside the first create_task's allocation, before any task exists: nothing is pending-ready, no tick is pended and no yield pends, so the block does nothing"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "resume_all_inline",
+      "text": "if self.pended_ticks > 0 {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "unwind_pended_ticks returns at once with nothing pended"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "begin_wait",
+      "text": "if ticks == 0 && !self.flag(task.index() as usize, Self::F_WAIT, true) {",
+      "replacement": "",
+      "class": "redundant-guard",
+      "why": "a zero-tick call never meets a set frame (a blocked call is retried with its own ticks), and the zero frame the mutant writes is torn down by the caller's end_wait"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "begin_wait",
+      "text": "if tcb.wait.queue != queue || !tcb.wait.entry_set {",
+      "replacement": "&&",
+      "class": "unreachable-input",
+      "why": "end_wait resets a finished frame to its default, so a frame for this queue with entry_set clear does not exist"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "check_for_timeout",
+      "text": "} else if elapsed < held {",
+      "replacement": "<=",
+      "class": "same-value",
+      "why": "at elapsed == held the arm computes left = 0, and NonZeroU64::new(0) is the timeout arm's None, with the same zeroed wait"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "remove_from_unordered_event_list",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "priority_inherit",
+      "text": "if holder.is_null() || !self.tcbs.contains(holder) {",
+      "replacement": "&&",
+      "class": "c-undefined",
+      "why": "differs only for a mutex whose holder was deleted while holding it"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "priority_inherit",
+      "text": "if C::NUMBER_OF_CORES > 1 && C::USE_PREEMPTION && self.running_core(holder).is_none() {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "priority_inherit",
+      "text": "if C::NUMBER_OF_CORES > 1 && C::USE_PREEMPTION && self.running_core(holder).is_none() {",
+      "replacement": "||",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "priority_disinherit",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "priority_disinherit_after_timeout",
+      "text": "if holder.is_null() || !self.tcbs.contains(holder) {",
+      "replacement": "&&",
+      "class": "c-undefined",
+      "why": "as priority_inherit"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "priority_disinherit_after_timeout",
+      "text": "let target = if highest_waiting > base {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "at equality the target priority is the same number either way"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "priority_disinherit_after_timeout",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "core-gate"
+    },
+    {
+      "file": "queue.rs",
+      "fn": "drop_free_slot",
+      "text": "if index < last {",
+      "replacement": "<=",
+      "class": "same-value",
+      "why": "at index == last the last block is copied onto itself"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "drop_free_block",
+      "text": "if index < last {",
+      "replacement": "<=",
+      "class": "same-value",
+      "why": "at index == last the last block is copied onto itself"
+    },
+    {
+      "file": "queue.rs",
+      "fn": "increment_tx_lock",
+      "text": "if tx_lock < 0 || (tx_lock as usize) < tasks {",
+      "replacement": "<=",
+      "col": 24,
+      "class": "unreachable-input",
+      "why": "the `< 0` arm is the UNLOCKED sentinel's, which never reaches the increment; for a count of 0 or more the second arm decides"
+    },
+    {
+      "file": "queue.rs",
+      "fn": "increment_tx_lock",
+      "text": "if tx_lock < 0 || (tx_lock as usize) < tasks {",
+      "replacement": "==",
+      "class": "unreachable-input",
+      "why": "as above"
+    },
+    {
+      "file": "queue.rs",
+      "fn": "increment_rx_lock",
+      "text": "if rx_lock < 0 || (rx_lock as usize) < tasks {",
+      "replacement": "<=",
+      "col": 24,
+      "class": "unreachable-input",
+      "why": "as increment_tx_lock"
+    },
+    {
+      "file": "queue.rs",
+      "fn": "increment_rx_lock",
+      "text": "if rx_lock < 0 || (rx_lock as usize) < tasks {",
+      "replacement": "==",
+      "class": "unreachable-input",
+      "why": "as increment_tx_lock"
+    },
+    {
+      "file": "queue.rs",
+      "fn": "unlock_queue",
+      "text": "let tx_looped = tx_lock > LOCKED_UNMODIFIED;",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "at LOCKED_UNMODIFIED the read above has already set UNLOCKED, and this writes it again"
+    },
+    {
+      "file": "queue.rs",
+      "fn": "unlock_queue",
+      "text": "let rx_looped = rx_lock > LOCKED_UNMODIFIED;",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "as tx_looped"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "stream_buffer_send_inner",
+      "text": "} else if required > max_reported {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "at equality the clamp sets required to the value it has"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "stream_buffer_send_from_isr",
+      "text": "} else if required > max_reported {",
+      "replacement": "<",
+      "class": "unused-value",
+      "why": "on a stream buffer -- the only kind this arm is for -- write_message never reads required"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "stream_buffer_send_from_isr",
+      "text": "} else if required > max_reported {",
+      "replacement": "==",
+      "class": "unused-value",
+      "why": "as above"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "stream_buffer_send_from_isr",
+      "text": "} else if required > max_reported {",
+      "replacement": ">=",
+      "class": "unused-value",
+      "why": "as above"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "stream_buffer_send_from_isr",
+      "text": "if written > 0 {",
+      "replacement": ">=",
+      "class": "redundant-guard",
+      "why": "with nothing written the contents are unchanged, and a reader waits only while they are below its trigger, so the completion's trigger test wakes nobody"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "stream_buffer_receive_inner",
+      "text": "if available > prefix {",
+      "replacement": ">=",
+      "class": "unreachable-input",
+      "why": "available == prefix needs a stored zero-length message, and a zero-length send stores nothing (unit-tested)"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "stream_buffer_receive_from_isr",
+      "text": "if available > prefix {",
+      "replacement": ">=",
+      "class": "unreachable-input",
+      "why": "as stream_buffer_receive_inner"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "write_message",
+      "text": "next_head = if Self::MESSAGE_LENGTH_BYTES <= core::mem::size_of::<usize>() {",
+      "replacement": ">",
+      "class": "same-value",
+      "why": "for a prefix that fits usize the wide path writes the same little-endian bytes"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "read_length_prefix_from",
+      "text": "if Self::MESSAGE_LENGTH_BYTES > core::mem::size_of::<usize>() {",
+      "replacement": "<",
+      "class": "same-value",
+      "why": "for a prefix that fits usize the wide path reads the same bytes to the same value"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "read_length_prefix_from",
+      "text": "if Self::MESSAGE_LENGTH_BYTES > core::mem::size_of::<usize>() {",
+      "replacement": "==",
+      "class": "same-value",
+      "why": "as above"
+    },
+    {
+      "file": "stream.rs",
+      "fn": "read_length_prefix_from",
+      "text": "if Self::MESSAGE_LENGTH_BYTES > core::mem::size_of::<usize>() {",
+      "replacement": ">=",
+      "class": "same-value",
+      "why": "as above"
+    },
+    {
+      "file": "timer.rs",
+      "fn": "timer_execute_command",
+      "text": "if message.command.id() < 0 {",
+      "replacement": "<=",
+      "class": "unreachable-input",
+      "why": "no Command has id 0 (Kairos has no START_DONT_TRACE)"
+    }
+  ]
+}

@@ -12,6 +12,41 @@ Ordered by how much a reader should care, not by how easy the fix is.
 
 ---
 
+## H14 — One mutant survives every oracle: the stream wait's own-exit resume — OPEN
+
+**Measured 2026-10-03 (plan P5).** Of 1,460 viable mutants kernel-wide, one
+is neither killed nor explained: `set_stream_waited` made a no-op
+(`kernel.rs`). The flag tells a stream-buffer call that was preempted at its
+WAIT's own exit -- not at the sampling exit -- that only the transfer is
+left; without it the resumed call would wait again. No oracle preempts a
+stream call there: not the API differential (it delivers interrupts and
+ticks between calls), not the corpus pins, and not `kairos conform` at
+100,000 ticks on StreamBufferDemo, MessageBufferDemo, StreamBufferInterrupt
+and MessageBufferAMP (run C, which DID kill its three siblings --
+`take_stream_waited`, `take_stream_timed`, `set_stream_timed` -- and the
+condition at `stream.rs:823`). It is an internal function, so P5's target
+(no unexplained survivor in a judged API) holds; the arm itself is real.
+
+**Closing it:** a scenario, or a sim-port unit test, that switches a stream
+receiver away exactly at the exit ending its wait.
+
+## H13 — The 26-scenario corpus is compared against the C at 64 bits only — OPEN
+
+**Measured 2026-10-03 (plan P5).** Every target is 32-bit; the oracle host
+is x86-64, and the pointer width is observable -- a message buffer's length
+prefix is a `size_t`. Until P5 nothing compared Kairos against FreeRTOS at
+32 bits. P5 closed it for the API differential: `oracle/api/run.sh` builds
+the C driver `-m32` too and pins each build's trace (`pins/api*-w32-*.pin`),
+and `cargo test --target i686-pc-windows-msvc` replays them -- both builds,
+28,000 steps, identical. That first 32-bit comparison found a Kairos defect
+at once (a message prefix wider than `size_t` was written short; fixed).
+
+**Still 64-bit only:** the 26-scenario corpus and the two-core corpus. Their
+C harness (`oracle/harness`, `oracle/harness-smp`) is built native; a `-m32`
+build and an i686 `kairos-sim` would make them judge the targets' width as
+well. Until then a width-dependent defect outside what the API
+differential's scripts reach would pass every corpus run.
+
 ## H10 — 7 of 119 C-twinned APIs are never compared against the C on two cores — CLOSED 2026-10-03 (was 77)
 
 **Measured 2026-10-02 by coverage, not grep** (`tools/api-census`,

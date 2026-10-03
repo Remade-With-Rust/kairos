@@ -33,6 +33,8 @@ DOC = os.path.join(ROOT, "docs", "API-COVERAGE.md")
 DATA = os.path.join(ROOT, "docs", "api-coverage.json")
 GROUPS = ("C1", "C1L", "C2", "EQ", "ANY")
 REASONS = os.path.join(ROOT, "tools", "api-census", "reasons.json")
+MUTANTS = os.path.join(ROOT, "tools", "api-census", "mutants.json")
+EQUIVALENT = os.path.join(ROOT, "tools", "api-census", "equivalent-mutants.json")
 # The typed face: the only file the wrapper-equivalence test (EQ) can judge.
 WRAPPERS = "typed.rs"
 # H2's five: Rust spellings with no C twin to differ from. They keep their
@@ -220,6 +222,13 @@ def load_reasons():
     return json.load(open(REASONS, encoding="utf-8"))
 
 
+def src_line(src, f, line):
+    text = src.get(f)
+    if text is None:
+        text = src[f] = open(os.path.join(SRC, f), encoding="utf-8").read().splitlines()
+    return text[line - 1].strip() if 0 < line <= len(text) else ""
+
+
 def reason_for(reasons, src, f, name, line, col):
     text = src[f]
     here = text[line - 1].strip() if 0 < line <= len(text) else ""
@@ -233,6 +242,20 @@ def reason_for(reasons, src, f, name, line, col):
             continue
         return i
     return None
+
+
+def load_mutants():
+    """P5's survey (mutants.py) and the survivors' written equivalences, or
+    None when no survey has been merged."""
+    if not os.path.isfile(MUTANTS):
+        return None, []
+    m = json.load(open(MUTANTS, encoding="utf-8"))
+    if os.path.isfile(EQUIVALENT):
+        data = json.load(open(EQUIVALENT, encoding="utf-8"))
+        m["eq_classes"] = data.get("classes", {})
+        return m, data["mutants"]
+    m["eq_classes"] = {}
+    return m, []
 
 
 def measure():
@@ -319,12 +342,72 @@ def measure():
                                   if not (a or b or k or e) and i is None],
                      "diagnostic": rec["name"] in DIAGNOSTICS and rec["pub"]})
     rows.sort(key=lambda r: (r["file"], r["line"]))
+    # P5: each mutant to the innermost function holding its line, as regions.
+    survey, equivalent = load_mutants()
+    eq_used = set()
+    if survey is not None:
+        by_fn = {(r["file"], r["name"], r["line"]): r for r in rows}
+        for r in rows:
+            r.update({"m_viable": 0, "m_killed": 0, "m_equivalent": 0, "m_survived": []})
+        # Module-level code -- a `const`, a static's initialiser -- belongs to
+        # no function, and is counted here rather than dropped.
+        outside = {"file": "", "name": "(outside any function)", "pub": False, "line": 0,
+                   "m_viable": 0, "m_killed": 0, "m_equivalent": 0, "m_survived": [],
+                   "outside": True, "twin": "none", "c": "", "regions": 0, "c1": 0, "c1_pin": 0,
+                   "c2": 0, "any": 0, "c1k": 0, "c2k": 0, "missed_by_c": [], "contract_missed": 0,
+                   "eq": 0, "eq_missed": 0, "reasoned": [], "reasoned_missed": 0, "unjudged": [],
+                   "diagnostic": False}
+        for m in survey["mutants"]:
+            o = owner((m["file"], m["line"]))
+            r = by_fn.get((m["file"], o[0], o[2])) if o else outside
+            if r is None:
+                # A function with no row: internal, and no region of it was
+                # recorded -- the 32-bit half of a `cfg` pair, on this host.
+                # Its mutants are still mutants; give it a row, never drop them.
+                r = dict(outside)
+                r.update({"file": m["file"], "name": o[0], "pub": o[1], "line": o[2],
+                          "outside": False, "m_viable": 0, "m_killed": 0, "m_equivalent": 0,
+                          "m_survived": [], "m_eq_classes": []})
+                by_fn[(m["file"], o[0], o[2])] = r
+                rows.append(r)
+            if m["final"] == "unviable":
+                continue
+            r["m_viable"] += 1
+            if m["final"] == "killed":
+                r["m_killed"] += 1
+                continue
+            text = src_line(src, m["file"], m["line"])
+            fn_name = "" if r is outside else r["name"]
+            hit = None
+            for i, e in enumerate(equivalent):
+                if (e["file"] == m["file"] and e["fn"] == fn_name and text.startswith(e["text"])
+                        and e["replacement"] == m["replacement"]
+                        and e.get("col", m["col"]) == m["col"]):
+                    hit = i
+                    break
+            if hit is None:
+                where = ("%s:%d" % (m["file"], m["line"])) if r is outside else str(m["line"])
+                r["m_survived"].append("%s: %s" % (where, m["replacement"]))
+            else:
+                eq_used.add(hit)
+                r["m_equivalent"] += 1
+                r.setdefault("m_eq_classes", []).append(equivalent[hit]["class"])
+        if outside["m_viable"]:
+            rows.append(outside)
+    stale_eq = [e for i, e in enumerate(equivalent) if i not in eq_used]
+    if stale_eq:
+        sys.exit("equivalent-mutants.json: %d entr(ies) match no surviving mutant: %s" % (
+            len(stale_eq), "; ".join("%s %s `%s` -> %s" % (e["file"], e["fn"], e["text"], e["replacement"])
+                                     for e in stale_eq)))
     stale = [e for i, e in enumerate(reasons["arms"]) if i not in used]
     if stale:
         sys.exit("reasons.json: %d reason(s) match no unjudged arm -- the arm is judged now, or "
                  "its code moved: %s" % (len(stale), "; ".join("%s %s `%s`" % (e["file"], e["fn"], e["text"])
                                                                 for e in stale)))
     meta = {"long": [], "classes": reasons["classes"],
+            "mutants": survey["meta"] if survey is not None else None,
+            "eq_classes": survey["eq_classes"] if survey is not None else {},
+            "equivalent": [{"file": e["file"], "fn": e["fn"], "class": e["class"]} for e in equivalent],
             "reasons": [{"file": e["file"], "fn": e["fn"], "text": e["text"], "class": e["class"]}
                         for e in reasons["arms"]]}
     mp = os.path.join(OUT, "C1L.meta")
@@ -426,6 +509,31 @@ def render(rows, meta):
                             (". Unjudged: " + ", ".join("`%s`" % r["name"] for r in unjudged) + ".")
                             if unjudged else "; none is left without one."))
     s.append("")
+    if meta.get("mutants"):
+        runs = meta["mutants"]
+        viable = sum(r.get("m_viable", 0) for r in api)
+        killed = sum(r.get("m_killed", 0) for r in api)
+        equiv = sum(r.get("m_equivalent", 0) for r in api)
+        surv = [r for r in api if r.get("m_survived")]
+        evidence = sum(r.get("m_eq_classes", []).count(c) for r in rows
+                       for c in ("core-gate", "oracle-evidence"))
+        allv = sum(r.get("m_viable", 0) for r in rows)
+        allk = sum(r.get("m_killed", 0) for r in rows)
+        alle = sum(r.get("m_equivalent", 0) for r in rows)
+        alls = sum(len(r.get("m_survived", [])) for r in rows)
+        s.append("**Mutants (plan P5): in the %d, %d viable, %d killed, %d equivalent with a written "
+                 "reason, %d unexplained survivor(s)%s.** Kernel-wide, public and internal: %d viable, "
+                 "%d killed, %d equivalent (%d of them on oracle evidence rather than proof: the "
+                 "`core-gate` and `oracle-evidence` classes), %d unexplained. `cargo mutants %s` over every kernel-core file "
+                 "(%d mutants), judged by the kernel's own tests -- the API differential's scripts, pins "
+                 "and sweeps on both builds, the equivalence test, the SMP differential, the unit suite "
+                 "-- and its survivors by the corpus, one core and two (`tools/api-census/mutants.py`)." % (
+                     len(api), viable, killed, equiv, sum(len(r["m_survived"]) for r in surv),
+                     (" in " + ", ".join("`%s`" % r["name"] for r in surv)) if surv else "",
+                     allv, allk, alle, evidence, alls,
+                     runs["runs"][0]["version"] if runs["runs"] else "",
+                     sum(x["total"] for x in runs["runs"])))
+        s.append("")
     diags = [r for r in pub if r.get("diagnostic")]
     s.append("**Diagnostics (H2), %d:** %s -- Rust spellings with no C call to differ from; they keep "
              "their unit tests (the *any run* column) and are not gaps." % (
@@ -482,6 +590,40 @@ def render(rows, meta):
             r["regions"], r.get("contract_missed", 0), r.get("eq_missed", 0), r.get("reasoned_missed", 0),
             len(r.get("unjudged", [])), shown))
     s.append("")
+    if meta.get("mutants"):
+        s.append("## Mutants per function")
+        s.append("")
+        s.append("Every function a viable mutant landed in -- public or internal -- with what killed "
+                 "it. *Equivalent* survivors carry a reason in `tools/api-census/equivalent-mutants.json`, "
+                 "which the census refuses once it no longer matches a survivor; *unexplained* ones are "
+                 "listed by line and replacement.")
+        s.append("")
+        s.append("| function | file | viable | killed | equivalent | unexplained |")
+        s.append("|---|---|---:|---:|---:|---|")
+        for r in sorted((r for r in rows if r.get("m_viable")),
+                        key=lambda r: (-len(r["m_survived"]), r["file"], r["line"])):
+            s.append("| %s | %s | %d | %d | %d | %s |" % (
+                "*%s*" % r["name"] if r.get("outside") else
+                "`%s`%s" % (r["name"], "" if r["pub"] else " (internal)"),
+                "module level" if r.get("outside") else "`%s:%d`" % (r["file"], r["line"]),
+                r["m_viable"],
+                r["m_killed"], r["m_equivalent"],
+                "; ".join("`%s`" % x for x in r["m_survived"]) if r["m_survived"] else "0"))
+        s.append("")
+    eq_classes = meta.get("eq_classes", {})
+    if eq_classes:
+        s.append("## Equivalent mutants, by class")
+        s.append("")
+        s.append("Each is an entry in `tools/api-census/equivalent-mutants.json`, keyed by function, "
+                 "source text and replacement, with its own `why`.")
+        s.append("")
+        s.append("| class | what it means | mutants | functions |")
+        s.append("|---|---|---:|---|")
+        for c in sorted(eq_classes):
+            fns = sorted({r["name"] for r in rows if c in r.get("m_eq_classes", [])})
+            n = sum(r.get("m_eq_classes", []).count(c) for r in rows)
+            s.append("| %s | %s | %d | %s |" % (c, eq_classes[c], n, ", ".join("`%s`" % f for f in fns)))
+        s.append("")
     classes = meta.get("classes", {})
     if classes:
         s.append("## Arms judged by a written reason")
@@ -526,6 +668,13 @@ def readme_block(rows):
         "in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md); the mission is "
         "[`docs/plans/api-differential.md`](docs/plans/api-differential.md)."
         % (judged, len(api), len(api) - one, len(api) - two),
+    ] + ([
+        "",
+        "**Mutants (cargo-mutants, plan P5):** in those APIs %d viable, %d killed, %d equivalent "
+        "with a written reason, **%d unexplained**." % (
+            sum(r.get("m_viable", 0) for r in api), sum(r.get("m_killed", 0) for r in api),
+            sum(r.get("m_equivalent", 0) for r in api), sum(len(r.get("m_survived", [])) for r in api)),
+    ] if any("m_viable" in r for r in api) else []) + [
         END,
     ])
 
