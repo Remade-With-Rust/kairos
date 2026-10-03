@@ -149,9 +149,11 @@ Generalise `smp_differential` from ~11 operations to the whole C-twinned surface
 - **Poisoned.** For each API family, a planted one-line kernel change must
   fail the differential at a recorded step, and the census records it.
 
-**Progress (2026-10-02).** `oracle/api` + `tests/api_differential.rs`: one
-pinned seed, 24,000 steps, both builds, every step identical. Families in,
-each with its poison seen to fail and the defect it found:
+**Progress (2026-10-02).** `oracle/api` + `tests/api_differential.rs`: the
+pinned seed at 28,000 steps, both builds, plus two pinned FINDING seeds kept
+as digests (`oracle/api/pins/`, `pin.py`), every step identical; 96 fresh
+seeds x 2 builds x 28,000 steps (`fresh.sh`, the ignored test) identical too.
+Families in, each with its poison seen to fail and the defect it found:
 
 | brick | family | Kairos defect the C exposed |
 |---|---|---|
@@ -162,6 +164,8 @@ each with its poison seen to fail and the defect it found:
 | P1.5 | event groups | `taskEVENT_LIST_ITEM_VALUE_IN_USE` never set, so a priority change rewrote a waiter's event value |
 | P1.6 | stream and message buffers | the send was one wait and a partial write; the C is a do-while that re-blocks for what is left, and writes with its last sample after a timeout |
 | P1.7 | software timers, the daemon as a real coroutine, pended calls, event-group ISR set/clear | (a) two cores: a yield left pending by an ISR with no woken pointer was never taken at the next task-level exit (`vTaskExitCritical` takes it); (b) a timer command that blocked on a full queue re-read the clock on its retry, so the timer expired late |
+| P1.8 | queue sets, abort-delay, delay-until, suspend/resume-all around a tick or a give, task lookup, critical section, tick counts, queue spaces | two cores: `xTaskResumeAll` drained the pending-ready list with a SECOND yield decision, picking another core when the first was already asked |
+| fresh seeds | everything above, 96 new scripts | (a) `vTaskPriorityDisinheritAfterTimeout` could not RAISE a holder still at its base priority (a waiter's priority set above it after it blocked); (b) two cores: `vTaskResume` of a running task skipped the critical section whose exit is a yield point; (c) `ucDelayAborted` outlived its task -- a reused index inherited it, and the new task's first block timed out at once |
 
 Harness lessons, each of which once looked like a kernel bug: the replay's
 `Config` must match `FreeRTOSConfig.h` field for field (`DYNAMIC_ALLOCATION`
@@ -173,9 +177,17 @@ the app tasks (`configTIMER_TASK_PRIORITY 2`) -- at the top priority it
 drains its one-slot queue before any task can find it full, and (b) is
 unreachable.
 
-Left for P1: queue sets, abort-delay, delay-until, suspend/resume-all and the
-remaining task APIs (P1.8); then the coverage-guided weights, the 32 pinned
-seeds, and the census groups.
+Eleven Kairos defects in all, four of them two-core only; none was visible to
+the 26-scenario corpus or the two-core corpus, both of which stayed identical
+through every fix.
+
+Pinning is by digest, not by trace: a full trace is 4.4 MB and every
+regeneration lands in history, a pin is a third of that and judges the same
+steps. The rule is D2's -- a fresh seed that fails becomes a pin, cut just
+past its finding.
+
+Left for P1: the coverage-guided pass (census arms the scripts still miss,
+each reached or justified), and the census groups re-run.
 
 ### P2 — The two-core corpus, completed
 
