@@ -12,7 +12,7 @@ Ordered by how much a reader should care, not by how easy the fix is.
 
 ---
 
-## H10 — 7 of 119 C-twinned APIs are never compared against the C on two cores — OPEN (was 77): only typed wrappers and tickless remain
+## H10 — 7 of 119 C-twinned APIs are never compared against the C on two cores — CLOSED 2026-10-03 (was 77)
 
 **Measured 2026-10-02 by coverage, not grep** (`tools/api-census`,
 `docs/API-COVERAGE.md`). Of the 118 public kernel APIs whose FreeRTOS twin the
@@ -46,7 +46,18 @@ compared), the typed `Mutex::new` and `send_from_isr` (never entered on one
 core either; H11), and `step_tick` (tickless; H11). Eleven Kairos defects in
 all, four two-core only.
 
-## H11 — Three C-twinned APIs are not compared on one core either — OPEN
+**Closed 2026-10-03 (plan P3 and P4).** `step_tick` is now compared on both
+builds (113 entered on two cores); the six left never entered by a two-core
+run are the typed wrappers, whose every call is the C-twinned call it claims
+-- proved by `typed_equivalence` -- and those calls are compared on two cores.
+More than "entered": the census now judges EVERY ARM of all 119 C-twinned
+APIs -- compared on either build, contract-only, run by the equivalence test,
+or carrying a written reason it checks (`tools/api-census/reasons.json`).
+Two authored sweeps (`oracle/api/sweeps/`) reached what the random script
+cannot, and the tickless sweep found a twelfth Kairos defect: no
+next-unblock-time reset at the five places the C's tickless build has one.
+
+## H11 — Three C-twinned APIs are not compared on one core either — CLOSED 2026-10-03
 
 | API | why |
 |---|---|
@@ -57,7 +68,16 @@ all, four two-core only.
 The first needs Test7 switched on in the harness and ported (plan P3); the two
 wrappers need the wrapper-equivalence test (plan P4).
 
-## H12 — CI's conformance pins cannot see a regression in two timer APIs — OPEN
+**Closed 2026-10-03.** `step_tick` did not need Test7: the API differential
+now compiles `configUSE_TICKLESS_IDLE` into its oracle and steps the clock the
+way a tickless port does (scheduler suspended, one tick), on both builds --
+every one of its 23 regions compared. It found Kairos's missing tickless
+next-unblock resets (plan P3). The two wrappers are judged by
+`typed_equivalence` (plan P4): recorded at the `Raw` boundary, their calls
+are exactly the C-twinned ones they claim, and a twin kernel making those
+calls directly ends in the same state.
+
+## H12 — CI's conformance pins cannot see a regression in two timer APIs — CLOSED (by P1.7; recorded 2026-10-03)
 
 `timer_reset` and `timer_set_id` are compared against the C only at full
 length: TimerDemo reaches them in its Test6, which starts after the 2,000
@@ -66,6 +86,11 @@ conform` enters `timer_reset` 460 times in a trace identical to the C. So the
 comparison exists, but only on a machine with the oracle built: a regression
 in either would pass CI. Fix: a TimerDemo pin long enough to reach Test6, or
 its arms in the generative differential (plan P1).
+
+**Closed by the API differential's timer family (P1.7).** Its pinned scripts,
+which CI runs, execute every arm of both -- `timer_reset` 10 of 10 regions,
+`timer_set_id` 15 of 15 -- and the census reports no C-twinned API that only
+the full-length runs reach.
 
 ---
 

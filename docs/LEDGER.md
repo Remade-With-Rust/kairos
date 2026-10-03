@@ -16684,3 +16684,43 @@ missing group.
 
 **Also.** `kairos conform --all --ticks 100000`: all 26 scenarios identical to
 the C on this day's kernel (0.3.2).
+
+## ★ 2026-10-03 — every arm of every C-twinned API judged (API differential P3, P4)
+
+**Measured** by `tools/api-census`, now five groups (EQ added: the typed face's
+equivalence test, credited to `typed.rs` only). Of 119 C-twinned APIs:
+
+| | one core | two cores |
+|---|---:|---:|
+| entered by a run compared to the C | **117** | **113** |
+| every code region executed | 58 | 56 |
+| every region executed, or contract-only (D1) | 93 | 88 |
+
+**Every arm of all 119 is judged**: executed by a compared run on either build,
+contract-only, run by the equivalence test, or carrying a written reason in
+`tools/api-census/reasons.json` (57 entries, twelve classes), which the census
+refuses once it no longer matches an unjudged arm. Every reason's claim was
+checked against the C source or the coverage; two were wrong and were replaced,
+one of them by a sweep.
+
+**A twelfth Kairos defect**, found by compiling `configUSE_TICKLESS_IDLE` into
+the API oracle and stepping the clock as a tickless port does: Kairos never
+reset its next-unblock time at the five places the C's tickless build does, so
+`vTaskStepTick` could jump past a wake a notify had just moved. Fixed, gated on
+the configuration; the corpus (tickless off) is unchanged and identical at
+100,000 ticks, 26 of 26.
+
+**Authored sweeps** (`oracle/api/sweeps/`), a mode of the same driver:
+`xTaskDelayUntil` across the tick wrap, and `xQueueAddToSet` given a
+non-set. **Equivalence:** `typed_equivalence` (23 steps; every typed wrapper's
+calls recorded at `Raw` and replayed directly on a twin kernel) and
+`pollq_async`'s per-future test.
+
+**Kill tests.** Tickless resets off: steps 7290 (one core) and 688 (two). The
+overflow arm: the sweep at step 604, and nothing else. The non-set refusal: the
+sweep at step 1. `Mutex::with` take/give swapped: step 13. A `Raw` remap: step
+9. The async `count` with enter and exit swapped: its first poll. One recorded
+equivalent mutant: `step_tick`'s critical section (no yield can be pending and
+no interrupt land inside it).
+
+H10, H11 and H12 are closed.

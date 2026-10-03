@@ -31,7 +31,14 @@ OUT = os.path.join(ROOT, "tools", "api-census", "out")
 HEADERS = os.path.join(ROOT, "oracle", "FreeRTOS-Kernel", "include")
 DOC = os.path.join(ROOT, "docs", "API-COVERAGE.md")
 DATA = os.path.join(ROOT, "docs", "api-coverage.json")
-GROUPS = ("C1", "C1L", "C2", "ANY")
+GROUPS = ("C1", "C1L", "C2", "EQ", "ANY")
+REASONS = os.path.join(ROOT, "tools", "api-census", "reasons.json")
+# The typed face: the only file the wrapper-equivalence test (EQ) can judge.
+WRAPPERS = "typed.rs"
+# H2's five: Rust spellings with no C twin to differ from. They keep their
+# unit tests (the ANY column); the census names them so nobody counts them
+# as a gap again.
+DIAGNOSTICS = {"task_at", "ready_cursor", "ready_items", "with_tick_hook", "notify_value"}
 
 FN = re.compile(r"^(\s*)(pub(\([^)]*\))?\s+)?(const\s+)?(unsafe\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)")
 CNAME = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)[^`]*`")
@@ -170,6 +177,13 @@ def regions(group):
 # can miss contract arms (an `Ok(false)` refusal, say) but cannot call a real arm
 # one, so the column it feeds can understate and never overclaim.
 CONTRACT = re.compile(r"^(\?|Err\(|return Err\b|Err\(e\) =>)")
+# Three more shapes that do nothing but hand an error back, found by P3's
+# reading of what the first test left: an arm that passes an error through
+# (`Err(e) => Err(e),`, whose region LLVM starts inside the pattern), a
+# section's exit whose next statement returns an error, and an `Err(e) => {`
+# block that holds only those two. Anything else in the block keeps it a gap.
+PASSTHROUGH = re.compile(r"^Err\([a-z_]\w*\) => Err\(")
+LEAVE_ONLY = re.compile(r"^(self\.exit_critical\(\);|return Err\(.*\);)$")
 
 
 def is_contract(src, f, line, col):
@@ -178,11 +192,53 @@ def is_contract(src, f, line, col):
         text = src[f] = open(os.path.join(SRC, f), encoding="utf-8").read().splitlines()
     if not 0 < line <= len(text):
         return False
-    return bool(CONTRACT.match(text[line - 1][col - 1:].lstrip()))
+    here = text[line - 1][col - 1:].lstrip()
+    whole = text[line - 1].strip()
+    if CONTRACT.match(here) or PASSTHROUGH.match(whole):
+        return True
+    rest = [t.strip() for t in text[line:line + 6] if t.strip()]
+    if whole == "self.exit_critical();" and rest and rest[0].startswith("return Err("):
+        return True
+    if re.match(r"^Err\([a-z_]\w*\) => \{$", whole):
+        body = []
+        for t in rest:
+            if t == "}" or t == "},":
+                break
+            body.append(t)
+        return bool(body) and all(LEAVE_ONLY.match(t) for t in body)
+    return False
+
+
+def load_reasons():
+    """tools/api-census/reasons.json: the arms no C-compared run executes,
+    each with a written reason. An entry names a function and the text the
+    arm's source line begins with -- every region LLVM cuts from that line
+    shares it; `after`, if given, must appear on one of the three lines above
+    (for a bare `}`, which only means something by what it closes)."""
+    if not os.path.isfile(REASONS):
+        return {"classes": {}, "arms": []}
+    return json.load(open(REASONS, encoding="utf-8"))
+
+
+def reason_for(reasons, src, f, name, line, col):
+    text = src[f]
+    here = text[line - 1].strip() if 0 < line <= len(text) else ""
+    above = " ".join(text[max(0, line - 4):line - 1])
+    for i, e in enumerate(reasons["arms"]):
+        if e["file"] != f or e["fn"] != name:
+            continue
+        if not here.startswith(e["text"]):
+            continue
+        if e.get("after") and e["after"] not in above:
+            continue
+        return i
+    return None
 
 
 def measure():
     decl = declared_in_headers()
+    reasons = load_reasons()
+    used = set()
     if decl is None:
         sys.exit("the oracle checkout is missing (oracle/FreeRTOS-Kernel): run `kairos oracle fetch`")
     fns = {}
@@ -223,13 +279,27 @@ def measure():
         twin = "api" if cname and cname in decl else ("state" if cname else "none")
         rs = sorted(rec["regions"])
         n = len(rs)
-        # r = [line, col, C1, C1L, C2, ANY]. One core is the pins OR the long
-        # runs; "any" is everything, the C-compared runs included.
+        # r = [line, col, C1, C1L, C2, EQ, ANY]. One core is the pins OR the
+        # long runs; "any" is everything, the C-compared runs included.
         one = [r[2] or r[3] for r in rs]
         two = [r[4] for r in rs]
-        anyc = [r[2] or r[3] or r[4] or r[5] for r in rs]
+        eq = [r[5] and rec["file"] == WRAPPERS for r in rs]
+        anyc = [r[2] or r[3] or r[4] or r[5] or r[6] for r in rs]
         missed = [[r[0], r[1]] for r, a, b in zip(rs, one, two) if not (a or b)]
         contract = [is_contract(src, rec["file"], r[0], r[1]) for r in rs]
+        # P3: an arm no C-compared run executed is still JUDGED if it is
+        # contract-only, or the equivalence test ran it, or it carries a
+        # written reason. Reasons are looked up only for arms that need one,
+        # so a reason that matches nothing unjudged is stale (checked below).
+        why = []
+        for r, a, b, k, e in zip(rs, one, two, contract, eq):
+            if a or b or k or e:
+                why.append(None)
+                continue
+            i = reason_for(reasons, src, rec["file"], rec["name"], r[0], r[1])
+            if i is not None:
+                used.add(i)
+            why.append(i)
         rows.append({"file": rec["file"], "name": rec["name"], "pub": rec["pub"], "line": rec["line"],
                      "c": cname, "twin": twin, "regions": n,
                      "c1": sum(one), "c1_pin": sum(1 for r in rs if r[2]),
@@ -238,9 +308,25 @@ def measure():
                      "c1k": sum(1 for o, k in zip(one, contract) if o or k),
                      "c2k": sum(1 for o, k in zip(two, contract) if o or k),
                      "contract_missed": sum(1 for r, a, b, k in zip(rs, one, two, contract)
-                                            if k and not (a or b))})
+                                            if k and not (a or b)),
+                     "eq": sum(1 for e in eq if e),
+                     "eq_missed": sum(1 for a, b, k, e in zip(one, two, contract, eq)
+                                      if e and not (a or b or k)),
+                     "reasoned": sorted({reasons["arms"][i]["class"] for i in why if i is not None}),
+                     "reasoned_missed": sum(1 for i in why if i is not None),
+                     "unjudged": [[r[0], r[1]] for r, a, b, k, e, i in
+                                  zip(rs, one, two, contract, eq, why)
+                                  if not (a or b or k or e) and i is None],
+                     "diagnostic": rec["name"] in DIAGNOSTICS and rec["pub"]})
     rows.sort(key=lambda r: (r["file"], r["line"]))
-    meta = {"long": []}
+    stale = [e for i, e in enumerate(reasons["arms"]) if i not in used]
+    if stale:
+        sys.exit("reasons.json: %d reason(s) match no unjudged arm -- the arm is judged now, or "
+                 "its code moved: %s" % (len(stale), "; ".join("%s %s `%s`" % (e["file"], e["fn"], e["text"])
+                                                                for e in stale)))
+    meta = {"long": [], "classes": reasons["classes"],
+            "reasons": [{"file": e["file"], "fn": e["fn"], "text": e["text"], "class": e["class"]}
+                        for e in reasons["arms"]]}
     mp = os.path.join(OUT, "C1L.meta")
     if os.path.isfile(mp):
         for ln in open(mp, encoding="utf-8"):
@@ -272,7 +358,7 @@ def render(rows, meta):
              "if this file disagrees with `docs/api-coverage.json`.")
     s.append("")
     s.append("**Method.** LLVM source-based coverage (`-C instrument-coverage`, rustc 1.98.0) over "
-             "four groups of runs, each attributed by source line to the innermost function holding "
+             "five groups of runs, each attributed by source line to the innermost function holding "
              "it -- so inlining and generics do not hide anything. A *region* is one straight-line "
              "piece of code; a function's regions are its arms.")
     s.append("")
@@ -291,6 +377,9 @@ def render(rows, meta):
         s.append("| **C1L** | not run this time (no `kairos conform` log given) | -- |")
     s.append("| **C2** | `smp_conformance` (nine scenarios, 20,000 ticks) + `smp_differential` (two "
              "20,000-step scripts) | yes, two cores |")
+    s.append("| **EQ** | `typed_equivalence`: every typed wrapper on a real kernel, its calls recorded at the `Raw` "
+             "boundary and replayed directly on a twin kernel (plan P4) | no -- each wrapper proved to make exactly "
+             "the C-twinned calls C1/C2 compare; credited to `typed.rs` only |")
     s.append("| **ANY** | every test in the kernel and the demo, both feature sets | no -- *executed*, not *compared* |")
     s.append("")
     s.append("**What a covered region does and does not prove.** A region C1 or C2 executed ran inside "
@@ -322,10 +411,25 @@ def render(rows, meta):
                                              count(api, lambda r: pred(r, "any"))))
     s.append("")
     s.append("*Contract-only* (plan decision D1): a region whose code begins with an error "
-             "construct (`?`, `Err(`, `return Err`) -- a stale handle, a refused argument -- has no "
-             "C answer to compare against. The test is deliberately narrow: it can leave a "
+             "construct (`?`, `Err(`, `return Err`), passes an error through (`Err(e) => Err(e)`), "
+             "or only leaves the critical section to return one -- a stale handle, a refused "
+             "argument -- has no C answer to compare against. The test is deliberately narrow: it can leave a "
              "contract arm counted as a gap, never the reverse. Such arms are judged by the "
              "kernel's own tests, which the *any run* column counts.")
+    s.append("")
+    judged = [r for r in api if r["regions"] > 0 and not r.get("unjudged")]
+    unjudged = [r for r in api if r["regions"] == 0 or r.get("unjudged")]
+    s.append("**Every arm judged (plan P3): %d of the %d.** An arm is judged when a C-compared run on "
+             "either build executed it, or it is contract-only (D1), or the wrapper-equivalence test "
+             "ran it (EQ, `typed.rs`), or it carries a written reason in `tools/api-census/reasons.json` "
+             "(below)%s" % (len(judged), len(api),
+                            (". Unjudged: " + ", ".join("`%s`" % r["name"] for r in unjudged) + ".")
+                            if unjudged else "; none is left without one."))
+    s.append("")
+    diags = [r for r in pub if r.get("diagnostic")]
+    s.append("**Diagnostics (H2), %d:** %s -- Rust spellings with no C call to differ from; they keep "
+             "their unit tests (the *any run* column) and are not gaps." % (
+                 len(diags), ", ".join("`%s`" % r["name"] for r in diags)))
     s.append("")
     long_only = [r for r in api if r["c1"] > 0 and r["c1_pin"] == 0]
     s.append("Of the one-core column, **%d** C-twinned APIs are entered ONLY by the full-length runs "
@@ -356,7 +460,8 @@ def render(rows, meta):
     s.append("|---|---|---|---|---:|---|---|---|")
     for r in pub:
         s.append("| `%s:%d` | `%s` | %s | %s | %d | %s | %s | %s |" % (
-            r["file"], r["line"], r["name"], ("`%s`" % r["c"]) if r["c"] else "", r["twin"],
+            r["file"], r["line"], r["name"], ("`%s`" % r["c"]) if r["c"] else "",
+            r["twin"] + (" (diagnostic)" if r.get("diagnostic") else ""),
             r["regions"], verdict(r, "c1"), verdict(r, "c2"), verdict(r, "any")))
     s.append("")
     s.append("## Arms no C-compared run executes")
@@ -365,16 +470,33 @@ def render(rows, meta):
              "first. Lines are where each unexecuted region starts. This is the target list for the "
              "generative differential (plan P1).")
     s.append("")
-    s.append("| function | file | unexecuted / regions | of them contract-only | at lines |")
-    s.append("|---|---|---:|---:|---|")
-    arms = sorted((r for r in rows if r["missed_by_c"]), key=lambda r: (-len(r["missed_by_c"]), r["file"], r["line"]))
+    s.append("| function | file | unexecuted / regions | contract-only | EQ | reasoned | **unjudged** | unjudged at lines |")
+    s.append("|---|---|---:|---:|---:|---:|---:|---|")
+    arms = sorted((r for r in rows if r["missed_by_c"]),
+                  key=lambda r: (-len(r.get("unjudged", [])), -len(r["missed_by_c"]), r["file"], r["line"]))
     for r in arms:
-        lines = sorted({m[0] for m in r["missed_by_c"]})
+        lines = sorted({m[0] for m in r.get("unjudged", [])})
         shown = ", ".join(str(x) for x in lines[:12]) + (" ..." if len(lines) > 12 else "")
-        s.append("| `%s`%s | `%s:%d` | %d / %d | %d | %s |" % (r["name"], "" if r["pub"] else " (internal)",
-                                                             r["file"], r["line"], len(r["missed_by_c"]),
-                                                             r["regions"], r.get("contract_missed", 0), shown))
+        s.append("| `%s`%s | `%s:%d` | %d / %d | %d | %d | %d | %d | %s |" % (
+            r["name"], "" if r["pub"] else " (internal)", r["file"], r["line"], len(r["missed_by_c"]),
+            r["regions"], r.get("contract_missed", 0), r.get("eq_missed", 0), r.get("reasoned_missed", 0),
+            len(r.get("unjudged", [])), shown))
     s.append("")
+    classes = meta.get("classes", {})
+    if classes:
+        s.append("## Arms judged by a written reason")
+        s.append("")
+        s.append("Each reason is an entry in `tools/api-census/reasons.json`, keyed by function and the "
+                 "text its arm begins with; the census refuses a reason that no longer matches an "
+                 "unjudged arm, so a reason cannot outlive its code.")
+        s.append("")
+        s.append("| class | what it means | entries | functions |")
+        s.append("|---|---|---:|---|")
+        for c in sorted(classes):
+            fns = sorted({r["name"] for r in rows if c in r.get("reasoned", [])})
+            n = sum(1 for e in meta.get("reasons", []) if e["class"] == c)
+            s.append("| %s | %s | %d | %s |" % (c, classes[c], n, ", ".join("`%s`" % f for f in fns)))
+        s.append("")
     return "\n".join(s)
 
 
@@ -390,6 +512,7 @@ def readme_block(rows):
     two = sum(1 for r in api if r["c2"] > 0)
     one_full = sum(1 for r in api if r["regions"] and r["c1"] == r["regions"])
     two_full = sum(1 for r in api if r["regions"] and r["c2"] == r["regions"])
+    judged = sum(1 for r in api if r["regions"] and not r.get("unjudged"))
     return "\n".join([
         BEGIN,
         "| %d public APIs with a FreeRTOS twin | entered by a run compared to the C | every arm executed |" % len(api),
@@ -397,9 +520,12 @@ def readme_block(rows):
         "| one core | **%d** | %d |" % (one, one_full),
         "| two cores | **%d** | %d |" % (two, two_full),
         "",
-        "The %d never compared on one core, and the %d never compared on two, are named "
-        "there; closing them is [`docs/plans/api-differential.md`](docs/plans/api-differential.md)."
-        % (len(api) - one, len(api) - two),
+        "**Every arm of %d of the %d is judged** -- compared on either build, contract-only, "
+        "proved by the typed face's equivalence test, or carrying a written reason the census "
+        "checks. The %d never compared on one core, and the %d never compared on two, are named "
+        "in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md); the mission is "
+        "[`docs/plans/api-differential.md`](docs/plans/api-differential.md)."
+        % (judged, len(api), len(api) - one, len(api) - two),
         END,
     ])
 

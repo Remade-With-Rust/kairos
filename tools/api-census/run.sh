@@ -10,10 +10,13 @@
 #   C1   compared against the C kernel, ONE core: rusty_rtos_demo's
 #        `conformance` pins -- every scenario's C trace digest and counters
 #        (and the async arm) -- the two tests that compare, by exact name --
-#        and the kernel's `api_differential`, one-core script.
-#   C2   compared against the C kernel, TWO cores: `smp_conformance` (nine
-#        scenarios), the kernel's `smp_differential` (both scripts) and
-#        `api_differential`'s two-core script.
+#        and the kernel's `api_differential`, one-core script and pins.
+#   C2   compared against the C kernel, TWO cores: `smp_conformance`, the
+#        kernel's `smp_differential` (both scripts) and `api_differential`'s
+#        two-core script and pins.
+#   EQ   the typed face's wrapper-equivalence test (`typed_equivalence`):
+#        not compared to the C, but each wrapper proved to make exactly the
+#        C-twinned calls it claims. The census credits it to typed.rs only.
 #   ANY  every test in the kernel and the demo, default and smp features:
 #        "executed by something", which is NOT "compared".
 #   C1L  compared against the C kernel, one core, at FULL length: given
@@ -41,7 +44,7 @@ mkdir -p "$OUT"
 # run GROUP DIR "CARGO ARGS" "TEST ARGS"
 # CENSUS_GROUPS="C1" runs only those groups (the kill test re-runs C1 alone).
 # Not GROUPS: bash reserves that name and silently ignores assignments to it.
-CENSUS_GROUPS=${CENSUS_GROUPS:-"C1 C2 ANY"}
+CENSUS_GROUPS=${CENSUS_GROUPS:-"C1 C2 EQ ANY"}
 
 run() {
     g=$1 d=$2 cargs=$3 targs=$4
@@ -66,9 +69,20 @@ run C1 rusty_rtos_demo "-p rusty_rtos_demo-core --test conformance" \
 # The API differential (docs/plans/api-differential.md, P1): every step of a
 # seeded script compared against FreeRTOS, one core and two.
 run C1 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test api_differential"     "--exact one_core_answers_every_step_as_the_c_kernel_does"
+# The digest pins (seeds that once found a defect) and the authored sweeps
+# (plan P3), each build's to its column.
+export API_PINS=api1-
+run C1 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test api_differential"     "--exact pinned_seeds_answer_every_step_as_the_c_kernel_does authored_sweeps_answer_every_step_as_the_c_kernel_does"
+export API_PINS=api2-
+run C2 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test api_differential"     "--exact pinned_seeds_answer_every_step_as_the_c_kernel_does authored_sweeps_answer_every_step_as_the_c_kernel_does"
+unset API_PINS
 run C2 rusty_rtos_demo "-p rusty_rtos_demo-core --features smp --test smp_conformance" ""
 run C2 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test api_differential"     "--exact two_cores_answer_every_step_as_the_c_kernel_does"
 run C2 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test smp_differential" ""
+# EQ: the typed face's wrapper-equivalence test (plan P4). Not compared to the
+# C: it proves each wrapper makes exactly the C-twinned calls it claims, and
+# those calls are what C1 and C2 compare. The census credits it to typed.rs only.
+run EQ rusty_rtos_kernel "-p rusty_rtos_kernel-core --test typed_equivalence" ""
 run ANY rusty_rtos_kernel "--workspace" ""
 run ANY rusty_rtos_demo "--workspace" ""
 # Not `--tests`: the ONE-core `conformance` pins fail by construction when the
@@ -96,7 +110,7 @@ else
     echo "C1L skipped: set CONFORM_LOG to a \`kairos conform --all --ticks N\` log"
 fi
 
-for g in C1 C1L C2 ANY; do
+for g in C1 C1L C2 EQ ANY; do
     [ -d "$OUT/$g" ] || continue
     "$LLVM/llvm-profdata" merge -sparse "$OUT/$g"/*.profraw -o "$OUT/$g.profdata"
     objs=$(sort -u "$OUT/$g.objects" | sed 's/^/-object /' | tr '\n' ' ')
