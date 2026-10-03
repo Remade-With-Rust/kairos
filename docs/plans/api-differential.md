@@ -186,8 +186,28 @@ regeneration lands in history, a pin is a third of that and judges the same
 steps. The rule is D2's -- a fresh seed that fails becomes a pin, cut just
 past its finding.
 
-Left for P1: the coverage-guided pass (census arms the scripts still miss,
-each reached or justified), and the census groups re-run.
+**The coverage pass (2026-10-02).** Of the 233 C-twinned regions no compared
+run executed: 123 are error and contract arms (a stale handle, a refused
+argument -- D1's contract-only column, the C has no answer); a handful are
+diagnostics or unreachable (scheduler stalls, an arena-full create, tickless
+`step_tick`, suspending the last task while idle cannot be suspended); the
+rest were reachable and are now reached -- the TICK WRAP (every script starts
+600 ticks short of 2^32: delayed-list swap, timer-list switch, every
+overflow arm), a trigger level of 0, a stream send longer than its buffer.
+The pinned seed was blind to the wrap (poisons passed), so fresh seed
+0x00001092, which catches both, is pinned.
+
+Census after it: two cores **112** entered / **53** every arm (from 41 / 22);
+one core 116 / 57. The seven never compared on two cores are typed wrappers
+(P4) and `step_tick` (H11).
+
+**P1's kill test, scored.** "Plant one-line changes in a queue arm, a timer
+arm and an ISR arm; each fails at a named seed and step": met many times over
+-- every family's poison, plus the wrap and abort and resume ones, each at a
+recorded step. "Every arm reached or justified": the classification above;
+the contract-only arms still want their own census column (D1), which is the
+one piece of P1 not built. "32 seeds x 20k steps identical": 160 fresh seeds
+x 28k steps x 2 builds, identical; four pinned.
 
 ### P2 — The two-core corpus, completed
 

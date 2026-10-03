@@ -12,7 +12,7 @@ Ordered by how much a reader should care, not by how easy the fix is.
 
 ---
 
-## H10 — 14 of 119 C-twinned APIs are never compared against the C on two cores — OPEN (was 77)
+## H10 — 7 of 119 C-twinned APIs are never compared against the C on two cores — OPEN (was 77): only typed wrappers and tickless remain
 
 **Measured 2026-10-02 by coverage, not grep** (`tools/api-census`,
 `docs/API-COVERAGE.md`). Of the 118 public kernel APIs whose FreeRTOS twin the
@@ -36,10 +36,15 @@ fifteen one-core scenarios that have never run on two cores).
 mutexes, notifications, event groups, stream/message buffers, timers and the
 daemon, against FreeRTOS built two-core) took the two-core column to **105**
 entered and **50** with every arm executed. It found five Kairos defects on the
-way (see the plan's P1 table), two of them two-core only. Still never entered
-on two cores: `task_get_handle`, `queue_spaces_available` and the five
-queue-set APIs (P1.8), the four typed wrappers (P4), and `step_tick`
-(tickless; H11).
+way (see the plan's P1 table), two of them two-core only.
+
+**After P1.8 and the coverage pass (same day): 112 entered on two cores, 53
+with every arm.** Every kernel API with a C twin is now compared on two cores;
+the seven left are the four typed wrappers (`create`, `send`, `receive`,
+`len` -- P4's wrapper-equivalence tests, since their kernel calls ARE
+compared), the typed `Mutex::new` and `send_from_isr` (never entered on one
+core either; H11), and `step_tick` (tickless; H11). Eleven Kairos defects in
+all, four two-core only.
 
 ## H11 — Three C-twinned APIs are not compared on one core either — OPEN
 
