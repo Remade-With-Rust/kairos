@@ -107,6 +107,13 @@ def main():
     pending = [n for n, r in recs.items() if r["final"] == "unjudged-by-corpus"]
     if pending and b_files:
         sys.exit("%d run-A survivors have no run-B verdict, e.g. %s" % (len(pending), pending[0]))
+    # The kernel source the survey's lines are keyed to: census.py refuses a
+    # survey of other source rather than attributing its lines to whatever
+    # functions sit there now. Run B and C restore the tree to HEAD, so this is
+    # the source every run judged.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import census
+    meta["kernel_src"] = census.fingerprint(census.INPUTS[0][1])
     rows = [dict(name=n, **r) for n, r in sorted(recs.items(), key=lambda kv: (kv[1]["file"], kv[1]["line"],
                                                                              kv[1]["col"], kv[0]))]
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:

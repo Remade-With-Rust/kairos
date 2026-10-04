@@ -40,6 +40,10 @@ export CARGO_TARGET_DIR="$TD"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
+# What this run measures, fingerprinted before anything is built: census.py
+# refuses to render from coverage of other source, and --check compares the
+# published census against the checkouts with exactly these.
+python3 "$ROOT/tools/api-census/census.py" --fingerprint > "$OUT/inputs.json"
 
 # run GROUP DIR "CARGO ARGS" "TEST ARGS"
 # CENSUS_GROUPS="C1" runs only those groups (the kill test re-runs C1 alone).
@@ -120,6 +124,16 @@ for g in C1 C1L C2 EQ ANY; do
         -ignore-filename-regex='(rustc|registry|\.cargo|library)' > "$OUT/$g.json"
     echo "$g: $(wc -c < "$OUT/$g.json") bytes of coverage"
 done
+
+# A source edit DURING the run would mix two programs' coverage.
+python3 "$ROOT/tools/api-census/census.py" --fingerprint > "$OUT/inputs.end.json"
+python3 - "$OUT/inputs.json" "$OUT/inputs.end.json" <<'PYEND' || exit 1
+import json, sys
+a, b = (json.load(open(p, encoding="utf-8"))["inputs"] for p in sys.argv[1:3])
+moved = [k for k in a if a[k] != b.get(k)]
+if moved:
+    sys.exit("inputs changed during the run: %s -- refusing this coverage" % ", ".join(moved))
+PYEND
 
 # The cargo-paths trap: building inside the packages rewrote their lockfiles.
 for r in rusty_rtos_kernel rusty_rtos_demo; do

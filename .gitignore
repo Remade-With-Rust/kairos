@@ -20,6 +20,8 @@
 /oracle/traces/*.trace
 /oracle/traces/*.sim
 /oracle/traces/*.oracle
+/oracle/traces/*.sim-w32
+/oracle/traces/*.oracle-w32
 *.log
 .DS_Store
 Thumbs.db

@@ -4,6 +4,7 @@
     python3 tools/api-census/census.py            # render from out/*.json
     python3 tools/api-census/census.py --check    # fail if the doc is stale
     python3 tools/api-census/census.py --render   # re-render from docs/api-coverage.json
+    python3 tools/api-census/census.py --check --require-inputs   # CI: also fail if not fresh
 
 Every function in rusty_rtos_kernel-core/src is found by parsing the source
 (its body's line range, by brace matching), and every LLVM code region the
@@ -42,6 +43,79 @@ WRAPPERS = "typed.rs"
 # unit tests (the ANY column); the census names them so nobody counts them
 # as a gap again.
 DIAGNOSTICS = {"task_at", "ready_cursor", "ready_items", "with_tick_hook", "notify_value"}
+
+# What a measurement depends on, fingerprinted when it is taken and compared
+# by --check. The kernel's source is what every row and mutant is keyed to; its
+# tests and oracle/api are the C differential (scripts, traces, pins, sweeps);
+# demo-core is the corpus. A change to any of them can move a published
+# number, so the census is STALE until it is measured again -- and --check says
+# so rather than vouching for documents that only agree with an old summary.
+# (2026-10-03: the one-core Ir round moved kernel.rs under P5's data and
+# nothing noticed until the census was re-run by hand.)
+KERNEL = os.path.join(ROOT, "rusty_rtos_kernel")
+DEMO = os.path.join(ROOT, "rusty_rtos_demo")
+INPUTS = (
+    ("kernel-core src", os.path.join(KERNEL, "crates", "rusty_rtos_kernel-core", "src")),
+    ("kernel-core tests", os.path.join(KERNEL, "crates", "rusty_rtos_kernel-core", "tests")),
+    ("kernel oracle/api", os.path.join(KERNEL, "oracle", "api")),
+    ("demo-core", os.path.join(DEMO, "crates", "rusty_rtos_demo-core")),
+)
+
+
+def fingerprint(path):
+    """sha256 over the TRACKED files under `path`, as they are in the working
+    tree: paths sorted, CRLF read as LF so a Windows checkout and a Linux one
+    agree. Tracked only, because a CI checkout has nothing else -- an ignored
+    build product or a scratch file must not make two checkouts of one commit
+    disagree."""
+    import hashlib
+    import subprocess
+    r = subprocess.run(["git", "-C", path, "ls-files", "-z", "--", "."],
+                       capture_output=True)
+    if r.returncode != 0:
+        sys.exit("%s is not in a git checkout; cannot fingerprint it" % path)
+    rels = sorted(x.decode() for x in r.stdout.split(b"\0") if x)
+    h = hashlib.sha256()
+    for rel in rels:
+        f = os.path.join(path, rel)
+        h.update(rel.encode() + b"\0")
+        # A tracked file deleted in the working tree is a change too.
+        data = open(f, "rb").read() if os.path.isfile(f) else b"<deleted>"
+        h.update(data.replace(b"\r\n", b"\n") + b"\0")
+    return h.hexdigest()[:16]
+
+
+def git_head(repo):
+    import subprocess
+    r = subprocess.run(["git", "-C", repo, "rev-parse", "--short=12", "HEAD"],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def inputs_now():
+    """Each input's fingerprint, or None for one not checked out here."""
+    return {name: (fingerprint(p) if os.path.isdir(p) else None) for name, p in INPUTS}
+
+
+def check_fresh(meta, require):
+    """Fail if an input moved since the census was measured. An input that is
+    not checked out is not judged -- unless `require`, which CI passes, so a
+    checkout that went to the wrong path cannot pass by checking nothing."""
+    then = meta.get("inputs")
+    if not then:
+        sys.exit("docs/api-coverage.json records no input fingerprints: re-run tools/api-census")
+    now = inputs_now()
+    missing = [n for n, v in now.items() if v is None]
+    if missing and require:
+        sys.exit("not checked out, so freshness cannot be judged: %s" % ", ".join(missing))
+    moved = [n for n, v in now.items() if v is not None and v != then.get(n)]
+    if moved:
+        sys.exit("the census is STALE: %s changed since it was measured (kernel %s, demo %s); "
+                 "re-run tools/api-census/run.sh and census.py"
+                 % (", ".join(moved), meta.get("commits", {}).get("kernel"),
+                    meta.get("commits", {}).get("demo")))
+    return missing
+
 
 FN = re.compile(r"^(\s*)(pub(\([^)]*\))?\s+)?(const\s+)?(unsafe\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)")
 CNAME = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)[^`]*`")
@@ -259,7 +333,30 @@ def load_mutants():
     return m, []
 
 
+def measured_inputs():
+    """The fingerprints run.sh took when the coverage was recorded -- refusing
+    a measurement whose coverage, mutant survey and checkout disagree, which is
+    the one way a census can be internally consistent and still wrong."""
+    ip = os.path.join(OUT, "inputs.json")
+    if not os.path.isfile(ip):
+        sys.exit("no %s: run tools/api-census/run.sh (it records what it measured)" % ip)
+    taken = json.load(open(ip, encoding="utf-8"))
+    now = inputs_now()
+    moved = [n for n, v in now.items() if v != taken["inputs"].get(n)]
+    if moved:
+        sys.exit("%s changed since the coverage was recorded: re-run tools/api-census/run.sh"
+                 % ", ".join(moved))
+    if os.path.isfile(MUTANTS):
+        keyed = json.load(open(MUTANTS, encoding="utf-8"))["meta"].get("kernel_src")
+        if keyed != taken["inputs"]["kernel-core src"]:
+            sys.exit("tools/api-census/mutants.json was surveyed on other kernel source (%s, now %s): "
+                     "re-survey the changed files and re-merge with mutants.py"
+                     % (keyed, taken["inputs"]["kernel-core src"]))
+    return taken
+
+
 def measure():
+    taken = measured_inputs()
     decl = declared_in_headers()
     reasons = load_reasons()
     used = set()
@@ -406,6 +503,7 @@ def measure():
                  "its code moved: %s" % (len(stale), "; ".join("%s %s `%s`" % (e["file"], e["fn"], e["text"])
                                                                 for e in stale)))
     meta = {"long": [], "classes": reasons["classes"],
+            "inputs": taken["inputs"], "commits": taken["commits"],
             "mutants": survey["meta"] if survey is not None else None,
             "eq_classes": survey["eq_classes"] if survey is not None else {},
             "equivalent": [{"file": e["file"], "fn": e["fn"], "class": e["class"]} for e in equivalent],
@@ -648,7 +746,7 @@ BEGIN = "<!-- API-CENSUS:BEGIN (generated by tools/api-census/census.py -- do no
 END = "<!-- API-CENSUS:END -->"
 
 
-def readme_block(rows):
+def readme_block(rows, meta=None):
     """The umbrella README's few lines, from the same rows as the doc."""
     api = [r for r in rows if r["pub"] and r["twin"] == "api"]
     one = sum(1 for r in api if r["c1"] > 0)
@@ -675,7 +773,12 @@ def readme_block(rows):
         "with a written reason, **%d unexplained**." % (
             sum(r.get("m_viable", 0) for r in api), sum(r.get("m_killed", 0) for r in api),
             sum(r.get("m_equivalent", 0) for r in api), sum(len(r.get("m_survived", [])) for r in api)),
-    ] if any("m_viable" in r for r in api) else []) + [
+    ] if any("m_viable" in r for r in api) else []) + ([
+        "",
+        "Measured at kernel `%s` and demo `%s`; CI's `census.py --check` fails once either "
+        "moves, until the census is measured again." % (
+            meta["commits"].get("kernel"), meta["commits"].get("demo")),
+    ] if meta and meta.get("commits") else []) + [
         END,
     ])
 
@@ -760,7 +863,7 @@ def write_generated(rows, meta):
         f.write(render(rows, meta))
     readme = open(README, encoding="utf-8").read()
     with open(README, "w", encoding="utf-8", newline="") as f:
-        f.write(splice_readme(readme, readme_block(rows)))
+        f.write(splice_readme(readme, readme_block(rows, meta)))
     holes = open(HOLES, encoding="utf-8").read()
     with open(HOLES, "w", encoding="utf-8", newline="") as f:
         f.write(splice_holes(holes, holes_block(rows)))
@@ -774,13 +877,24 @@ def main():
         if have != want:
             sys.exit("docs/API-COVERAGE.md is stale or hand-edited: re-run tools/api-census")
         readme = open(README, encoding="utf-8").read()
-        if readme != splice_readme(readme, readme_block(data["rows"])):
+        if readme != splice_readme(readme, readme_block(data["rows"], data["meta"])):
             sys.exit("README.md's API-CENSUS block is stale or hand-edited: re-run tools/api-census")
         holes = open(HOLES, encoding="utf-8").read()
         if HBEGIN not in holes or holes != splice_holes(holes, holes_block(data["rows"])):
             sys.exit("docs/HOLES.md's API-CENSUS-HOLES block is stale, missing or hand-edited: "
                      "re-run tools/api-census/census.py --render")
+        missing = check_fresh(data["meta"], "--require-inputs" in sys.argv)
         print("API-COVERAGE.md, the README block and the HOLES block up to date")
+        if missing:
+            print("freshness NOT judged (not checked out here): %s" % ", ".join(missing))
+        else:
+            print("and fresh: kernel and demo are what the census measured")
+        return
+    if "--fingerprint" in sys.argv:
+        # run.sh records this when it starts the coverage run.
+        print(json.dumps({"inputs": inputs_now(),
+                          "commits": {"kernel": git_head(KERNEL), "demo": git_head(DEMO)}},
+                         indent=1, sort_keys=True))
         return
     if "--render" in sys.argv:
         # Re-render the generated files from the committed summary, with no

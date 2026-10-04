@@ -1646,6 +1646,23 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
     if ran == 0 {
         return fail("nothing to check: no listed package has a Cargo.toml on disk");
     }
+    // The API census, on every check and not behind a flag: it is cheap, and
+    // it is the one gate that notices when a package moved under numbers the
+    // umbrella publishes. `--check` re-renders the README's and HOLES.md's
+    // generated blocks from docs/api-coverage.json, and fails if the kernel or
+    // demo checkout is not the source that census measured
+    // (docs/plans/api-differential.md, P6 and its follow-up).
+    let census = root.join("tools").join("api-census").join("census.py");
+    if census.is_file() {
+        println!("== api census ==");
+        let path = census.to_string_lossy().into_owned();
+        if let Err(e) = run(false, root, "python3", &[&path, "--check"]) {
+            failures.push(format!(
+                "api census: {e} -- re-run tools/api-census (run.sh, then census.py), \
+                 or the README and HOLES.md publish numbers measured on other code"
+            ));
+        }
+    }
     if failures.is_empty() {
         println!("\ncheck: {ran} package(s) passed");
         Ok(())
@@ -2023,8 +2040,8 @@ USAGE
   kairos deploy PACKAGE (--public | --private) [--message TEXT] [--dry-run] [--override-visibility]
   kairos deploy --umbrella (--public | --private) [--message TEXT] [--dry-run]
   kairos secrets [--from-env VAR] [--dry-run]
-  kairos oracle fetch | patch | build [SCENARIO] | trace [SCENARIO] [--ticks N] [--all] | cat [SCENARIO]
-  kairos conform [SCENARIO] [--ticks N] [--all] [--exits]
+  kairos oracle fetch | patch | build [SCENARIO] [--w32] | trace [SCENARIO] [--ticks N] [--all] | cat [SCENARIO]
+  kairos conform [SCENARIO] [--ticks N] [--all] [--exits] [--w32]
   kairos power idle [SCENARIO] [--min-sleep N] | diff [SCENARIO] [--show]
 
 `status --ci` adds the latest GitHub Actions conclusion per package (through

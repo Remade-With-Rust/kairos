@@ -14,6 +14,10 @@
 "storage": "two cores: Kairos keeps the C's termination list as two reap slots; the second fills only when two deletions of running tasks land before the idle task reaps. The API differential reaps after every step (the C's list makes reaping invisible), so one step holds at most one.",
 "yield-window": "two cores: a core asked to yield that has not yet taken it -- the C's taskTASK_SCHEDULED_TO_YIELD. Every harness takes a requested yield at the end of the step that asked for it, so a later call never finds one outstanding; on silicon it is the inter-processor interrupt's latency."
 },
+"commits": {
+"demo": "6845c544636b",
+"kernel": "ad127addc4fb"
+},
 "eq_classes": {
 "c-undefined": "differs only for input the C configASSERTs against (event bits in the control byte, a mutex holder deleted while it holds), where FreeRTOS has no defined answer.",
 "core-gate": "EVIDENCE, NOT PROOF. `C::NUMBER_OF_CORES > 1` (or its pair) relaxed so a one-core build takes the two-core path: every one-core oracle -- the API differential's scripts, pins and sweeps against FreeRTOS built one-core, at both pointer widths, and the 26-scenario corpus -- passes with it. The two-core code run with one core decides what the one-core code decides wherever any oracle looks. Listed site by site so it can be revisited.",
@@ -475,6 +479,12 @@
 "fn": "run_tick_hook"
 }
 ],
+"inputs": {
+"demo-core": "8c4a4986829022ec",
+"kernel oracle/api": "34fcc30ecd4b511f",
+"kernel-core src": "8cee9fe623f8bbba",
+"kernel-core tests": "729765ba23d41e1a"
+},
 "long": [
 [
 "dynamic",
@@ -608,6 +618,7 @@
 ]
 ],
 "mutants": {
+"kernel_src": "8cee9fe623f8bbba",
 "runs": [
 {
 "caught": 17,

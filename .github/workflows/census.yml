@@ -1,20 +1,29 @@
 name: census
 
-# The API census's generated numbers -- docs/API-COVERAGE.md, the README's
+# The API census's published numbers -- docs/API-COVERAGE.md, the README's
 # API-CENSUS block and docs/HOLES.md's API-CENSUS-HOLES block -- re-rendered
 # from the committed summary (docs/api-coverage.json) and compared byte for
 # byte. A count typed by hand into any of them fails here
 # (docs/plans/api-differential.md, P6).
 #
-# What this does NOT do is re-measure: the coverage runs need the C oracle and
-# an hour of cargo-mutants, so `tools/api-census/run.sh` and `census.py` (no
-# flag) are run locally and their summary committed. This job proves the
-# documents are that summary, nothing more and nothing less.
+# And the summary must be of the code that is actually on main. The census
+# records a fingerprint of everything it measured -- the kernel's source, its
+# tests and C traces (oracle/api), the demo's corpus -- and `--require-inputs`
+# checks out both packages and fails if either moved since. The packages are
+# their own repositories, so a kernel push does not run this workflow: the
+# daily schedule is what notices it.
+#
+# What this does NOT do is re-measure: coverage needs the C oracle and the
+# mutant survey an hour of cargo-mutants, so tools/api-census/run.sh and
+# census.py run locally and their summary is committed.
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,4 +34,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - run: python3 tools/api-census/census.py --check
+      # Public repositories, no token: the paths are where the umbrella
+      # expects its packages.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: Remade-With-Rust/rusty_rtos_kernel
+          path: rusty_rtos_kernel
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: Remade-With-Rust/rusty_rtos_demo
+          path: rusty_rtos_demo
+      - run: python3 tools/api-census/census.py --check --require-inputs
