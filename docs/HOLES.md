@@ -20,26 +20,37 @@ Ordered by how much a reader should care, not by how easy the fix is.
 | C-twinned APIs never compared against the C, one core | 2 of 119 | `new` (xSemaphoreCreateMutex, typed.rs), `send_from_isr` (xQueueSendToBackFromISR, typed.rs) | H11 |
 | C-twinned APIs never compared against the C, two cores | 6 of 119 | `new` (xSemaphoreCreateMutex, typed.rs), `create` (xQueueCreate, typed.rs), `send` (xQueueSendToBack, typed.rs), `receive` (xQueueReceive, typed.rs), `send_from_isr` (xQueueSendToBackFromISR, typed.rs), `len` (uxQueueMessagesWaiting, typed.rs) | H10 |
 | C-twinned APIs with an arm nothing judges | 0 | -- | H10, H11 (plan P3) |
-| unexplained mutants in a C-twinned API | 0 of 503 viable | -- | plan P5 |
-| unexplained mutants kernel-wide | 1 of 1460 viable | `kernel.rs` `set_stream_waited` (line 3619) | H14 |
+| unexplained mutants in a C-twinned API | 0 of 489 viable | -- | plan P5 |
+| unexplained mutants kernel-wide | 2 of 1452 viable | `kernel.rs` `take_stream_waited` (line 3652), `kernel.rs` `set_stream_waited` (line 3662) | H14 |
 
 Every API in the first two rows is judged another way -- the typed face's equivalence test, or a written reason -- which is what the third row counts.
 <!-- API-CENSUS-HOLES:END -->
 
-## H14 — One mutant survives every oracle: the stream wait's own-exit resume — OPEN
+## H14 — One arm survives every oracle: the stream wait's own-exit resume — OPEN
 
-**Measured 2026-10-03 (plan P5).** Of 1,460 viable mutants kernel-wide, one
-is neither killed nor explained: `set_stream_waited` made a no-op
-(`kernel.rs`). The flag tells a stream-buffer call that was preempted at its
-WAIT's own exit -- not at the sampling exit -- that only the transfer is
-left; without it the resumed call would wait again. No oracle preempts a
-stream call there: not the API differential (it delivers interrupts and
-ticks between calls), not the corpus pins, and not `kairos conform` at
-100,000 ticks on StreamBufferDemo, MessageBufferDemo, StreamBufferInterrupt
-and MessageBufferAMP (run C, which DID kill its three siblings --
-`take_stream_waited`, `take_stream_timed`, `set_stream_timed` -- and the
-condition at `stream.rs:823`). It is an internal function, so P5's target
-(no unexplained survivor in a judged API) holds; the arm itself is real.
+**Measured 2026-10-03 (plan P5), corrected the same day (P6's re-survey).**
+Two mutants, one arm: `set_stream_waited` made a no-op, and
+`take_stream_waited` made to answer `false` (`kernel.rs`). `set_stream_waited`
+is the flag's only setter, so "never set" and "never read as set" are the same
+program. The flag tells a stream-buffer call that was preempted at its WAIT's
+own exit -- not at the sampling exit -- that only the transfer is left;
+without it the resumed call would wait again. No oracle preempts a stream call
+there: not the API differential (it delivers interrupts and ticks between
+calls), not the corpus pins, and not `kairos conform` at 100,000 ticks on
+StreamBufferDemo, MessageBufferDemo, StreamBufferInterrupt and
+MessageBufferAMP (run C, which does kill the siblings `take_stream_timed`,
+`set_stream_timed` and `take_stream_waited -> true`, and the condition at
+`stream.rs:823`). Both are internal functions, so P5's target (no unexplained
+survivor in a judged API) holds; the arm itself is real.
+
+**The correction.** P5 recorded `take_stream_waited -> false` as killed by
+run C. It cannot have been: it is the same program as the setter's no-op,
+which survived the same run. Run C counted ANY failure of `kairos conform`
+that was not a compile error as a kill, and P5's session saw WSL's transient
+`E_UNEXPECTED`; the re-survey, on a clean oracle, reads it missed.
+`mutants-long-conform.sh` now records a kill only on evidence -- a diverging
+trace or a scenario failing its own check -- and anything else as
+`oracle-error`.
 
 **Closing it:** a scenario, or a sim-port unit test, that switches a stream
 receiver away exactly at the exit ending its wait.

@@ -10,7 +10,8 @@
     "yield-window": "two cores: differs only while a core asked to yield has not yet taken it; every harness takes a requested yield at the end of the step that asked (as reasons.json).",
     "pre-scheduler": "differs only before the scheduler starts, which no compared run steps through (as reasons.json).",
     "core-gate": "EVIDENCE, NOT PROOF. `C::NUMBER_OF_CORES > 1` (or its pair) relaxed so a one-core build takes the two-core path: every one-core oracle -- the API differential's scripts, pins and sweeps against FreeRTOS built one-core, at both pointer widths, and the 26-scenario corpus -- passes with it. The two-core code run with one core decides what the one-core code decides wherever any oracle looks. Listed site by site so it can be revisited.",
-    "oracle-evidence": "EVIDENCE, NOT PROOF, on the two-core side: every two-core oracle -- smp_conformance's scenarios, smp_differential, the API differential's two-core scripts, pins and sweeps at both pointer widths -- passes with it, and no argument from the code alone closes it. Listed so it can be revisited."
+    "oracle-evidence": "EVIDENCE, NOT PROOF, on the two-core side: every two-core oracle -- smp_conformance's scenarios, smp_differential, the API differential's two-core scripts, pins and sweeps at both pointer widths -- passes with it, and no argument from the code alone closes it. Listed so it can be revisited.",
+    "same-code": "the mutated test only chooses between two copies of the same code -- a body in line and the same body out of line, kept apart for speed -- so either arm does exactly what the other does."
   },
   "mutants": [
     {
@@ -165,7 +166,7 @@
     },
     {
       "file": "kernel.rs",
-      "fn": "add_task_to_ready_list",
+      "fn": "add_task_to_ready_list_at",
       "text": "if priority > self.top_ready_priority {",
       "replacement": ">=",
       "class": "same-value",
@@ -574,18 +575,18 @@
     {
       "file": "queue.rs",
       "fn": "unlock_queue",
-      "text": "let tx_looped = tx_lock > LOCKED_UNMODIFIED;",
+      "text": "if tx_lock > LOCKED_UNMODIFIED {",
       "replacement": ">=",
       "class": "same-value",
-      "why": "at LOCKED_UNMODIFIED the read above has already set UNLOCKED, and this writes it again"
+      "why": "at LOCKED_UNMODIFIED the drain runs no iteration and writes UNLOCKED, which the read above already wrote"
     },
     {
       "file": "queue.rs",
       "fn": "unlock_queue",
-      "text": "let rx_looped = rx_lock > LOCKED_UNMODIFIED;",
+      "text": "if rx_lock > LOCKED_UNMODIFIED {",
       "replacement": ">=",
       "class": "same-value",
-      "why": "as tx_looped"
+      "why": "as the tx guard"
     },
     {
       "file": "stream.rs",
@@ -682,6 +683,30 @@
       "replacement": "<=",
       "class": "unreachable-input",
       "why": "no Command has id 0 (Kairos has no START_DONT_TRACE)"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "run_tick_hook",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": "<",
+      "class": "same-code",
+      "why": "either arm copies the hook out, runs it and stores it back: run_tick_hook_body out of line, or the same three lines in line"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "run_tick_hook",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": "==",
+      "class": "same-code",
+      "why": "either arm copies the hook out, runs it and stores it back: run_tick_hook_body out of line, or the same three lines in line"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "run_tick_hook",
+      "text": "if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "same-code",
+      "why": "either arm copies the hook out, runs it and stores it back: run_tick_hook_body out of line, or the same three lines in line"
     }
   ]
 }

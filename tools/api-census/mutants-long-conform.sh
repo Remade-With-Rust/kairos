@@ -50,12 +50,22 @@ for diff in "$@"; do
         continue
     fi
     : > "$LOG"
+    # `caught` needs EVIDENCE: a trace that diverges from the C's, or a
+    # scenario failing its own check. Anything else -- the oracle not running,
+    # WSL's transient E_UNEXPECTED -- is `oracle-error`, which mutants.py does
+    # not count as a kill. Until 2026-10-03 every failure was `caught`, and
+    # P5 recorded take_stream_waited -> false as killed here although it
+    # behaves exactly as set_stream_waited -> (), which survived: a failed
+    # oracle run read as a kill.
     if conform; then
         verdict=missed
     elif grep -q "error\[E" "$LOG"; then
         verdict=unviable
-    else
+    elif grep -q "traces diverge at line\|failed its own check" "$LOG"; then
         verdict=caught
+    else
+        verdict=oracle-error
+        tail -3 "$LOG" >&2
     fi
     (cd "$K" && git checkout -q -- crates)
     printf '%s\t%s\n' "$diff" "$verdict"

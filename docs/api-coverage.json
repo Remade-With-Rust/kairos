@@ -22,6 +22,7 @@
 "oracle-evidence": "EVIDENCE, NOT PROOF, on the two-core side: every two-core oracle -- smp_conformance's scenarios, smp_differential, the API differential's two-core scripts, pins and sweeps at both pointer widths -- passes with it, and no argument from the code alone closes it. Listed so it can be revisited.",
 "pre-scheduler": "differs only before the scheduler starts, which no compared run steps through (as reasons.json).",
 "redundant-guard": "the same condition is decided again where it matters -- the C's own double sampling, a frame that end_wait has already cleared, an arm the caller's context makes false -- so the mutated guard only moves where the answer is reached.",
+"same-code": "the mutated test only chooses between two copies of the same code -- a body in line and the same body out of line, kept apart for speed -- so either arm does exactly what the other does.",
 "same-value": "at the only input where the mutated test decides differently, both arms compute the same thing: an equal value written over itself, a block copied onto itself, a clamp that changes nothing at its boundary, a lock flag already unlocked, a prefix written the same either way.",
 "unreachable-input": "the mutation differs only for an input this code cannot be handed: a core id at or past the core count, a command id of zero, the slot of an idle task (idle tasks are never deleted), a zero-length message stored, a name longer than the validation window, a zero-core configuration (refused).",
 "unused-value": "the mutated value is never read on the path it is computed for.",
@@ -126,7 +127,7 @@
 {
 "class": "same-value",
 "file": "kernel.rs",
-"fn": "add_task_to_ready_list"
+"fn": "add_task_to_ready_list_at"
 },
 {
 "class": "unreachable-input",
@@ -457,6 +458,21 @@
 "class": "unreachable-input",
 "file": "timer.rs",
 "fn": "timer_execute_command"
+},
+{
+"class": "same-code",
+"file": "kernel.rs",
+"fn": "run_tick_hook"
+},
+{
+"class": "same-code",
+"file": "kernel.rs",
+"fn": "run_tick_hook"
+},
+{
+"class": "same-code",
+"file": "kernel.rs",
+"fn": "run_tick_hook"
 }
 ],
 "long": [
@@ -642,19 +658,19 @@
 "version": "27.1.0"
 },
 {
-"caught": 210,
-"missed": 22,
+"caught": 213,
+"missed": 21,
 "timeout": 2,
-"total": 342,
-"unviable": 108,
+"total": 343,
+"unviable": 107,
 "version": "27.1.0"
 },
 {
-"caught": 650,
-"missed": 137,
+"caught": 642,
+"missed": 135,
 "timeout": 10,
-"total": 852,
-"unviable": 55,
+"total": 858,
+"unviable": 71,
 "version": "27.1.0"
 }
 ]
@@ -2774,9 +2790,9 @@
 "file": "kernel.rs",
 "line": 1014,
 "m_equivalent": 0,
-"m_killed": 2,
+"m_killed": 1,
 "m_survived": [],
-"m_viable": 2,
+"m_viable": 1,
 "missed_by_c": [],
 "name": "priority_of",
 "pub": true,
@@ -3171,9 +3187,9 @@
 "redundant-guard"
 ],
 "m_equivalent": 1,
-"m_killed": 11,
+"m_killed": 12,
 "m_survived": [],
-"m_viable": 12,
+"m_viable": 13,
 "missed_by_c": [
 [
 1211,
@@ -3393,13 +3409,13 @@
 ]
 },
 {
-"any": 28,
+"any": 29,
 "c": "",
-"c1": 28,
-"c1_pin": 28,
-"c1k": 28,
-"c2": 28,
-"c2k": 28,
+"c1": 29,
+"c1_pin": 29,
+"c1k": 29,
+"c2": 29,
+"c2k": 29,
 "contract_missed": 0,
 "diagnostic": false,
 "eq": 0,
@@ -3415,7 +3431,7 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 28,
+"regions": 29,
 "twin": "none",
 "unjudged": []
 },
@@ -3432,7 +3448,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1324,
+"line": 1330,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -3459,7 +3475,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1341,
+"line": 1347,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -3486,7 +3502,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1349,
+"line": 1355,
 "m_eq_classes": [
 "unused-value"
 ],
@@ -3496,7 +3512,7 @@
 "m_viable": 4,
 "missed_by_c": [
 [
-1355,
+1361,
 13
 ]
 ],
@@ -3523,7 +3539,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1385,
+"line": 1391,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
@@ -3550,14 +3566,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1402,
+"line": 1408,
 "m_equivalent": 0,
 "m_killed": 6,
 "m_survived": [],
 "m_viable": 6,
 "missed_by_c": [
 [
-1405,
+1411,
 20
 ]
 ],
@@ -3569,7 +3585,7 @@
 "twin": "none",
 "unjudged": [
 [
-1405,
+1411,
 20
 ]
 ]
@@ -3587,7 +3603,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1432,
+"line": 1438,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -3614,7 +3630,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1442,
+"line": 1448,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -3641,7 +3657,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1459,
+"line": 1465,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -3668,7 +3684,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1477,
+"line": 1483,
 "m_eq_classes": [
 "redundant-guard"
 ],
@@ -3678,51 +3694,51 @@
 "m_viable": 13,
 "missed_by_c": [
 [
-1477,
+1483,
 5
 ],
 [
-1487,
+1493,
 13
 ],
 [
-1487,
+1493,
 19
 ],
 [
-1488,
+1494,
 16
 ],
 [
-1488,
+1494,
 16
 ],
 [
-1489,
+1495,
 16
 ],
 [
-1491,
+1497,
 12
 ],
 [
-1492,
+1498,
 13
 ],
 [
-1494,
+1500,
 13
 ],
 [
-1494,
+1500,
 36
 ],
 [
-1494,
+1500,
 51
 ],
 [
-1496,
+1502,
 5
 ]
 ],
@@ -3734,51 +3750,51 @@
 "twin": "state",
 "unjudged": [
 [
-1477,
+1483,
 5
 ],
 [
-1487,
+1493,
 13
 ],
 [
-1487,
+1493,
 19
 ],
 [
-1488,
+1494,
 16
 ],
 [
-1488,
+1494,
 16
 ],
 [
-1489,
+1495,
 16
 ],
 [
-1491,
+1497,
 12
 ],
 [
-1492,
+1498,
 13
 ],
 [
-1494,
+1500,
 13
 ],
 [
-1494,
+1500,
 36
 ],
 [
-1494,
+1500,
 51
 ],
 [
-1496,
+1502,
 5
 ]
 ]
@@ -3796,7 +3812,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1514,
+"line": 1520,
 "m_equivalent": 0,
 "m_killed": 8,
 "m_survived": [],
@@ -3823,162 +3839,162 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1543,
+"line": 1549,
 "m_equivalent": 0,
-"m_killed": 5,
+"m_killed": 6,
 "m_survived": [],
-"m_viable": 5,
+"m_viable": 6,
 "missed_by_c": [
 [
-1543,
+1549,
 5
 ],
 [
-1544,
-12
-],
-[
-1545,
-13
-],
-[
-1546,
-9
-],
-[
-1548,
-12
-],
-[
-1549,
-13
-],
-[
 1550,
-9
+12
+],
+[
+1551,
+13
 ],
 [
 1552,
 9
 ],
 [
-1552,
+1554,
+12
+],
+[
+1555,
+13
+],
+[
+1556,
+9
+],
+[
+1558,
+9
+],
+[
+1558,
 14
 ],
 [
-1553,
+1559,
 13
 ],
 [
-1553,
+1559,
 24
 ],
 [
-1553,
+1559,
 29
 ],
 [
-1554,
+1560,
 12
 ],
 [
-1554,
+1560,
 59
 ],
 [
-1555,
+1561,
 17
 ],
 [
-1555,
+1561,
 24
 ],
 [
-1556,
+1562,
 13
 ],
 [
-1556,
+1562,
 18
 ],
 [
-1557,
+1563,
 13
 ],
 [
-1557,
+1563,
 24
 ],
 [
-1557,
+1563,
 30
 ],
 [
-1557,
+1563,
 36
 ],
 [
-1559,
+1565,
 17
-],
-[
-1559,
-25
-],
-[
-1559,
-35
-],
-[
-1559,
-60
-],
-[
-1560,
-13
-],
-[
-1560,
-18
-],
-[
-1560,
-28
-],
-[
-1562,
-17
-],
-[
-1562,
-24
-],
-[
-1563,
-13
-],
-[
-1563,
-18
-],
-[
-1564,
-13
-],
-[
-1564,
-24
 ],
 [
 1565,
-9
+25
+],
+[
+1565,
+35
+],
+[
+1565,
+60
 ],
 [
 1566,
+13
+],
+[
+1566,
+18
+],
+[
+1566,
+28
+],
+[
+1568,
 17
 ],
 [
-1567,
+1568,
+24
+],
+[
+1569,
+13
+],
+[
+1569,
+18
+],
+[
+1570,
+13
+],
+[
+1570,
+24
+],
+[
+1571,
+9
+],
+[
+1572,
+17
+],
+[
+1573,
 5
 ]
 ],
@@ -3990,155 +4006,155 @@
 "twin": "none",
 "unjudged": [
 [
-1543,
+1549,
 5
 ],
 [
-1544,
-12
-],
-[
-1545,
-13
-],
-[
-1546,
-9
-],
-[
-1548,
-12
-],
-[
-1549,
-13
-],
-[
 1550,
-9
+12
+],
+[
+1551,
+13
 ],
 [
 1552,
 9
 ],
 [
-1552,
+1554,
+12
+],
+[
+1555,
+13
+],
+[
+1556,
+9
+],
+[
+1558,
+9
+],
+[
+1558,
 14
 ],
 [
-1553,
+1559,
 13
 ],
 [
-1553,
+1559,
 24
 ],
 [
-1553,
+1559,
 29
 ],
 [
-1554,
+1560,
 12
 ],
 [
-1554,
+1560,
 59
 ],
 [
-1555,
+1561,
 17
 ],
 [
-1555,
+1561,
 24
 ],
 [
-1556,
+1562,
 13
 ],
 [
-1556,
+1562,
 18
 ],
 [
-1557,
+1563,
 13
 ],
 [
-1557,
+1563,
 24
 ],
 [
-1557,
+1563,
 30
 ],
 [
-1557,
+1563,
 36
 ],
 [
-1559,
+1565,
 17
-],
-[
-1559,
-25
-],
-[
-1559,
-35
-],
-[
-1559,
-60
-],
-[
-1560,
-13
-],
-[
-1560,
-18
-],
-[
-1560,
-28
-],
-[
-1562,
-17
-],
-[
-1562,
-24
-],
-[
-1563,
-13
-],
-[
-1563,
-18
-],
-[
-1564,
-13
-],
-[
-1564,
-24
 ],
 [
 1565,
-9
+25
+],
+[
+1565,
+35
+],
+[
+1565,
+60
 ],
 [
 1566,
+13
+],
+[
+1566,
+18
+],
+[
+1566,
+28
+],
+[
+1568,
 17
 ],
 [
-1567,
+1568,
+24
+],
+[
+1569,
+13
+],
+[
+1569,
+18
+],
+[
+1570,
+13
+],
+[
+1570,
+24
+],
+[
+1571,
+9
+],
+[
+1572,
+17
+],
+[
+1573,
 5
 ]
 ]
@@ -4156,7 +4172,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1577,
+"line": 1583,
 "m_eq_classes": [
 "core-gate",
 "core-gate"
@@ -4187,7 +4203,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1633,
+"line": 1639,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -4214,7 +4230,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1652,
+"line": 1658,
 "m_eq_classes": [
 "unreachable-input",
 "unreachable-input",
@@ -4226,51 +4242,51 @@
 "m_viable": 5,
 "missed_by_c": [
 [
-1691,
+1697,
 21
 ],
 [
-1691,
+1697,
 28
 ],
 [
-1692,
+1698,
 17
 ],
 [
-1692,
+1698,
 22
 ],
 [
-1693,
+1699,
 17
 ],
 [
-1693,
+1699,
 28
 ],
 [
-1693,
+1699,
 34
 ],
 [
-1693,
+1699,
 40
 ],
 [
-1694,
+1700,
 24
 ],
 [
-1706,
+1712,
 62
 ],
 [
-1727,
+1733,
 13
 ],
 [
-1731,
+1737,
 58
 ]
 ],
@@ -4298,7 +4314,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1736,
+"line": 1742,
 "m_eq_classes": [
 "core-gate"
 ],
@@ -4308,7 +4324,7 @@
 "m_viable": 15,
 "missed_by_c": [
 [
-1757,
+1763,
 46
 ]
 ],
@@ -4321,29 +4337,26 @@
 "unjudged": []
 },
 {
-"any": 21,
+"any": 10,
 "c": "prvAddTaskToReadyList",
-"c1": 21,
-"c1_pin": 21,
-"c1k": 22,
-"c2": 21,
-"c2k": 22,
+"c1": 10,
+"c1_pin": 10,
+"c1k": 11,
+"c2": 10,
+"c2k": 11,
 "contract_missed": 1,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1797,
-"m_eq_classes": [
-"same-value"
-],
-"m_equivalent": 1,
-"m_killed": 3,
+"line": 1803,
+"m_equivalent": 0,
+"m_killed": 1,
 "m_survived": [],
-"m_viable": 4,
+"m_viable": 1,
 "missed_by_c": [
 [
-1798,
+1804,
 47
 ]
 ],
@@ -4351,8 +4364,38 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 22,
+"regions": 11,
 "twin": "state",
+"unjudged": []
+},
+{
+"any": 17,
+"c": "",
+"c1": 17,
+"c1_pin": 17,
+"c1k": 17,
+"c2": 17,
+"c2k": 17,
+"contract_missed": 0,
+"diagnostic": false,
+"eq": 0,
+"eq_missed": 0,
+"file": "kernel.rs",
+"line": 1821,
+"m_eq_classes": [
+"same-value"
+],
+"m_equivalent": 1,
+"m_killed": 3,
+"m_survived": [],
+"m_viable": 4,
+"missed_by_c": [],
+"name": "add_task_to_ready_list_at",
+"pub": false,
+"reasoned": [],
+"reasoned_missed": 0,
+"regions": 17,
+"twin": "none",
 "unjudged": []
 },
 {
@@ -4368,22 +4411,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1847,
+"line": 1870,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-1851,
+1874,
 47
 ],
 [
-1855,
+1878,
 46
 ],
 [
-1857,
+1880,
 72
 ]
 ],
@@ -4408,7 +4451,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1888,
+"line": 1911,
 "m_eq_classes": [
 "unreachable-input"
 ],
@@ -4418,23 +4461,23 @@
 "m_viable": 4,
 "missed_by_c": [
 [
-1892,
+1915,
 67
 ],
 [
-1895,
+1918,
 13
 ],
 [
-1899,
+1922,
 46
 ],
 [
-1901,
+1924,
 72
 ],
 [
-1920,
+1943,
 17
 ]
 ],
@@ -4446,11 +4489,11 @@
 "twin": "api",
 "unjudged": [
 [
-1895,
+1918,
 13
 ],
 [
-1920,
+1943,
 17
 ]
 ]
@@ -4468,7 +4511,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1931,
+"line": 1954,
 "m_eq_classes": [
 "same-value",
 "unreachable-input",
@@ -4480,11 +4523,11 @@
 "m_viable": 8,
 "missed_by_c": [
 [
-1934,
+1957,
 13
 ],
 [
-1936,
+1959,
 13
 ]
 ],
@@ -4496,11 +4539,11 @@
 "twin": "api",
 "unjudged": [
 [
-1934,
+1957,
 13
 ],
 [
-1936,
+1959,
 13
 ]
 ]
@@ -4518,7 +4561,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1944,
+"line": 1967,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -4545,7 +4588,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1950,
+"line": 1973,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -4572,18 +4615,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1955,
+"line": 1978,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1958,
+1981,
 9
 ],
 [
-1961,
+1984,
 9
 ]
 ],
@@ -4595,11 +4638,11 @@
 "twin": "none",
 "unjudged": [
 [
-1958,
+1981,
 9
 ],
 [
-1961,
+1984,
 9
 ]
 ]
@@ -4617,7 +4660,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1964,
+"line": 1987,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -4644,7 +4687,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1968,
+"line": 1991,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -4671,14 +4714,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1972,
+"line": 1995,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1975,
+1998,
 9
 ]
 ],
@@ -4690,7 +4733,7 @@
 "twin": "none",
 "unjudged": [
 [
-1975,
+1998,
 9
 ]
 ]
@@ -4708,7 +4751,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1978,
+"line": 2001,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -4735,14 +4778,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1982,
+"line": 2005,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1985,
+2008,
 9
 ]
 ],
@@ -4754,7 +4797,7 @@
 "twin": "none",
 "unjudged": [
 [
-1985,
+2008,
 9
 ]
 ]
@@ -4772,7 +4815,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1990,
+"line": 2013,
 "m_equivalent": 0,
 "m_killed": 6,
 "m_survived": [],
@@ -4799,7 +4842,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 1996,
+"line": 2019,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
@@ -4826,14 +4869,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2007,
+"line": 2030,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-2009,
+2032,
 13
 ]
 ],
@@ -4845,7 +4888,7 @@
 "twin": "state",
 "unjudged": [
 [
-2009,
+2032,
 13
 ]
 ]
@@ -4863,7 +4906,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2030,
+"line": 2053,
 "m_equivalent": 0,
 "m_killed": 7,
 "m_survived": [],
@@ -4890,14 +4933,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2084,
+"line": 2107,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-2087,
+2110,
 9
 ]
 ],
@@ -4909,7 +4952,7 @@
 "twin": "none",
 "unjudged": [
 [
-2087,
+2110,
 9
 ]
 ]
@@ -4927,7 +4970,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2092,
+"line": 2115,
 "m_equivalent": 0,
 "m_killed": 4,
 "m_survived": [],
@@ -4954,7 +4997,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2101,
+"line": 2124,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -4981,7 +5024,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2124,
+"line": 2147,
 "m_eq_classes": [
 "unreachable-input",
 "pre-scheduler",
@@ -4996,63 +5039,63 @@
 "m_viable": 14,
 "missed_by_c": [
 [
-2148,
+2171,
 21
 ],
 [
-2152,
+2175,
 13
 ],
 [
-2152,
+2175,
 38
 ],
 [
-2153,
+2176,
 21
 ],
 [
-2153,
+2176,
 28
 ],
 [
-2153,
+2176,
 33
 ],
 [
-2153,
+2176,
 44
 ],
 [
-2154,
+2177,
 20
 ],
 [
-2154,
+2177,
 41
 ],
 [
-2155,
+2178,
 21
 ],
 [
-2155,
+2178,
 38
 ],
 [
-2157,
+2180,
 21
 ],
 [
-2159,
+2182,
 13
 ],
 [
-2183,
+2206,
 25
 ],
 [
-2206,
+2229,
 24
 ]
 ],
@@ -5064,63 +5107,63 @@
 "twin": "state",
 "unjudged": [
 [
-2148,
+2171,
 21
 ],
 [
-2152,
+2175,
 13
 ],
 [
-2152,
+2175,
 38
 ],
 [
-2153,
+2176,
 21
 ],
 [
-2153,
+2176,
 28
 ],
 [
-2153,
+2176,
 33
 ],
 [
-2153,
+2176,
 44
 ],
 [
-2154,
+2177,
 20
 ],
 [
-2154,
+2177,
 41
 ],
 [
-2155,
+2178,
 21
 ],
 [
-2155,
+2178,
 38
 ],
 [
-2157,
+2180,
 21
 ],
 [
-2159,
+2182,
 13
 ],
 [
-2183,
+2206,
 25
 ],
 [
-2206,
+2229,
 24
 ]
 ]
@@ -5138,14 +5181,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2221,
+"line": 2244,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-2229,
+2252,
 9
 ]
 ],
@@ -5157,7 +5200,7 @@
 "twin": "api",
 "unjudged": [
 [
-2229,
+2252,
 9
 ]
 ]
@@ -5175,14 +5218,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2237,
+"line": 2260,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-2250,
+2273,
 9
 ]
 ],
@@ -5194,7 +5237,7 @@
 "twin": "api",
 "unjudged": [
 [
-2250,
+2273,
 9
 ]
 ]
@@ -5212,7 +5255,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2257,
+"line": 2280,
 "m_eq_classes": [
 "oracle-evidence"
 ],
@@ -5222,35 +5265,35 @@
 "m_viable": 4,
 "missed_by_c": [
 [
-2260,
+2283,
 13
 ],
 [
-2260,
+2283,
 18
 ],
 [
-2260,
+2283,
 33
 ],
 [
-2261,
+2284,
 13
 ],
 [
-2267,
+2290,
 13
 ],
 [
-2267,
+2290,
 18
 ],
 [
-2267,
+2290,
 29
 ],
 [
-2268,
+2291,
 13
 ]
 ],
@@ -5262,35 +5305,35 @@
 "twin": "api",
 "unjudged": [
 [
-2260,
+2283,
 13
 ],
 [
-2260,
+2283,
 18
 ],
 [
-2260,
+2283,
 33
 ],
 [
-2261,
+2284,
 13
 ],
 [
-2267,
+2290,
 13
 ],
 [
-2267,
+2290,
 18
 ],
 [
-2267,
+2290,
 29
 ],
 [
-2268,
+2291,
 13
 ]
 ]
@@ -5308,44 +5351,12 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2280,
+"line": 2303,
 "m_equivalent": 0,
 "m_killed": 8,
 "m_survived": [],
 "m_viable": 8,
 "missed_by_c": [
-[
-2316,
-13
-],
-[
-2316,
-18
-],
-[
-2316,
-29
-],
-[
-2317,
-13
-],
-[
-2330,
-25
-],
-[
-2330,
-30
-],
-[
-2330,
-41
-],
-[
-2331,
-25
-],
 [
 2339,
 13
@@ -5360,6 +5371,38 @@
 ],
 [
 2340,
+13
+],
+[
+2353,
+25
+],
+[
+2353,
+30
+],
+[
+2353,
+41
+],
+[
+2354,
+25
+],
+[
+2362,
+13
+],
+[
+2362,
+18
+],
+[
+2362,
+29
+],
+[
+2363,
 13
 ]
 ],
@@ -5386,7 +5429,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2371,
+"line": 2394,
 "m_eq_classes": [
 "fast-path"
 ],
@@ -5396,7 +5439,7 @@
 "m_viable": 5,
 "missed_by_c": [
 [
-2399,
+2422,
 24
 ]
 ],
@@ -5408,7 +5451,7 @@
 "twin": "none",
 "unjudged": [
 [
-2399,
+2422,
 24
 ]
 ]
@@ -5426,14 +5469,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2415,
+"line": 2438,
 "m_equivalent": 0,
-"m_killed": 4,
+"m_killed": 3,
 "m_survived": [],
-"m_viable": 4,
+"m_viable": 3,
 "missed_by_c": [
 [
-2424,
+2447,
 20
 ]
 ],
@@ -5445,79 +5488,73 @@
 "twin": "none",
 "unjudged": [
 [
-2424,
+2447,
 20
 ]
 ]
 },
 {
-"any": 11,
+"any": 31,
 "c": "",
-"c1": 11,
-"c1_pin": 11,
-"c1k": 11,
-"c2": 10,
-"c2k": 10,
+"c1": 31,
+"c1_pin": 31,
+"c1k": 31,
+"c2": 18,
+"c2k": 18,
 "contract_missed": 0,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2447,
+"line": 2470,
 "m_equivalent": 0,
-"m_killed": 2,
+"m_killed": 5,
 "m_survived": [],
-"m_viable": 2,
-"missed_by_c": [],
+"m_viable": 5,
+"missed_by_c": [
+[
+2485,
+13
+]
+],
 "name": "resume_pending_owed",
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 11,
+"regions": 32,
 "twin": "none",
-"unjudged": []
+"unjudged": [
+[
+2485,
+13
+]
+]
 },
 {
-"any": 123,
+"any": 102,
 "c": "",
-"c1": 123,
-"c1_pin": 123,
-"c1k": 123,
-"c2": 42,
-"c2k": 42,
+"c1": 102,
+"c1_pin": 102,
+"c1k": 102,
+"c2": 30,
+"c2k": 30,
 "contract_missed": 0,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2460,
+"line": 2513,
 "m_equivalent": 0,
-"m_killed": 10,
+"m_killed": 5,
 "m_survived": [],
-"m_viable": 10,
+"m_viable": 5,
 "missed_by_c": [
 [
-2475,
+2526,
 13
 ],
 [
-2486,
-13
-],
-[
-2505,
-17
-],
-[
-2515,
-17
-],
-[
-2529,
-17
-],
-[
-2543,
+2534,
 17
 ],
 [
@@ -5525,71 +5562,83 @@
 17
 ],
 [
-2546,
+2558,
+17
+],
+[
+2572,
+17
+],
+[
+2573,
+17
+],
+[
+2575,
 29
 ],
 [
-2546,
+2575,
 37
 ],
 [
-2546,
+2575,
 37
 ],
 [
-2546,
+2575,
 68
 ],
 [
-2548,
+2577,
 17
 ],
 [
-2549,
+2578,
 21
 ],
 [
-2549,
+2578,
 28
 ],
 [
-2550,
+2579,
 17
 ],
 [
-2550,
+2579,
 22
 ],
 [
-2551,
+2580,
 17
 ],
 [
-2551,
+2580,
 28
 ],
 [
-2552,
+2581,
 21
 ],
 [
-2553,
+2582,
 21
 ],
 [
-2558,
+2587,
 24
 ],
 [
-2568,
+2597,
 17
 ],
 [
-2585,
+2614,
 17
 ],
 [
-2592,
+2621,
 20
 ]
 ],
@@ -5597,31 +5646,15 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 147,
+"regions": 125,
 "twin": "none",
 "unjudged": [
 [
-2475,
+2526,
 13
 ],
 [
-2486,
-13
-],
-[
-2505,
-17
-],
-[
-2515,
-17
-],
-[
-2529,
-17
-],
-[
-2543,
+2534,
 17
 ],
 [
@@ -5629,81 +5662,93 @@
 17
 ],
 [
-2546,
+2558,
+17
+],
+[
+2572,
+17
+],
+[
+2573,
+17
+],
+[
+2575,
 29
 ],
 [
-2546,
+2575,
 37
 ],
 [
-2546,
+2575,
 37
 ],
 [
-2546,
+2575,
 68
 ],
 [
-2548,
+2577,
 17
 ],
 [
-2549,
+2578,
 21
 ],
 [
-2549,
+2578,
 28
 ],
 [
-2550,
+2579,
 17
 ],
 [
-2550,
+2579,
 22
 ],
 [
-2551,
+2580,
 17
 ],
 [
-2551,
+2580,
 28
 ],
 [
-2552,
+2581,
 21
 ],
 [
-2553,
+2582,
 21
 ],
 [
-2558,
+2587,
 24
 ],
 [
-2568,
+2597,
 17
 ],
 [
-2585,
+2614,
 17
 ],
 [
-2592,
+2621,
 20
 ]
 ]
 },
 {
-"any": 26,
+"any": 27,
 "c": "",
-"c1": 26,
-"c1_pin": 26,
-"c1k": 26,
+"c1": 27,
+"c1_pin": 27,
+"c1k": 27,
 "c2": 0,
 "c2k": 0,
 "contract_missed": 0,
@@ -5711,7 +5756,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2604,
+"line": 2633,
 "m_eq_classes": [
 "same-value"
 ],
@@ -5721,19 +5766,31 @@
 "m_viable": 4,
 "missed_by_c": [
 [
-2607,
+2636,
 13
 ],
 [
-2614,
+2643,
 13
 ],
 [
-2618,
+2647,
 13
 ],
 [
-2626,
+2660,
+17
+],
+[
+2660,
+17
+],
+[
+2660,
+40
+],
+[
+2664,
 9
 ]
 ],
@@ -5741,23 +5798,35 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 30,
+"regions": 34,
 "twin": "none",
 "unjudged": [
 [
-2607,
+2636,
 13
 ],
 [
-2614,
+2643,
 13
 ],
 [
-2618,
+2647,
 13
 ],
 [
-2626,
+2660,
+17
+],
+[
+2660,
+17
+],
+[
+2660,
+40
+],
+[
+2664,
 9
 ]
 ]
@@ -5775,18 +5844,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2638,
+"line": 2676,
 "m_equivalent": 0,
 "m_killed": 6,
 "m_survived": [],
 "m_viable": 6,
 "missed_by_c": [
 [
-2706,
+2744,
 78
 ],
 [
-2712,
+2750,
 9
 ]
 ],
@@ -5798,11 +5867,11 @@
 "twin": "none",
 "unjudged": [
 [
-2706,
+2744,
 78
 ],
 [
-2712,
+2750,
 9
 ]
 ]
@@ -5820,14 +5889,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2739,
+"line": 2777,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-2742,
+2780,
 21
 ]
 ],
@@ -5839,7 +5908,7 @@
 "twin": "none",
 "unjudged": [
 [
-2742,
+2780,
 21
 ]
 ]
@@ -5857,14 +5926,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2749,
+"line": 2787,
 "m_equivalent": 0,
-"m_killed": 4,
+"m_killed": 2,
 "m_survived": [],
-"m_viable": 4,
+"m_viable": 2,
 "missed_by_c": [
 [
-2756,
+2794,
 9
 ]
 ],
@@ -5876,7 +5945,7 @@
 "twin": "none",
 "unjudged": [
 [
-2756,
+2794,
 9
 ]
 ]
@@ -5894,14 +5963,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2773,
+"line": 2811,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-2780,
+2818,
 13
 ]
 ],
@@ -5913,7 +5982,7 @@
 "twin": "none",
 "unjudged": [
 [
-2780,
+2818,
 13
 ]
 ]
@@ -5931,14 +6000,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2784,
+"line": 2822,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-2787,
+2825,
 9
 ]
 ],
@@ -5950,7 +6019,7 @@
 "twin": "none",
 "unjudged": [
 [
-2787,
+2825,
 9
 ]
 ]
@@ -5968,7 +6037,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2792,
+"line": 2830,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -5995,18 +6064,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2812,
+"line": 2850,
 "m_equivalent": 0,
 "m_killed": 6,
 "m_survived": [],
 "m_viable": 6,
 "missed_by_c": [
 [
-2843,
+2881,
 13
 ],
 [
-2846,
+2884,
 13
 ]
 ],
@@ -6018,11 +6087,11 @@
 "twin": "none",
 "unjudged": [
 [
-2843,
+2881,
 13
 ],
 [
-2846,
+2884,
 13
 ]
 ]
@@ -6040,14 +6109,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2852,
+"line": 2890,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-2855,
+2893,
 9
 ]
 ],
@@ -6059,7 +6128,7 @@
 "twin": "none",
 "unjudged": [
 [
-2855,
+2893,
 9
 ]
 ]
@@ -6077,18 +6146,17 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2859,
+"line": 2897,
 "m_eq_classes": [
-"core-gate",
 "core-gate"
 ],
-"m_equivalent": 2,
-"m_killed": 23,
+"m_equivalent": 1,
+"m_killed": 11,
 "m_survived": [],
-"m_viable": 25,
+"m_viable": 12,
 "missed_by_c": [
 [
-2895,
+2933,
 17
 ]
 ],
@@ -6115,50 +6183,50 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 2956,
+"line": 2994,
 "m_equivalent": 0,
 "m_killed": 17,
 "m_survived": [],
 "m_viable": 17,
 "missed_by_c": [
 [
-2964,
+3002,
 20
 ],
 [
-2976,
+3014,
 21
 ],
 [
-2979,
+3017,
 21
 ],
 [
-2980,
+3018,
 17
 ],
 [
-2982,
+3020,
 13
 ],
 [
-2993,
+3031,
 67
 ],
 [
-2994,
+3032,
 13
 ],
 [
-3021,
+3059,
 17
 ],
 [
-3025,
+3063,
 13
 ],
 [
-3026,
+3064,
 9
 ]
 ],
@@ -6174,19 +6242,19 @@
 "unjudged": []
 },
 {
-"any": 99,
+"any": 97,
 "c": "ulTaskGenericNotifyTake",
-"c1": 99,
-"c1_pin": 98,
-"c1k": 101,
-"c2": 97,
-"c2k": 99,
+"c1": 97,
+"c1_pin": 96,
+"c1k": 99,
+"c2": 95,
+"c2k": 97,
 "contract_missed": 2,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3059,
+"line": 3097,
 "m_eq_classes": [
 "interrupt-window"
 ],
@@ -6196,39 +6264,39 @@
 "m_viable": 13,
 "missed_by_c": [
 [
-3066,
+3104,
 20
 ],
 [
-3079,
+3117,
 21
 ],
 [
-3080,
+3118,
 17
 ],
 [
-3082,
+3120,
 13
 ],
 [
-3092,
+3130,
 67
 ],
 [
-3093,
+3131,
 13
 ],
 [
-3132,
+3175,
 17
 ],
 [
-3136,
+3179,
 13
 ],
 [
-3137,
+3180,
 9
 ]
 ],
@@ -6239,7 +6307,7 @@
 "interrupt-window"
 ],
 "reasoned_missed": 7,
-"regions": 108,
+"regions": 106,
 "twin": "api",
 "unjudged": []
 },
@@ -6256,7 +6324,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3165,
+"line": 3208,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -6283,14 +6351,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3190,
+"line": 3233,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-3198,
+3241,
 20
 ]
 ],
@@ -6315,14 +6383,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3212,
+"line": 3255,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-3220,
+3263,
 20
 ]
 ],
@@ -6347,22 +6415,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3240,
+"line": 3283,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-3248,
+3291,
 20
 ],
 [
-3257,
+3300,
 19
 ],
 [
-3257,
+3300,
 32
 ]
 ],
@@ -6387,22 +6455,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3264,
+"line": 3307,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-3272,
+3315,
 20
 ],
 [
-3281,
+3324,
 33
 ],
 [
-3282,
+3325,
 25
 ]
 ],
@@ -6427,7 +6495,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3286,
+"line": 3329,
 "m_eq_classes": [
 "core-gate"
 ],
@@ -6437,35 +6505,35 @@
 "m_viable": 18,
 "missed_by_c": [
 [
-3297,
+3340,
 50
 ],
 [
-3300,
+3343,
 13
 ],
 [
-3315,
+3358,
 13
 ],
 [
-3332,
+3375,
 69
 ],
 [
-3334,
+3377,
 87
 ],
 [
-3336,
+3379,
 46
 ],
 [
-3338,
+3381,
 17
 ],
 [
-3339,
+3382,
 50
 ]
 ],
@@ -6477,15 +6545,15 @@
 "twin": "none",
 "unjudged": [
 [
-3300,
+3343,
 13
 ],
 [
-3315,
+3358,
 13
 ],
 [
-3338,
+3381,
 17
 ]
 ]
@@ -6503,22 +6571,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3380,
+"line": 3423,
 "m_equivalent": 0,
 "m_killed": 4,
 "m_survived": [],
 "m_viable": 4,
 "missed_by_c": [
 [
-3382,
+3425,
 20
 ],
 [
-3391,
+3434,
 17
 ],
 [
-3392,
+3435,
 13
 ]
 ],
@@ -6545,14 +6613,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3412,
+"line": 3455,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-3414,
+3457,
 20
 ]
 ],
@@ -6577,26 +6645,26 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3431,
+"line": 3474,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-3438,
+3481,
 20
 ],
 [
-3449,
+3492,
 25
 ],
 [
-3451,
+3494,
 17
 ],
 [
-3451,
+3494,
 23
 ]
 ],
@@ -6621,7 +6689,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3466,
+"line": 3509,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -6648,14 +6716,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3472,
+"line": 3515,
 "m_equivalent": 0,
 "m_killed": 4,
 "m_survived": [],
 "m_viable": 4,
 "missed_by_c": [
 [
-3473,
+3516,
 51
 ]
 ],
@@ -6680,14 +6748,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3482,
+"line": 3525,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-3486,
+3529,
 9
 ]
 ],
@@ -6699,7 +6767,7 @@
 "twin": "none",
 "unjudged": [
 [
-3486,
+3529,
 9
 ]
 ]
@@ -6717,14 +6785,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3495,
+"line": 3538,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-3498,
+3541,
 9
 ]
 ],
@@ -6736,7 +6804,7 @@
 "twin": "none",
 "unjudged": [
 [
-3498,
+3541,
 9
 ]
 ]
@@ -6754,7 +6822,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3504,
+"line": 3547,
 "m_eq_classes": [
 "unreachable-input"
 ],
@@ -6784,7 +6852,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3514,
+"line": 3557,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -6811,14 +6879,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3519,
+"line": 3562,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-3522,
+3565,
 9
 ]
 ],
@@ -6830,7 +6898,7 @@
 "twin": "none",
 "unjudged": [
 [
-3522,
+3565,
 9
 ]
 ]
@@ -6848,7 +6916,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3526,
+"line": 3569,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -6875,14 +6943,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3532,
+"line": 3575,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-3540,
+3583,
 20
 ]
 ],
@@ -6894,7 +6962,7 @@
 "twin": "none",
 "unjudged": [
 [
-3540,
+3583,
 20
 ]
 ]
@@ -6912,18 +6980,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3560,
+"line": 3603,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-3571,
+3614,
 13
 ],
 [
-3573,
+3616,
 9
 ]
 ],
@@ -6935,11 +7003,11 @@
 "twin": "none",
 "unjudged": [
 [
-3571,
+3614,
 13
 ],
 [
-3573,
+3616,
 9
 ]
 ]
@@ -6957,14 +7025,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3584,
+"line": 3627,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-3586,
+3629,
 20
 ]
 ],
@@ -6976,7 +7044,7 @@
 "twin": "none",
 "unjudged": [
 [
-3586,
+3629,
 20
 ]
 ]
@@ -6994,14 +7062,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3594,
+"line": 3637,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-3597,
+3640,
 9
 ]
 ],
@@ -7013,7 +7081,7 @@
 "twin": "none",
 "unjudged": [
 [
-3597,
+3640,
 9
 ]
 ]
@@ -7031,14 +7099,16 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3608,
+"line": 3651,
 "m_equivalent": 0,
-"m_killed": 2,
-"m_survived": [],
+"m_killed": 1,
+"m_survived": [
+"3652: false"
+],
 "m_viable": 2,
 "missed_by_c": [
 [
-3610,
+3653,
 20
 ]
 ],
@@ -7050,7 +7120,7 @@
 "twin": "none",
 "unjudged": [
 [
-3610,
+3653,
 20
 ]
 ]
@@ -7068,40 +7138,40 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3618,
+"line": 3661,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [
-"3619: ()"
+"3662: ()"
 ],
 "m_viable": 1,
 "missed_by_c": [
 [
-3618,
+3661,
 5
 ],
 [
-3619,
+3662,
 19
 ],
 [
-3619,
+3662,
 26
 ],
 [
-3619,
+3662,
 26
 ],
 [
-3619,
+3662,
 54
 ],
 [
-3621,
+3664,
 9
 ],
 [
-3622,
+3665,
 5
 ]
 ],
@@ -7113,31 +7183,31 @@
 "twin": "none",
 "unjudged": [
 [
-3618,
+3661,
 5
 ],
 [
-3619,
+3662,
 19
 ],
 [
-3619,
+3662,
 26
 ],
 [
-3619,
+3662,
 26
 ],
 [
-3619,
+3662,
 54
 ],
 [
-3621,
+3664,
 9
 ],
 [
-3622,
+3665,
 5
 ]
 ]
@@ -7155,7 +7225,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3624,
+"line": 3667,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -7182,14 +7252,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3631,
+"line": 3674,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-3634,
+3677,
 9
 ]
 ],
@@ -7201,7 +7271,7 @@
 "twin": "none",
 "unjudged": [
 [
-3634,
+3677,
 9
 ]
 ]
@@ -7219,7 +7289,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3637,
+"line": 3680,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -7246,7 +7316,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3645,
+"line": 3688,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -7273,7 +7343,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3659,
+"line": 3702,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -7300,7 +7370,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3666,
+"line": 3709,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -7315,30 +7385,62 @@
 "unjudged": []
 },
 {
-"any": 9,
+"any": 15,
 "c": "vApplicationTickHook",
-"c1": 9,
-"c1_pin": 9,
-"c1k": 9,
-"c2": 9,
-"c2k": 9,
+"c1": 12,
+"c1_pin": 12,
+"c1k": 12,
+"c2": 10,
+"c2k": 10,
 "contract_missed": 0,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3676,
-"m_equivalent": 0,
-"m_killed": 2,
+"line": 3727,
+"m_eq_classes": [
+"same-code",
+"same-code",
+"same-code"
+],
+"m_equivalent": 3,
+"m_killed": 4,
 "m_survived": [],
-"m_viable": 2,
+"m_viable": 7,
 "missed_by_c": [],
 "name": "run_tick_hook",
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 9,
+"regions": 15,
 "twin": "api",
+"unjudged": []
+},
+{
+"any": 6,
+"c": "",
+"c1": 0,
+"c1_pin": 0,
+"c1k": 0,
+"c2": 6,
+"c2k": 6,
+"contract_missed": 0,
+"diagnostic": false,
+"eq": 0,
+"eq_missed": 0,
+"file": "kernel.rs",
+"line": 3745,
+"m_equivalent": 0,
+"m_killed": 1,
+"m_survived": [],
+"m_viable": 1,
+"missed_by_c": [],
+"name": "run_tick_hook_body",
+"pub": false,
+"reasoned": [],
+"reasoned_missed": 0,
+"regions": 6,
+"twin": "none",
 "unjudged": []
 },
 {
@@ -7354,7 +7456,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3688,
+"line": 3754,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -7381,7 +7483,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3693,
+"line": 3759,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -7396,53 +7498,57 @@
 "unjudged": []
 },
 {
-"any": 72,
+"any": 64,
 "c": "",
-"c1": 60,
-"c1_pin": 60,
-"c1k": 60,
-"c2": 59,
-"c2k": 59,
+"c1": 59,
+"c1_pin": 59,
+"c1k": 59,
+"c2": 58,
+"c2k": 58,
 "contract_missed": 0,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3702,
+"line": 3768,
 "m_eq_classes": [
 "core-gate"
 ],
 "m_equivalent": 1,
-"m_killed": 12,
+"m_killed": 13,
 "m_survived": [],
-"m_viable": 13,
+"m_viable": 14,
 "missed_by_c": [
 [
-3708,
+3774,
 13
 ],
 [
-3717,
+3783,
 17
 ],
 [
-3718,
+3784,
 24
 ],
 [
-3721,
+3787,
 24
 ],
 [
-3728,
+3794,
 24
 ],
 [
-3740,
+3801,
 24
 ],
 [
-3760,
+3813,
+24
+],
+[
+3832,
 17
 ]
 ],
@@ -7450,35 +7556,39 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 78,
+"regions": 71,
 "twin": "none",
 "unjudged": [
 [
-3708,
+3774,
 13
 ],
 [
-3717,
+3783,
 17
 ],
 [
-3718,
+3784,
 24
 ],
 [
-3721,
+3787,
 24
 ],
 [
-3728,
+3794,
 24
 ],
 [
-3740,
+3801,
 24
 ],
 [
-3760,
+3813,
+24
+],
+[
+3832,
 17
 ]
 ]
@@ -7496,7 +7606,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3777,
+"line": 3846,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -7523,7 +7633,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3822,
+"line": 3891,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -7550,14 +7660,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3837,
+"line": 3906,
 "m_equivalent": 0,
 "m_killed": 6,
 "m_survived": [],
 "m_viable": 6,
 "missed_by_c": [
 [
-3845,
+3914,
 68
 ]
 ],
@@ -7582,7 +7692,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3876,
+"line": 3945,
 "m_eq_classes": [
 "core-gate"
 ],
@@ -7592,19 +7702,19 @@
 "m_viable": 11,
 "missed_by_c": [
 [
-3878,
+3947,
 20
 ],
 [
-3883,
+3952,
 48
 ],
 [
-3900,
+3969,
 17
 ],
 [
-3904,
+3973,
 42
 ]
 ],
@@ -7631,7 +7741,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 3918,
+"line": 3987,
 "m_eq_classes": [
 "unreachable-input",
 "same-value"
@@ -7642,31 +7752,31 @@
 "m_viable": 17,
 "missed_by_c": [
 [
-3937,
+4006,
 13
 ],
 [
-3951,
+4020,
 20
 ],
 [
-3957,
+4026,
 9
 ],
 [
-3966,
+4035,
 64
 ],
 [
-3979,
+4048,
 51
 ],
 [
-4010,
+4079,
 58
 ],
 [
-4024,
+4093,
 17
 ]
 ],
@@ -7678,15 +7788,15 @@
 "twin": "state",
 "unjudged": [
 [
-3937,
+4006,
 13
 ],
 [
-3957,
+4026,
 9
 ],
 [
-4024,
+4093,
 17
 ]
 ]
@@ -7704,7 +7814,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4040,
+"line": 4109,
 "m_eq_classes": [
 "pre-scheduler"
 ],
@@ -7714,51 +7824,51 @@
 "m_viable": 15,
 "missed_by_c": [
 [
-4046,
+4115,
 17
 ],
 [
-4046,
+4115,
 22
 ],
 [
-4047,
+4116,
 24
 ],
 [
-4055,
+4124,
 43
 ],
 [
-4058,
+4127,
 64
 ],
 [
-4084,
+4153,
 13
 ],
 [
-4120,
+4189,
 23
 ],
 [
-4120,
+4189,
 23
 ],
 [
-4120,
+4189,
 34
 ],
 [
-4120,
+4189,
 38
 ],
 [
-4120,
+4189,
 94
 ],
 [
-4122,
+4191,
 13
 ]
 ],
@@ -7774,46 +7884,46 @@
 "unjudged": []
 },
 {
-"any": 50,
+"any": 51,
 "c": "vTaskResume",
-"c1": 43,
-"c1_pin": 43,
-"c1k": 47,
-"c2": 41,
-"c2k": 45,
+"c1": 44,
+"c1_pin": 44,
+"c1k": 48,
+"c2": 42,
+"c2k": 46,
 "contract_missed": 4,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4131,
+"line": 4200,
 "m_equivalent": 0,
 "m_killed": 13,
 "m_survived": [],
 "m_viable": 13,
 "missed_by_c": [
 [
-4142,
+4211,
 20
 ],
 [
-4146,
+4215,
 44
 ],
 [
-4149,
-50
+4219,
+54
 ],
 [
-4153,
-54
+4222,
+62
 ]
 ],
 "name": "resume",
 "pub": true,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 53,
+"regions": 54,
 "twin": "api",
 "unjudged": []
 },
@@ -7830,22 +7940,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4169,
+"line": 4241,
 "m_equivalent": 0,
 "m_killed": 4,
 "m_survived": [],
 "m_viable": 4,
 "missed_by_c": [
 [
-4170,
+4242,
 56
 ],
 [
-4173,
+4245,
 70
 ],
 [
-4175,
+4247,
 20
 ]
 ],
@@ -7857,7 +7967,7 @@
 "twin": "state",
 "unjudged": [
 [
-4175,
+4247,
 20
 ]
 ]
@@ -7875,7 +7985,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4204,
+"line": 4276,
 "m_eq_classes": [
 "core-gate",
 "core-gate",
@@ -7887,23 +7997,23 @@
 "m_viable": 24,
 "missed_by_c": [
 [
-4207,
+4279,
 34
 ],
 [
-4216,
+4288,
 12
 ],
 [
-4218,
+4290,
 9
 ],
 [
-4250,
+4322,
 72
 ],
 [
-4281,
+4353,
 26
 ]
 ],
@@ -7932,14 +8042,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4297,
+"line": 4369,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-4308,
+4380,
 25
 ]
 ],
@@ -7951,7 +8061,7 @@
 "twin": "state",
 "unjudged": [
 [
-4308,
+4380,
 25
 ]
 ]
@@ -7969,18 +8079,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4319,
+"line": 4391,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-4346,
+4418,
 9
 ],
 [
-4357,
+4429,
 9
 ]
 ],
@@ -7992,11 +8102,11 @@
 "twin": "none",
 "unjudged": [
 [
-4346,
+4418,
 9
 ],
 [
-4357,
+4429,
 9
 ]
 ]
@@ -8014,7 +8124,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4373,
+"line": 4445,
 "m_eq_classes": [
 "core-gate"
 ],
@@ -8044,7 +8154,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4399,
+"line": 4471,
 "m_eq_classes": [
 "core-gate",
 "core-gate",
@@ -8055,60 +8165,60 @@
 "same-value"
 ],
 "m_equivalent": 7,
-"m_killed": 29,
+"m_killed": 28,
 "m_survived": [],
-"m_viable": 36,
+"m_viable": 35,
 "missed_by_c": [
 [
-4406,
+4478,
 17
 ],
 [
-4406,
+4478,
 22
 ],
 [
-4407,
+4479,
 24
 ],
 [
-4414,
+4486,
 49
 ],
 [
-4432,
+4504,
 62
 ],
 [
-4434,
+4506,
 56
 ],
 [
-4437,
+4509,
 69
 ],
 [
-4439,
+4511,
 50
 ],
 [
-4443,
+4515,
 68
 ],
 [
-4445,
+4517,
 46
 ],
 [
-4447,
+4519,
 56
 ],
 [
-4459,
+4531,
 64
 ],
 [
-4465,
+4537,
 21
 ]
 ],
@@ -8135,7 +8245,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4478,
+"line": 4550,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -8162,14 +8272,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4495,
+"line": 4567,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-4499,
+4571,
 13
 ]
 ],
@@ -8181,7 +8291,7 @@
 "twin": "none",
 "unjudged": [
 [
-4499,
+4571,
 13
 ]
 ]
@@ -8199,26 +8309,26 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4507,
+"line": 4579,
 "m_equivalent": 0,
 "m_killed": 6,
 "m_survived": [],
 "m_viable": 6,
 "missed_by_c": [
 [
-4511,
+4583,
 17
 ],
 [
-4514,
+4586,
 17
 ],
 [
-4519,
+4591,
 17
 ],
 [
-4540,
+4612,
 9
 ]
 ],
@@ -8230,19 +8340,19 @@
 "twin": "none",
 "unjudged": [
 [
-4511,
+4583,
 17
 ],
 [
-4514,
+4586,
 17
 ],
 [
-4519,
+4591,
 17
 ],
 [
-4540,
+4612,
 9
 ]
 ]
@@ -8260,14 +8370,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4550,
+"line": 4622,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-4552,
+4624,
 13
 ]
 ],
@@ -8279,7 +8389,7 @@
 "twin": "none",
 "unjudged": [
 [
-4552,
+4624,
 13
 ]
 ]
@@ -8297,7 +8407,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4560,
+"line": 4632,
 "m_equivalent": 0,
 "m_killed": 4,
 "m_survived": [],
@@ -8324,7 +8434,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4580,
+"line": 4652,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -8351,7 +8461,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4590,
+"line": 4662,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -8378,7 +8488,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4598,
+"line": 4670,
 "m_eq_classes": [
 "same-value",
 "same-value"
@@ -8389,7 +8499,7 @@
 "m_viable": 11,
 "missed_by_c": [
 [
-4613,
+4685,
 21
 ]
 ],
@@ -8401,7 +8511,7 @@
 "twin": "none",
 "unjudged": [
 [
-4613,
+4685,
 21
 ]
 ]
@@ -8419,7 +8529,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4643,
+"line": 4715,
 "m_eq_classes": [
 "redundant-guard",
 "unreachable-input"
@@ -8430,7 +8540,7 @@
 "m_viable": 11,
 "missed_by_c": [
 [
-4690,
+4762,
 20
 ]
 ],
@@ -8442,7 +8552,7 @@
 "twin": "none",
 "unjudged": [
 [
-4690,
+4762,
 20
 ]
 ]
@@ -8460,14 +8570,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4710,
+"line": 4782,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-4730,
+4802,
 9
 ]
 ],
@@ -8479,7 +8589,7 @@
 "twin": "none",
 "unjudged": [
 [
-4730,
+4802,
 9
 ]
 ]
@@ -8497,7 +8607,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4734,
+"line": 4806,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -8524,14 +8634,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4745,
+"line": 4817,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-4748,
+4820,
 9
 ]
 ],
@@ -8543,7 +8653,7 @@
 "twin": "state",
 "unjudged": [
 [
-4748,
+4820,
 9
 ]
 ]
@@ -8561,7 +8671,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4781,
+"line": 4853,
 "m_eq_classes": [
 "same-value"
 ],
@@ -8571,55 +8681,55 @@
 "m_viable": 16,
 "missed_by_c": [
 [
-4796,
+4868,
 13
 ],
 [
-4796,
+4868,
 18
 ],
 [
-4797,
+4869,
 20
 ],
 [
-4804,
+4876,
 13
 ],
 [
-4817,
+4889,
 21
 ],
 [
-4817,
+4889,
 39
 ],
 [
-4818,
+4890,
 21
 ],
 [
-4822,
+4894,
 21
 ],
 [
-4822,
+4894,
 36
 ],
 [
-4823,
+4895,
 21
 ],
 [
-4835,
+4907,
 21
 ],
 [
-4836,
+4908,
 21
 ],
 [
-4852,
+4924,
 23
 ]
 ],
@@ -8631,55 +8741,55 @@
 "twin": "api",
 "unjudged": [
 [
-4796,
+4868,
 13
 ],
 [
-4796,
+4868,
 18
 ],
 [
-4797,
+4869,
 20
 ],
 [
-4804,
+4876,
 13
 ],
 [
-4817,
+4889,
 21
 ],
 [
-4817,
+4889,
 39
 ],
 [
-4818,
+4890,
 21
 ],
 [
-4822,
+4894,
 21
 ],
 [
-4822,
+4894,
 36
 ],
 [
-4823,
+4895,
 21
 ],
 [
-4835,
+4907,
 21
 ],
 [
-4836,
+4908,
 21
 ],
 [
-4852,
+4924,
 23
 ]
 ]
@@ -8697,7 +8807,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4869,
+"line": 4941,
 "m_eq_classes": [
 "c-undefined"
 ],
@@ -8707,11 +8817,11 @@
 "m_viable": 3,
 "missed_by_c": [
 [
-4877,
+4949,
 67
 ],
 [
-4878,
+4950,
 42
 ]
 ],
@@ -8736,7 +8846,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4891,
+"line": 4963,
 "m_eq_classes": [
 "c-undefined",
 "core-gate"
@@ -8747,19 +8857,19 @@
 "m_viable": 9,
 "missed_by_c": [
 [
-4897,
+4969,
 67
 ],
 [
-4898,
+4970,
 49
 ],
 [
-4906,
+4978,
 42
 ],
 [
-4907,
+4979,
 44
 ]
 ],
@@ -8784,18 +8894,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4922,
+"line": 4994,
 "m_equivalent": 0,
 "m_killed": 4,
 "m_survived": [],
 "m_viable": 4,
 "missed_by_c": [
 [
-4928,
+5000,
 34
 ],
 [
-4930,
+5002,
 88
 ]
 ],
@@ -8820,22 +8930,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4937,
+"line": 5009,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-4939,
+5011,
 43
 ],
 [
-4940,
+5012,
 47
 ],
 [
-4942,
+5014,
 84
 ]
 ],
@@ -8860,7 +8970,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4948,
+"line": 5020,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
@@ -8887,18 +8997,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4966,
+"line": 5038,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-4971,
+5043,
 13
 ],
 [
-4973,
+5045,
 9
 ]
 ],
@@ -8910,11 +9020,11 @@
 "twin": "none",
 "unjudged": [
 [
-4971,
+5043,
 13
 ],
 [
-4973,
+5045,
 9
 ]
 ]
@@ -8932,30 +9042,30 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 4989,
+"line": 5061,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-5002,
+5074,
 13
 ],
 [
-5002,
+5074,
 18
 ],
 [
-5002,
+5074,
 29
 ],
 [
-5003,
+5075,
 20
 ],
 [
-5009,
+5081,
 52
 ]
 ],
@@ -8967,15 +9077,15 @@
 "twin": "none",
 "unjudged": [
 [
-5002,
+5074,
 13
 ],
 [
-5002,
+5074,
 18
 ],
 [
-5002,
+5074,
 29
 ]
 ]
@@ -8993,7 +9103,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5015,
+"line": 5087,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -9020,14 +9130,14 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5024,
+"line": 5096,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-5027,
+5099,
 9
 ]
 ],
@@ -9039,25 +9149,25 @@
 "twin": "api",
 "unjudged": [
 [
-5027,
+5099,
 9
 ]
 ]
 },
 {
-"any": 63,
+"any": 64,
 "c": "xTaskPriorityInherit",
-"c1": 56,
-"c1_pin": 56,
-"c1k": 62,
-"c2": 63,
-"c2k": 69,
+"c1": 57,
+"c1_pin": 57,
+"c1k": 63,
+"c2": 64,
+"c2k": 70,
 "contract_missed": 6,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5036,
+"line": 5108,
 "m_eq_classes": [
 "c-undefined",
 "core-gate",
@@ -9070,27 +9180,27 @@
 "m_viable": 14,
 "missed_by_c": [
 [
-5042,
+5114,
 48
 ],
 [
-5050,
+5122,
 63
 ],
 [
-5052,
+5124,
 38
 ],
 [
-5054,
+5126,
 60
 ],
 [
-5055,
-48
+5129,
+68
 ],
 [
-5062,
+5136,
 60
 ]
 ],
@@ -9098,24 +9208,24 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 69,
+"regions": 70,
 "twin": "api",
 "unjudged": []
 },
 {
-"any": 61,
+"any": 62,
 "c": "xTaskPriorityDisinherit",
-"c1": 56,
-"c1_pin": 56,
-"c1k": 59,
-"c2": 60,
-"c2k": 63,
+"c1": 57,
+"c1_pin": 57,
+"c1k": 60,
+"c2": 61,
+"c2k": 64,
 "contract_missed": 3,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5075,
+"line": 5149,
 "m_eq_classes": [
 "core-gate"
 ],
@@ -9125,27 +9235,27 @@
 "m_viable": 8,
 "missed_by_c": [
 [
-5091,
+5165,
 30
 ],
 [
-5098,
+5172,
 20
 ],
 [
-5105,
+5179,
 45
 ],
 [
-5108,
+5182,
 62
 ],
 [
-5109,
-44
+5184,
+53
 ],
 [
-5118,
+5193,
 13
 ]
 ],
@@ -9153,37 +9263,37 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 67,
+"regions": 68,
 "twin": "api",
 "unjudged": [
 [
-5091,
+5165,
 30
 ],
 [
-5098,
+5172,
 20
 ],
 [
-5118,
+5193,
 13
 ]
 ]
 },
 {
-"any": 64,
+"any": 65,
 "c": "vTaskPriorityDisinheritAfterTimeout",
-"c1": 58,
-"c1_pin": 58,
-"c1k": 63,
-"c2": 63,
-"c2k": 68,
+"c1": 59,
+"c1_pin": 59,
+"c1k": 64,
+"c2": 64,
+"c2k": 69,
 "contract_missed": 5,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5126,
+"line": 5201,
 "m_eq_classes": [
 "c-undefined",
 "same-value",
@@ -9195,39 +9305,39 @@
 "m_viable": 12,
 "missed_by_c": [
 [
-5132,
+5207,
 20
 ],
 [
-5135,
+5210,
 48
 ],
 [
-5162,
+5237,
 47
 ],
 [
-5163,
+5238,
 54
 ],
 [
-5165,
+5240,
 38
 ],
 [
-5167,
-48
+5243,
+59
 ]
 ],
 "name": "priority_disinherit_after_timeout",
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 70,
+"regions": 71,
 "twin": "api",
 "unjudged": [
 [
-5132,
+5207,
 20
 ]
 ]
@@ -9245,18 +9355,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5186,
+"line": 5262,
 "m_equivalent": 0,
 "m_killed": 24,
 "m_survived": [],
 "m_viable": 24,
 "missed_by_c": [
 [
-5209,
+5285,
 68
 ],
 [
-5214,
+5290,
 9
 ]
 ],
@@ -9283,34 +9393,34 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5226,
+"line": 5302,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
 "m_viable": 0,
 "missed_by_c": [
 [
-5226,
+5302,
 5
 ],
 [
-5227,
+5303,
 15
 ],
 [
-5227,
+5303,
 15
 ],
 [
-5228,
+5304,
 21
 ],
 [
-5229,
+5305,
 24
 ],
 [
-5231,
+5307,
 5
 ]
 ],
@@ -9322,80 +9432,84 @@
 "twin": "none",
 "unjudged": [
 [
-5226,
+5302,
 5
 ],
 [
-5227,
+5303,
 15
 ],
 [
-5227,
+5303,
 15
 ],
 [
-5228,
+5304,
 21
 ],
 [
-5229,
+5305,
 24
 ],
 [
-5231,
+5307,
 5
 ]
 ]
 },
 {
-"any": 43,
+"any": 45,
 "c": "xTaskRemoveFromEventList",
-"c1": 38,
-"c1_pin": 38,
-"c1k": 43,
-"c2": 35,
-"c2k": 40,
+"c1": 40,
+"c1_pin": 40,
+"c1k": 45,
+"c2": 37,
+"c2k": 42,
 "contract_missed": 5,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "kernel.rs",
-"line": 5241,
+"line": 5317,
 "m_equivalent": 0,
 "m_killed": 9,
 "m_survived": [],
 "m_viable": 9,
 "missed_by_c": [
 [
-5242,
+5318,
 47
 ],
 [
-5243,
+5319,
 20
 ],
 [
-5253,
+5329,
 20
 ],
 [
-5253,
+5329,
 24
 ],
 [
-5258,
-46
+5338,
+20
 ],
 [
-5264,
+5338,
+24
+],
+[
+5343,
+56
+],
+[
+5349,
 68
 ],
 [
-5266,
-44
-],
-[
-5272,
+5356,
 13
 ]
 ],
@@ -9403,19 +9517,23 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 51,
+"regions": 54,
 "twin": "api",
 "unjudged": [
 [
-5243,
+5319,
 20
 ],
 [
-5253,
+5329,
 24
 ],
 [
-5272,
+5338,
+24
+],
+[
+5356,
 13
 ]
 ]
@@ -10307,9 +10425,9 @@
 "same-value"
 ],
 "m_equivalent": 1,
-"m_killed": 2,
+"m_killed": 3,
 "m_survived": [],
-"m_viable": 3,
+"m_viable": 4,
 "missed_by_c": [
 [
 389,
@@ -11356,14 +11474,14 @@
 "unjudged": []
 },
 {
-"any": 117,
+"any": 124,
 "c": "xQueueGenericSend",
-"c1": 113,
-"c1_pin": 113,
-"c1k": 120,
-"c2": 104,
-"c2k": 111,
-"contract_missed": 7,
+"c1": 120,
+"c1_pin": 120,
+"c1k": 131,
+"c2": 111,
+"c2k": 122,
+"contract_missed": 11,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
@@ -11391,15 +11509,31 @@
 24
 ],
 [
-1043,
+1051,
+25
+],
+[
+1052,
+25
+],
+[
+1052,
+30
+],
+[
+1053,
+32
+],
+[
+1060,
 92
 ],
 [
-1049,
+1066,
 72
 ],
 [
-1068,
+1085,
 55
 ]
 ],
@@ -11407,7 +11541,7 @@
 "pub": true,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 120,
+"regions": 131,
 "twin": "api",
 "unjudged": []
 },
@@ -11424,26 +11558,26 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1108,
+"line": 1125,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1113,
+1130,
 37
 ],
 [
-1128,
+1145,
 79
 ],
 [
-1129,
+1146,
 37
 ],
 [
-1134,
+1151,
 37
 ]
 ],
@@ -11456,50 +11590,54 @@
 "unjudged": []
 },
 {
-"any": 57,
+"any": 70,
 "c": "prvCopyDataToQueue",
-"c1": 55,
-"c1_pin": 55,
-"c1k": 59,
-"c2": 55,
-"c2k": 59,
-"contract_missed": 4,
+"c1": 68,
+"c1_pin": 68,
+"c1k": 73,
+"c2": 68,
+"c2k": 73,
+"contract_missed": 5,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1174,
+"line": 1191,
 "m_equivalent": 0,
-"m_killed": 8,
+"m_killed": 9,
 "m_survived": [],
-"m_viable": 8,
+"m_viable": 9,
 "missed_by_c": [
 [
-1216,
+1239,
+55
+],
+[
+1248,
 13
 ],
 [
-1217,
-51
+1250,
+55
 ],
 [
-1227,
+1261,
 71
 ],
 [
-1228,
+1262,
 51
 ],
 [
-1232,
+1266,
 13
 ],
 [
-1235,
+1269,
 51
 ],
 [
-1237,
+1271,
 9
 ]
 ],
@@ -11507,19 +11645,19 @@
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 62,
+"regions": 76,
 "twin": "state",
 "unjudged": [
 [
-1216,
+1248,
 13
 ],
 [
-1232,
+1266,
 13
 ],
 [
-1237,
+1271,
 9
 ]
 ]
@@ -11537,7 +11675,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1256,
+"line": 1290,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -11564,7 +11702,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1265,
+"line": 1299,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -11591,7 +11729,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1273,
+"line": 1307,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -11618,7 +11756,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1285,
+"line": 1319,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -11645,46 +11783,46 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1315,
+"line": 1349,
 "m_equivalent": 0,
 "m_killed": 12,
 "m_survived": [],
 "m_viable": 12,
 "missed_by_c": [
 [
-1349,
-17
-],
-[
-1350,
-17
-],
-[
-1350,
-22
-],
-[
-1351,
-24
-],
-[
 1383,
 17
 ],
 [
-1400,
+1384,
+17
+],
+[
+1384,
+22
+],
+[
+1385,
+24
+],
+[
+1417,
+17
+],
+[
+1434,
 96
 ],
 [
-1400,
+1434,
 98
 ],
 [
-1405,
+1439,
 51
 ],
 [
-1409,
+1443,
 92
 ]
 ],
@@ -11696,11 +11834,11 @@
 "twin": "none",
 "unjudged": [
 [
-1383,
+1417,
 17
 ],
 [
-1400,
+1434,
 98
 ]
 ]
@@ -11718,18 +11856,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1444,
+"line": 1478,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1462,
+1496,
 46
 ],
 [
-1467,
+1501,
 37
 ]
 ],
@@ -11754,26 +11892,26 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1498,
+"line": 1532,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-1505,
+1539,
 46
 ],
 [
-1512,
+1546,
 71
 ],
 [
-1513,
+1547,
 78
 ],
 [
-1514,
+1548,
 76
 ]
 ],
@@ -11798,26 +11936,26 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1528,
+"line": 1562,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-1558,
+1592,
 74
 ],
 [
-1559,
+1593,
 62
 ],
 [
-1568,
+1602,
 82
 ],
 [
-1570,
+1604,
 33
 ]
 ],
@@ -11842,50 +11980,50 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1593,
+"line": 1627,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
 "m_viable": 5,
 "missed_by_c": [
 [
-1603,
+1637,
 16
 ],
 [
-1604,
+1638,
 21
 ],
 [
-1604,
+1638,
 25
 ],
 [
-1604,
+1638,
 37
 ],
 [
-1604,
+1638,
 49
 ],
 [
-1604,
+1638,
 55
 ],
 [
-1608,
+1642,
 17
 ],
 [
-1609,
+1643,
 13
 ],
 [
-1610,
+1644,
 20
 ],
 [
-1623,
+1657,
 51
 ]
 ],
@@ -11897,35 +12035,35 @@
 "twin": "state",
 "unjudged": [
 [
-1603,
+1637,
 16
 ],
 [
-1604,
+1638,
 21
 ],
 [
-1604,
+1638,
 25
 ],
 [
-1604,
+1638,
 37
 ],
 [
-1604,
+1638,
 49
 ],
 [
-1608,
+1642,
 17
 ],
 [
-1609,
+1643,
 13
 ],
 [
-1610,
+1644,
 20
 ]
 ]
@@ -11943,18 +12081,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1637,
+"line": 1671,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1643,
+1677,
 51
 ],
 [
-1652,
+1686,
 55
 ]
 ],
@@ -11979,18 +12117,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1663,
+"line": 1697,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-1667,
+1701,
 51
 ],
 [
-1675,
+1709,
 47
 ]
 ],
@@ -12015,22 +12153,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1694,
+"line": 1728,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
 "m_viable": 3,
 "missed_by_c": [
 [
-1699,
+1733,
 13
 ],
 [
-1702,
+1736,
 13
 ],
 [
-1703,
+1737,
 9
 ]
 ],
@@ -12042,109 +12180,134 @@
 "twin": "none",
 "unjudged": [
 [
-1699,
+1733,
 13
 ],
 [
-1702,
+1736,
 13
 ],
 [
-1703,
+1737,
 9
 ]
 ]
 },
 {
-"any": 90,
+"any": 47,
 "c": "prvUnlockQueue",
-"c1": 90,
-"c1_pin": 81,
-"c1k": 93,
-"c2": 42,
-"c2k": 45,
-"contract_missed": 3,
+"c1": 47,
+"c1_pin": 47,
+"c1k": 49,
+"c2": 36,
+"c2k": 38,
+"contract_missed": 2,
 "diagnostic": false,
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1714,
+"line": 1748,
 "m_eq_classes": [
 "same-value",
 "same-value"
 ],
 "m_equivalent": 2,
-"m_killed": 16,
+"m_killed": 7,
 "m_survived": [],
-"m_viable": 18,
+"m_viable": 9,
 "missed_by_c": [
 [
-1737,
+1771,
 29
 ],
 [
-1745,
+1779,
 27
 ],
 [
-1750,
-83
+1782,
+70
 ],
 [
-1750,
-85
-],
-[
-1762,
-58
-],
-[
-1771,
-17
-],
-[
-1786,
+1797,
 27
 ],
 [
-1794,
-56
-],
-[
-1803,
-17
+1800,
+77
 ]
 ],
 "name": "unlock_queue",
 "pub": false,
 "reasoned": [],
 "reasoned_missed": 0,
-"regions": 99,
+"regions": 52,
 "twin": "state",
 "unjudged": [
 [
-1737,
+1771,
 29
 ],
 [
-1745,
+1779,
 27
 ],
 [
-1750,
-85
-],
-[
-1771,
-17
-],
-[
-1786,
+1797,
 27
+]
+]
+},
+{
+"any": 38,
+"c": "",
+"c1": 38,
+"c1_pin": 30,
+"c1k": 40,
+"c2": 0,
+"c2k": 2,
+"contract_missed": 2,
+"diagnostic": false,
+"eq": 0,
+"eq_missed": 0,
+"file": "queue.rs",
+"line": 1824,
+"m_equivalent": 0,
+"m_killed": 9,
+"m_survived": [],
+"m_viable": 9,
+"missed_by_c": [
+[
+1832,
+79
 ],
 [
-1803,
-17
+1832,
+81
+],
+[
+1848,
+52
+],
+[
+1860,
+9
+]
+],
+"name": "unlock_drain",
+"pub": false,
+"reasoned": [],
+"reasoned_missed": 0,
+"regions": 42,
+"twin": "none",
+"unjudged": [
+[
+1832,
+81
+],
+[
+1860,
+9
 ]
 ]
 },
@@ -12161,22 +12324,22 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1822,
+"line": 1876,
 "m_equivalent": 0,
 "m_killed": 4,
 "m_survived": [],
 "m_viable": 4,
 "missed_by_c": [
 [
-1839,
+1893,
 68
 ],
 [
-1851,
+1905,
 76
 ],
 [
-1853,
+1907,
 33
 ]
 ],
@@ -12201,7 +12364,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1865,
+"line": 1919,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
@@ -12228,7 +12391,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1877,
+"line": 1931,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
@@ -12255,18 +12418,18 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1889,
+"line": 1943,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-1891,
+1945,
 36
 ],
 [
-1894,
+1948,
 51
 ]
 ],
@@ -12291,7 +12454,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1908,
+"line": 1962,
 "m_equivalent": 0,
 "m_killed": 3,
 "m_survived": [],
@@ -12318,7 +12481,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1920,
+"line": 1974,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -12345,7 +12508,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1969,
+"line": 2023,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
@@ -12372,7 +12535,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1973,
+"line": 2027,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -12399,7 +12562,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1977,
+"line": 2031,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
@@ -12426,7 +12589,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1981,
+"line": 2035,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
@@ -12453,7 +12616,7 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1985,
+"line": 2039,
 "m_equivalent": 0,
 "m_killed": 5,
 "m_survived": [],
@@ -12480,26 +12643,26 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1991,
+"line": 2045,
 "m_equivalent": 0,
 "m_killed": 2,
 "m_survived": [],
 "m_viable": 2,
 "missed_by_c": [
 [
-1991,
+2045,
 5
 ],
 [
-1992,
+2046,
 9
 ],
 [
-1992,
+2046,
 19
 ],
 [
-1993,
+2047,
 5
 ]
 ],
@@ -12511,19 +12674,19 @@
 "twin": "none",
 "unjudged": [
 [
-1991,
+2045,
 5
 ],
 [
-1992,
+2046,
 9
 ],
 [
-1992,
+2046,
 19
 ],
 [
-1993,
+2047,
 5
 ]
 ]
@@ -12541,34 +12704,34 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1995,
+"line": 2049,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1995,
+2049,
 5
 ],
 [
-1996,
+2050,
 9
 ],
 [
-1996,
+2050,
 14
 ],
 [
-1996,
+2050,
 34
 ],
 [
-1996,
+2050,
 41
 ],
 [
-1997,
+2051,
 5
 ]
 ],
@@ -12580,27 +12743,27 @@
 "twin": "none",
 "unjudged": [
 [
-1995,
+2049,
 5
 ],
 [
-1996,
+2050,
 9
 ],
 [
-1996,
+2050,
 14
 ],
 [
-1996,
+2050,
 34
 ],
 [
-1996,
+2050,
 41
 ],
 [
-1997,
+2051,
 5
 ]
 ]
@@ -12618,26 +12781,26 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 1999,
+"line": 2053,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-1999,
+2053,
 5
 ],
 [
-2000,
+2054,
 9
 ],
 [
-2000,
+2054,
 14
 ],
 [
-2001,
+2055,
 5
 ]
 ],
@@ -12649,19 +12812,19 @@
 "twin": "none",
 "unjudged": [
 [
-1999,
+2053,
 5
 ],
 [
-2000,
+2054,
 9
 ],
 [
-2000,
+2054,
 14
 ],
 [
-2001,
+2055,
 5
 ]
 ]
@@ -12679,34 +12842,34 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 2003,
+"line": 2057,
 "m_equivalent": 0,
 "m_killed": 0,
 "m_survived": [],
 "m_viable": 0,
 "missed_by_c": [
 [
-2003,
+2057,
 5
 ],
 [
-2004,
+2058,
 9
 ],
 [
-2004,
+2058,
 14
 ],
 [
-2004,
+2058,
 29
 ],
 [
-2004,
+2058,
 36
 ],
 [
-2005,
+2059,
 5
 ]
 ],
@@ -12718,27 +12881,27 @@
 "twin": "none",
 "unjudged": [
 [
-2003,
+2057,
 5
 ],
 [
-2004,
+2058,
 9
 ],
 [
-2004,
+2058,
 14
 ],
 [
-2004,
+2058,
 29
 ],
 [
-2004,
+2058,
 36
 ],
 [
-2005,
+2059,
 5
 ]
 ]
@@ -12756,34 +12919,34 @@
 "eq": 0,
 "eq_missed": 0,
 "file": "queue.rs",
-"line": 2007,
+"line": 2061,
 "m_equivalent": 0,
 "m_killed": 1,
 "m_survived": [],
 "m_viable": 1,
 "missed_by_c": [
 [
-2007,
+2061,
 5
 ],
 [
-2008,
+2062,
 9
 ],
 [
-2008,
+2062,
 14
 ],
 [
-2008,
+2062,
 29
 ],
 [
-2008,
+2062,
 36
 ],
 [
-2009,
+2063,
 5
 ]
 ],
@@ -12795,27 +12958,27 @@
 "twin": "none",
 "unjudged": [
 [
-2007,
+2061,
 5
 ],
 [
-2008,
+2062,
 9
 ],
 [
-2008,
+2062,
 14
 ],
 [
-2008,
+2062,
 29
 ],
 [
-2008,
+2062,
 36
 ],
 [
-2009,
+2063,
 5
 ]
 ]
