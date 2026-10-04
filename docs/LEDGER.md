@@ -16757,3 +16757,87 @@ counters); 86 written equivalences, the evidence-only ones in classes of
 their own. **Kill test:** `name.rs` re-run fresh, 13 of 13 verdicts
 identical to the census's. H13 (the corpus at 32 bits) and H14 (one internal
 mutant) are open.
+
+## ★★ 2026-10-03 — the one-core round: fifteen deterministic instruction wins
+
+**Method.** Every candidate priced on four instruments in one pass, judged
+on all of them, one change per measurement. `bench/smp-ir/m.sh` (new): the
+one-core kernel rows and PROGRAM totals of `bench/kernel-ir` (BlockQ,
+GenQTest, TimerDemo, 20,000 ticks), the two-core shapes A and B, and the
+anchors (`KAIROS_RESULT` lines). `bench/tick-work/rows.sh` (new): all
+seventeen rv32 rows on BOTH ports, `RiscvPort` (`--features real-port`, the
+shipped port, the product number) and `SimPort`. `bench/kernel-flash` on both
+profiles. Every kept change passed `probe.sh gates` (kernel lib +
+`smp_differential`, both conformance suites, clippy `-D warnings`, fmt).
+
+**The instrument that did most of it:** `bench/tick-work/trace.{sh,py}`
+(new). QEMU's `in_asm,exec,nochain` log, expanded block by block and cut at
+the cell's `minstret` reads, is the exact retired path of one rv32 bracket --
+on the shipped port, where every kernel call is inlined into `main` and no
+per-function profile can see it. Bracket length minus the one-instruction tax
+reproduces the rows (except `block_cycle`, which reads 13 more: open).
+
+| | start | end | |
+|---|---:|---:|---:|
+| rv32 real port, sum of 17 rows | 1,697 | 1,364 | **-19.6%** |
+| — `peek_ok` / `queue_roundtrip` / `block_cycle` | 73 / 152 / 965 | 41 / 113 / 847 | |
+| — `switch_select` (a row with a C arm, 27) | 45 | 43 | |
+| rv32 sim port, sum of 17 rows | 1,470 | 1,453 | -1.2% |
+| one-core kernel rows (`bench/kernel-ir`) | 219,184,277 | 214,058,696 | -2.3% |
+| one-core program BlockQ / GenQTest / TimerDemo | 120.11M / 116.74M / 20.55M | 112.76M / 109.92M / 18.46M | -6.1% / -5.8% / -10.1% |
+| two-core shape A semtest / BlockQ / recmutex | 64.05M / 75.51M / 15.93M | 58.36M / 69.49M / 14.39M | -8.9% / -8.0% / -9.7% |
+| flash, `small` (the K3 row's profile) | 17,776 | 17,646 | -130 B |
+| flash, speed profile | 19,894 | 22,122 | +2,228 B |
+
+The wins, in order (kernel unless named): (1) `resume_pending_owed` replays
+owed exits in a frame of its own (-624k host); (2) `unlock_queue`'s drain
+loops out of line (-192k, rv32 `block_cycle` -6); (3) **core
+`TickHook::wants_tick`**, so the 448-byte demo hook is not copied twice a tick
+when it is `None` (BlockQ, GenQTest -5.5M each; +2 a tick on a scenario whose
+hook is installed); (4) `trace_task`'s exit-count load gated on `T::EMITS` --
+an `lw zero` on every traced rv32 path (-12 over five real rows, flash -102
+B); (5) `remove_from_event_list` resolves the woken TCB once (-660k, rv32 -6);
+(6) **port `RiscvPort`'s critical-section pair `#[inline]` on the speed
+profile** (below); (7) `settle_unwind`'s debt `wrapping_add` (-368k); (8)
+`vTaskResume`, (9) the tick's wake loop and (13) priority inheritance hand the
+priority they hold to `add_task_to_ready_list_at` rather than resolving twice
+more around the list edits (-232k, -212k, -113k); (10) two cores test the
+tick hook in line and run it out of line (shape A -420k twice); (11) an
+emitting sink's send re-reads the snapshot after the trace call instead of
+spilling seven fields across it (-801k); (12) **demo** IntQueue's two
+200-byte logs at four bits a value, shrinking `TickIsr` (TimerDemo -2.06M,
+-10%; the 20,000-tick IntQueue trace byte-identical, md5 f4ec6396...);
+(14) a silent sink's send writes the queue before the slot so the resolves
+fold (rv32 `queue_roundtrip` -7); (15) `notify_take` clears `notify_blocked`
+on the resolve it already makes (rv32 `notify_roundtrip` -5).
+
+**The flash, stated plainly.** Win 6 is +1,934 B on the speed profile and
+nothing under `small`: the pair was declined in 2026-09 at +1,406 B while one
+profile carried the K3 flash row, and the kernel's `small` profile carries it
+now (1.24x). Re-priced on the shipped port, the opaque call cost more than
+`jal`/`ret`: every queue and TCB field read before it was re-read and
+re-checked after it. In line, 13 real rows fall by 284 instructions. A firmware
+that wants the old shape enables the port's new `small` with the kernel's.
+Wins 2, 5, 8, 9 and 13 add 30-54 B each on the speed profile and none, or
+less, under `small`. Owner's call to reverse; one feature line each.
+
+**Refuted (bench/smp-ir/refuted.txt R1-R7):** `SimPort::take_tick` peeking
+(host +0, LLVM already folds it); the queue reorder ungated (host +32,092);
+the notify and pending-ready-drain versions of the priority hand-down
+(+1 on rv32; +2,203 on a path no scenario runs); `num`'s `wrapping_sub` (the
+saturation bounds the index: +179,576, noted in trace.rs); one kernel borrow
+per two-core turn (+51,154); and, by reading, dropping `end_wait` from the
+queue fast paths -- a `Blocked` returned as the C's `for(;;)` retry leaves the
+wait frame for the next call, which must clear it.
+
+**Two instrument findings.** The program totals now carry a few thousand
+instructions of glibc startup under valgrind (`vfscanf`, `strtoul`,
+tunables) that move between runs with nothing rebuilt; the per-function rows
+stay exact, and a total that moves by ~4k with no row moving is that.
+And the gate's verdict was once lost to a pipe (`probe.sh gates | tail -1`
+exits with `tail`'s status): one commit landed with a clippy failure, fixed in
+the next. Check the gate's line, not the pipeline's status.
+
+Committed locally (kernel 3e7aeff..db11d41, core f3dc0a3, port 66fbbef, demo
+4079b65/6845c54); nothing pushed or released. The kernel's `wants_tick` use
+needs core's next release for a registry build.
