@@ -26,7 +26,7 @@ Ordered by how much a reader should care, not by how easy the fix is.
 Every API in the first two rows is judged another way -- the typed face's equivalence test, or a written reason -- which is what the third row counts.
 <!-- API-CENSUS-HOLES:END -->
 
-## H14 — One arm survives every oracle: the stream wait's own-exit resume — OPEN
+## H14 — One arm survived every oracle: the stream wait's own-exit resume — CLOSED 2026-10-04
 
 **Measured 2026-10-03 (plan P5), corrected the same day (P6's re-survey).**
 Two mutants, one arm: `set_stream_waited` made a no-op, and
@@ -52,8 +52,12 @@ that was not a compile error as a kill, and P5's session saw WSL's transient
 trace or a scenario failing its own check -- and anything else as
 `oracle-error`.
 
-**Closing it:** a scenario, or a sim-port unit test, that switches a stream
-receiver away exactly at the exit ending its wait.
+**Closed 2026-10-04 by a unit test** (kernel 0c29acb,
+`a_receive_preempted_as_its_wait_ends_does_not_wait_again`, `stream.rs`). A
+port raises one tick at a chosen outermost exit. The test walks that tick over
+every exit of the resumed `xStreamBufferReceive`, so a higher task preempts R
+inside the call. R's next call must answer 0, not wait again. Both mutants fail
+it. The census re-survey of the same day reads 0 unexplained kernel-wide.
 
 ## H15 — The C ABI has never run on two cores — OPEN
 
