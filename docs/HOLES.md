@@ -55,6 +55,12 @@ trace or a scenario failing its own check -- and anything else as
 **Closing it:** a scenario, or a sim-port unit test, that switches a stream
 receiver away exactly at the exit ending its wait.
 
+## H15 — The C ABI has never run on two cores — OPEN
+
+**Recorded 2026-10-04** (API differential D4, deferred there). `rusty_rtos-capi` runs 25 unmodified FreeRTOS demo files on one core: QEMU Cortex-M3, plus Windows and Linux hosts. No cell builds it with `configNUMBER_OF_CORES 2`. The kernel's two-core paths are judged through the Rust face (the demo's two-core corpus and the SMP differential), never through the 87 C symbols. A two-core defect in the ABI seam itself, such as the handle codec or a critical-section spelling, would pass every run.
+
+**Blocked first on the crate itself.** capi sits on branch `wip/32bit-header-types`. Its core crate's tests have not compiled since `Handle`'s index widened to `u32` (`codec.rs` test vectors). Whether those vectors widen with the handle or narrow at the boundary is the owner's decision. A two-core cell would be built on top of that crate.
+
 ## H13 — The corpus was compared against the C at 64 bits only — CLOSED 2026-10-04
 
 **Measured 2026-10-03 (plan P5).** Every target is 32-bit; the oracle host
