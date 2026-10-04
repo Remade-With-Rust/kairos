@@ -20,8 +20,8 @@ Ordered by how much a reader should care, not by how easy the fix is.
 | C-twinned APIs never compared against the C, one core | 2 of 119 | `new` (xSemaphoreCreateMutex, typed.rs), `send_from_isr` (xQueueSendToBackFromISR, typed.rs) | H11 |
 | C-twinned APIs never compared against the C, two cores | 6 of 119 | `new` (xSemaphoreCreateMutex, typed.rs), `create` (xQueueCreate, typed.rs), `send` (xQueueSendToBack, typed.rs), `receive` (xQueueReceive, typed.rs), `send_from_isr` (xQueueSendToBackFromISR, typed.rs), `len` (uxQueueMessagesWaiting, typed.rs) | H10 |
 | C-twinned APIs with an arm nothing judges | 0 | -- | H10, H11 (plan P3) |
-| unexplained mutants in a C-twinned API | 0 of 489 viable | -- | plan P5 |
-| unexplained mutants kernel-wide | 2 of 1452 viable | `kernel.rs` `take_stream_waited` (line 3652), `kernel.rs` `set_stream_waited` (line 3662) | H14 |
+| unexplained mutants in a C-twinned API | 0 of 487 viable | -- | plan P5 |
+| unexplained mutants kernel-wide | 0 of 1429 viable | -- | H14 |
 
 Every API in the first two rows is judged another way -- the typed face's equivalence test, or a written reason -- which is what the third row counts.
 <!-- API-CENSUS-HOLES:END -->

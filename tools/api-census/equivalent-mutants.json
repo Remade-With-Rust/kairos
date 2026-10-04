@@ -9,8 +9,6 @@
     "interrupt-window": "differs only if an interrupt lands between two reads inside one call; the oracles deliver interrupts between calls (as reasons.json's class of the same name).",
     "yield-window": "two cores: differs only while a core asked to yield has not yet taken it; every harness takes a requested yield at the end of the step that asked (as reasons.json).",
     "pre-scheduler": "differs only before the scheduler starts, which no compared run steps through (as reasons.json).",
-    "core-gate": "EVIDENCE, NOT PROOF. `C::NUMBER_OF_CORES > 1` (or its pair) relaxed so a one-core build takes the two-core path: every one-core oracle -- the API differential's scripts, pins and sweeps against FreeRTOS built one-core, at both pointer widths, and the 26-scenario corpus -- passes with it. The two-core code run with one core decides what the one-core code decides wherever any oracle looks. Listed site by site so it can be revisited.",
-    "oracle-evidence": "EVIDENCE, NOT PROOF, on the two-core side: every two-core oracle -- smp_conformance's scenarios, smp_differential, the API differential's two-core scripts, pins and sweeps at both pointer widths -- passes with it, and no argument from the code alone closes it. Listed so it can be revisited.",
     "same-code": "the mutated test only chooses between two copies of the same code -- a body in line and the same body out of line, kept apart for speed -- so either arm does exactly what the other does."
   },
   "mutants": [
@@ -123,15 +121,16 @@
       "fn": "port_yield",
       "text": "if C::NUMBER_OF_CORES > 1 && P::COMMITS_SWITCH {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "redundant-guard",
+      "why": "one core: the block re-tests this core's kernel nesting, which only a two-core build writes (enter_critical, leave_critical_smp), so it reads 0 and the one-core code runs"
     },
     {
       "file": "kernel.rs",
       "fn": "port_yield",
       "text": "if C::NUMBER_OF_CORES > 1 && P::COMMITS_SWITCH {",
       "replacement": "||",
-      "class": "core-gate",
-      "why": "a one-core committing port pends a yield taken inside a section, as a PendSV does"
+      "class": "redundant-guard",
+      "why": "one core: as `>=`, the nesting re-test reads 0. Two cores: with_tick_hook refuses a port that does not commit its switches, so COMMITS_SWITCH is true there and `||` is `&&`"
     },
     {
       "file": "kernel.rs",
@@ -156,13 +155,6 @@
       "replacement": ">=",
       "class": "unused-value",
       "why": "on one core F_IDLE is read by nothing"
-    },
-    {
-      "file": "kernel.rs",
-      "fn": "add_new_task_to_ready_list",
-      "text": "if C::NUMBER_OF_CORES > 1 {",
-      "replacement": ">=",
-      "class": "core-gate"
     },
     {
       "file": "kernel.rs",
@@ -253,8 +245,8 @@
       "fn": "switch_context_smp",
       "text": "if incoming.index() != outgoing.index() {",
       "replacement": "==",
-      "class": "oracle-evidence",
-      "why": "hand_over on a switch to a different task: on the committing ports every two-core oracle runs, its unwinding half folds away, and its first-start resets were not observed to matter"
+      "class": "same-value",
+      "why": "two cores run only on a port that commits its switches (with_tick_hook). There hand_over's unwind arm is off, and the rest clears owed-call state -- F_YIELD, owed exits, owed trace -- that only a stackless switch creates (they need `cur() != caller` inside a call, which a committing port never shows), and marks `started`, which only hand_over reads: clearing what is already clear"
     },
     {
       "file": "kernel.rs",
@@ -277,7 +269,8 @@
       "fn": "increment_tick",
       "text": "if C::NUMBER_OF_CORES > 1 {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "same-value",
+      "why": "one core: tick_yields_smp() is `USE_PREEMPTION && pending_on(0)`, the one-core arm's `USE_PREEMPTION && pending_here()`"
     },
     {
       "file": "kernel.rs",
@@ -286,13 +279,6 @@
       "replacement": "||",
       "class": "interrupt-window",
       "why": "should_block false and already_yielded true each need an interrupt inside the call"
-    },
-    {
-      "file": "kernel.rs",
-      "fn": "notify_locked",
-      "text": "if C::NUMBER_OF_CORES > 1 {",
-      "replacement": ">=",
-      "class": "core-gate"
     },
     {
       "file": "kernel.rs",
@@ -307,14 +293,16 @@
       "fn": "wake_due_tasks",
       "text": "if C::NUMBER_OF_CORES > 1 {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "same-value",
+      "why": "one core: yield_for_task sets this core's pending flag exactly when the woken task outranks the running one (idle is not marked idle on one core: no tie), or leaves it already set; the tick's one-core tail turns a set flag into `switch_required`, so the tick answers the same, and the switch it asks for clears the flag"
     },
     {
       "file": "kernel.rs",
       "fn": "abort_delay",
       "text": "if C::NUMBER_OF_CORES > 1 {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "same-value",
+      "why": "one core: yield_for_task sets the pending flag exactly when the one-core arm does (woken outranks running; no idle tie on one core) or leaves it already set, and the call does not read smp_readied's answer"
     },
     {
       "file": "kernel.rs",
@@ -342,20 +330,6 @@
     {
       "file": "kernel.rs",
       "fn": "task_delete",
-      "text": "let holder = if C::NUMBER_OF_CORES > 1 {",
-      "replacement": ">=",
-      "class": "core-gate"
-    },
-    {
-      "file": "kernel.rs",
-      "fn": "task_delete",
-      "text": "if C::NUMBER_OF_CORES > 1 && !self.awaiting_reap.is_null() {",
-      "replacement": ">=",
-      "class": "core-gate"
-    },
-    {
-      "file": "kernel.rs",
-      "fn": "task_delete",
       "text": "Some(core) if self.running_core(target) == Some(core) => {",
       "replacement": "true",
       "class": "yield-window",
@@ -363,25 +337,20 @@
     },
     {
       "file": "kernel.rs",
-      "fn": "check_tasks_waiting_termination",
-      "text": "if C::NUMBER_OF_CORES > 1 {",
-      "replacement": ">=",
-      "class": "core-gate"
-    },
-    {
-      "file": "kernel.rs",
       "fn": "set_priority",
       "text": "let mut smp_yield_for = C::NUMBER_OF_CORES > 1 && new_priority > base;",
       "replacement": ">=",
       "col": 56,
-      "class": "core-gate"
+      "class": "unused-value",
+      "why": "one core: smp_yield_for is read only inside the two-core block"
     },
     {
       "file": "kernel.rs",
       "fn": "set_priority",
       "text": "let mut smp_yield_for = C::NUMBER_OF_CORES > 1 && new_priority > base;",
       "replacement": "||",
-      "class": "core-gate"
+      "class": "redundant-guard",
+      "why": "one core: unused, as `>=`. Two cores: a LOWERED task that is ready and not running would be yielded for at its new priority; yield_for_task asks only a core running below it with no yield owed, and no such core exists while a ready task outranks it -- the task's readying asked one (preemption is on in this block), and a core that switches takes the highest ready task"
     },
     {
       "file": "kernel.rs",
@@ -397,7 +366,8 @@
       "fn": "set_priority",
       "text": "let smp_yield_core = if C::NUMBER_OF_CORES > 1 && new_priority < base {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "unused-value",
+      "why": "one core: smp_yield_core is read only inside the two-core block"
     },
     {
       "file": "kernel.rs",
@@ -468,36 +438,24 @@
       "fn": "remove_from_unordered_event_list",
       "text": "if C::NUMBER_OF_CORES > 1 {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "same-value",
+      "why": "one core: as abort_delay -- the pending flag ends the same, and smp_readied's answer is not read"
     },
     {
       "file": "kernel.rs",
       "fn": "priority_inherit",
-      "text": "if holder.is_null() || !self.tcbs.contains(holder) {",
-      "replacement": "&&",
-      "class": "c-undefined",
-      "why": "differs only for a mutex whose holder was deleted while holding it"
-    },
-    {
-      "file": "kernel.rs",
-      "fn": "priority_inherit",
-      "text": "if C::NUMBER_OF_CORES > 1 && C::USE_PREEMPTION && self.running_core(holder).is_none() {",
+      "text": "if C::NUMBER_OF_CORES > 1 && self.running_core(holder).is_none() {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "redundant-guard",
+      "why": "one core: the waiter runs at exactly the priority the holder is raised to, and yield_for_task asks only a core running BELOW it"
     },
     {
       "file": "kernel.rs",
       "fn": "priority_inherit",
-      "text": "if C::NUMBER_OF_CORES > 1 && C::USE_PREEMPTION && self.running_core(holder).is_none() {",
+      "text": "if C::NUMBER_OF_CORES > 1 && self.running_core(holder).is_none() {",
       "replacement": "||",
-      "class": "core-gate"
-    },
-    {
-      "file": "kernel.rs",
-      "fn": "priority_disinherit",
-      "text": "if C::NUMBER_OF_CORES > 1 {",
-      "replacement": ">=",
-      "class": "core-gate"
+      "class": "redundant-guard",
+      "why": "one core: as `>=`. Two cores, holder running: yield_for_task's own taskTASK_IS_RUNNING test returns before anything -- the test running_core makes"
     },
     {
       "file": "kernel.rs",
@@ -520,7 +478,8 @@
       "fn": "priority_disinherit_after_timeout",
       "text": "if C::NUMBER_OF_CORES > 1 {",
       "replacement": ">=",
-      "class": "core-gate"
+      "class": "unreachable-input",
+      "why": "one core: called on the waiter's timeout, so the waiter runs and the holder does not; running_core(holder) is None and nothing is yielded"
     },
     {
       "file": "queue.rs",
@@ -707,6 +666,30 @@
       "replacement": ">=",
       "class": "same-code",
       "why": "either arm copies the hook out, runs it and stores it back: run_tick_hook_body out of line, or the same three lines in line"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "task_delete",
+      "text": "let holder = if C::NUMBER_OF_CORES > 1 {",
+      "replacement": ">=",
+      "class": "unused-value",
+      "why": "one core: holder is read only inside the two-core arms below (the defer test and the yield)"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "reap_waiting_tasks",
+      "text": "if C::NUMBER_OF_CORES > 1 && self.held_by_any_core(task) {",
+      "replacement": ">=",
+      "class": "unreachable-input",
+      "why": "one core: only a task deleting itself waits, and it is switched away from by the delete's own yield; idle, which reaps, never holds it"
+    },
+    {
+      "file": "kernel.rs",
+      "fn": "reap_head",
+      "text": "if tcb.reap_seq != 0 && head.is_none_or(|(seq, _)| tcb.reap_seq < seq) {",
+      "replacement": "<=",
+      "class": "same-value",
+      "why": "reap_seq is a counter: waiting tasks hold distinct values (a tie needs 2^32 deletions while one task waits), so <= picks the same head"
     }
   ]
 }

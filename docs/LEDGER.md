@@ -16959,3 +16959,50 @@ chased.
 
 Committed locally only; nothing pushed or released. The demo's new i686 CI
 job and the kernel's registry build both need core's next release.
+
+## ★ 2026-10-04 — no equivalence rests on evidence any more; the census re-measured
+
+**5. The twenty evidence-only equivalences, worked one at a time.** P5 had
+listed 19 `core-gate` entries (a `NUMBER_OF_CORES > 1` gate relaxed so one
+core takes the two-core path, every one-core oracle still passing) and one
+`oracle-evidence` entry (`switch_context_smp`), each marked EVIDENCE, NOT
+PROOF. The expected mechanism was an idle tie, and it was **refuted**:
+- Five tests built on it passed WITH the gates planted.
+- Idle is marked idle only by `start_scheduler_smp`. On one core there is no tie.
+- The two-core arm's real difference: it answers "a yield is owed" whenever
+  one ALREADY was, where the one-core test asks whether THIS task outranks
+  the running one.
+
+| outcome | entries |
+|---|---|
+| killed by a new test (each planted mutant fails it) | `add_new_task_to_ready_list`, `notify_locked` (an ISR's owed yield must not be taken early by readying a lower task); `priority_disinherit` (a give that wakes a lowered waiter owes no yield) |
+| proved | `abort_delay`, `remove_from_unordered_event_list`, `wake_due_tasks` set the flag in exactly the same cases; `increment_tick` (`tick_yields_smp` is the one-core expression on one core); `port_yield` (one core's nesting is never written); `set_priority` x3, `priority_inherit` x2, `priority_disinherit_after_timeout` (unread or unreachable); `switch_context_smp` (on a committing port hand_over clears state that only a stackless switch creates) |
+| code replaced by the reap fix | `task_delete` x2, `check_tasks_waiting_termination` |
+
+**Two kernel changes came out of the proofs (kernel e6f4b08):**
+- A **conformance fix.** The C calls `prvYieldForTask` DIRECTLY in
+  `xTaskPriorityInherit` (tasks.c:6798). It is the only call of it not
+  gated on `configUSE_PREEMPTION`, and Kairos gated it. A cooperative
+  two-core build therefore never yielded for a raised holder. A test pins
+  the fix; it failed before the fix.
+- A **refusal.** Two cores on a port that does not commit its own switches
+  now get `InvalidArgument`. The stackless model keeps one abandoned frame,
+  and every two-core port in the tree already commits.
+
+**6. Scope, measured.** The README block now says what the 119 are OF:
+- They twin 110 distinct FreeRTOS names: 107 of the 303 distinct names in `docs/API-MAP.md`, plus three critical-section and yield macros the map omits.
+- The other 196 names have no Kairos twin, and nothing measured speaks for them.
+- The C ABI's two-core run (D4) is NOT done. `rusty_rtos-capi` sits on a WIP branch whose core crate fails to compile since `Handle`'s index widened to u32. That decision was left to the owner, and a two-core capi run would build on it.
+
+**The census, re-measured** on kernel 2416bd8 and demo d945eb1. The demo's commit is required by the fingerprint: H13 changed demo-core.
+- Coverage: `kairos conform --all --ticks 100000`, all 26 identical to the C.
+- cargo-mutants run A on stream, queue and kernel. Run B on their survivors. Run C on `set_stream_timed`, caught: the trace diverges from the live C.
+- Old run-B verdicts were kept only for the five files not re-run. A stale verdict on a moved line could otherwise be credited to a new mutant.
+- Retired: `reasons.json`'s `storage` class (the two-slot design is gone). One new `defensive` reason.
+
+| | viable | killed | equivalent | unexplained |
+|---|---:|---:|---:|---:|
+| the 119 C-twinned APIs | 487 | 459 | 28 | **0** |
+| kernel-wide | 1,429 | 1,341 | 88, **all with a written proof** | **0** (was 2: H14) |
+
+**Every arm of all 119 judged; `census.py --check` passes fresh.**

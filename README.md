@@ -146,9 +146,11 @@ against the C kernel, in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md):
 
 **Every arm of 119 of the 119 is judged** -- compared on either build, contract-only, proved by the typed face's equivalence test, or carrying a written reason the census checks. The 2 never compared on one core, and the 6 never compared on two, are named in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md); the mission is [`docs/plans/api-differential.md`](docs/plans/api-differential.md).
 
-**Mutants (cargo-mutants, plan P5):** in those APIs 489 viable, 461 killed, 28 equivalent with a written reason, **0 unexplained**.
+**What the 119 are of.** They answer for 110 distinct FreeRTOS names: 107 of the 303 distinct names [`docs/API-MAP.md`](docs/API-MAP.md) lists from the pinned headers, and `taskENTER_CRITICAL`, `taskEXIT_CRITICAL`, `taskYIELD`, which it does not. The other 196 listed names have no Kairos twin, and nothing measured here speaks for them.
 
-Measured at kernel `ad127addc4fb` and demo `6845c544636b`; CI's `census.py --check` fails once either moves, until the census is measured again.
+**Mutants (cargo-mutants, plan P5):** in those APIs 487 viable, 459 killed, 28 equivalent with a written reason, **0 unexplained**.
+
+Measured at kernel `2416bd8f3b20` and demo `d945eb1eab0e`; CI's `census.py --check` fails once either moves, until the census is measured again.
 <!-- API-CENSUS:END -->
 
 | Milestone | |

@@ -10,8 +10,7 @@
     "config": "an arm compiled for a configuration neither compared build uses (configUSE_PREEMPTION 0).",
     "pre-scheduler": "vTaskSuspend of the running task before the scheduler starts: every compared run starts the scheduler before its first step.",
     "shadowed": "the one-core own-task shortcut of the section-free spelling: the compared spelling (task_state_get) answers it first; only a direct caller of state_of reaches it, and there the answer is the same Running.",
-    "between-lists": "a live task on no list, which exists only inside a call, between a removal and an insert -- no caller can ask then.",
-    "storage": "two cores: Kairos keeps the C's termination list as two reap slots; the second fills only when two deletions of running tasks land before the idle task reaps. The API differential reaps after every step (the C's list makes reaping invisible), so one step holds at most one."
+    "between-lists": "a live task on no list, which exists only inside a call, between a removal and an insert -- no caller can ask then."
   },
   "arms": [
     {"file": "events.rs", "fn": "event_group_set_bits", "text": "}", "after": "after = g.bits;", "class": "defensive", "why": "the group was resolved at entry"},
@@ -51,7 +50,7 @@
     {"file": "kernel.rs", "fn": "suspend", "text": "}", "after": "self.switch_context();", "class": "pre-scheduler"},
     {"file": "kernel.rs", "fn": "task_delete", "text": "if matches!(self.lists.container(state), Ok(Some(_))) {", "class": "between-lists", "why": "a live task's state item is always on a list between calls"},
     {"file": "kernel.rs", "fn": "task_delete", "text": "}", "after": "let _ = self.lists.remove(state);", "class": "between-lists", "why": "a live task's state item is always on a list between calls"},
-    {"file": "kernel.rs", "fn": "task_delete", "text": "if C::NUMBER_OF_CORES > 1 && !self.awaiting_reap.is_null() {", "class": "storage"},
+    {"file": "kernel.rs", "fn": "task_delete", "text": "}", "after": "tcb.reap_seq = seq;", "class": "defensive", "why": "the target was resolved at entry, and nothing in between frees it"},
     {"file": "kernel.rs", "fn": "task_delete", "text": "_ => {}", "class": "yield-window", "why": "the holder core was already asked to yield"},
     {"file": "kernel.rs", "fn": "set_priority", "text": "}", "after": "self.port_yield();", "class": "config", "why": "closes `if C::USE_PREEMPTION`"},
     {"file": "kernel.rs", "fn": "delay_until", "text": "}", "after": "self.yield_or_owe(caller);", "class": "interrupt-window", "why": "resume_all already yielded"},
