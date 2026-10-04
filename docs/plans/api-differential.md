@@ -432,6 +432,28 @@ above.
 Census in CI (`--check`), README and `HOLES.md` regenerated from it, LEDGER
 entry, kernel/demo patch releases from clean clones.
 
+**DONE 2026-10-03, but for the releases, which are the owner's.**
+`.github/workflows/census.yml` runs `census.py --check` on every push and
+pull request; it re-renders `docs/API-COVERAGE.md`, the README's API-CENSUS
+block and a new generated block in `docs/HOLES.md` (the measured gaps:
+never-compared APIs per build, unjudged arms, unexplained mutants in the 119
+and kernel-wide) from the committed `docs/api-coverage.json`, and fails on any
+byte that differs. `census.py --render` re-renders without a coverage run.
+
+The census was re-measured first, because the one-core Ir round had moved
+`kernel.rs` and `queue.rs` under P5's line-keyed data: coverage again (C1L
+from `kairos conform --all --ticks 100000`, all 26 identical to the live C),
+cargo-mutants runs A, B and C on the two files. It found two arms the round
+opened that no oracle judged (now tested), and that run C had been counting
+oracle failures as kills -- one P5 "kill" was impossible (`HOLES.md` H14). Now:
+the 119 APIs, 489 viable, 461 killed, 28 equivalent, **0 unexplained**;
+kernel-wide 1,452 viable, 2 unexplained (H14, one arm).
+
+**Kill test, scored.** A README count edited by hand (one core 117 -> 118)
+fails `--check`; so does a HOLES count (6 -> 5); so does a fresh clone of the
+umbrella with a count edited (two cores 113 -> 119) -- the check needs only
+tracked files. The workflow has not run on GitHub: nothing here is pushed.
+
 ### Owner-only steps
 
 | step | why it is yours |
@@ -460,7 +482,7 @@ entry, kernel/demo patch releases from clean clones.
 | P3 — **passed 2026-10-03** | census shows no C-twinned API unjudged without a sweep or a written reason -- 119 of 119 | as P1, per swept API: tickless resets off (one core step 7290, two cores 688); overflow arm (sweep step 604, nothing else catches it); non-set refusal (sweep step 1). One recorded equivalent: `step_tick`'s critical section |
 | P4 — **passed 2026-10-03** | every typed/async wrapper has an equivalence test | swap two calls inside one wrapper; its test fails -- `Mutex::with` take/give (step 13), plus a `Raw` remap (step 9) and the async `count` (first poll) |
 | P5 — **passed 2026-10-03** | per-API mutant report; no unexplained survivor in a "judged" API -- 503 viable, 474 killed, 29 equivalent (8 of them on oracle evidence, named), 0 unexplained | re-run cargo-mutants on one file; the report matches the census -- `name.rs`, 13 of 13 identical |
-| P6 | census `--check` in CI; README/HOLES generated | edit a count in the README by hand; CI fails |
+| P6 — **passed 2026-10-03** (releases left to the owner) | census `--check` in CI; README/HOLES generated | edit a count in the README by hand; CI fails -- 117 -> 118 fails `--check`, in the tree and in a fresh clone; a HOLES count likewise |
 
 ---
 

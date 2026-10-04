@@ -16841,3 +16841,37 @@ the next. Check the gate's line, not the pipeline's status.
 Committed locally (kernel 3e7aeff..db11d41, core f3dc0a3, port 66fbbef, demo
 4079b65/6845c54); nothing pushed or released. The kernel's `wants_tick` use
 needs core's next release for a registry build.
+
+## ★ 2026-10-03 — the census ships: `--check` in CI, HOLES generated (API differential P6)
+
+`.github/workflows/census.yml` (pinned checkout, read-only, no token) runs
+`tools/api-census/census.py --check`: `docs/API-COVERAGE.md`, the README's
+API-CENSUS block and `docs/HOLES.md`'s new API-CENSUS-HOLES block are
+re-rendered from `docs/api-coverage.json` and must match byte for byte.
+**Kill test:** a README count edited by hand fails it, in the tree and in a
+fresh clone of the umbrella; a HOLES count likewise. Not yet run on GitHub --
+nothing is pushed.
+
+**Re-measured first.** The one-core Ir round had moved `kernel.rs` and
+`queue.rs` under P5's line-keyed mutant data, and the census refused to
+measure (59 equivalences matching nothing). Coverage again, with C1L from
+`kairos conform --all --ticks 100000` -- **all 26 scenarios identical to the
+live C at 100,000 ticks after the fifteen Ir wins** -- and cargo-mutants runs
+A, B and C on the two files (the other six files' P5 runs reused):
+
+| | viable | killed | equivalent | unexplained |
+|---|---:|---:|---:|---:|
+| the 119 C-twinned APIs | 489 | 461 | 28 | **0** |
+| kernel-wide | 1,452 | 1,358 | 92 | 2 (H14, one arm) |
+
+**What the re-survey found.** Two arms the Ir round opened that nothing
+judged: `run_tick_hook`'s `USE_TICK_HOOK` gate (`||` as `&&` would call a
+hook under a config that has it off) and the drain's tail (`>` as `>=` wakes
+one waiter too many once the drain sits behind a guard). Both tested (kernel
+ad127ad), each kill planted by hand. And one P5 record that could not be
+right: run C "killed" `take_stream_waited -> false` while
+`set_stream_waited -> ()` -- the same program, its only setter made inert --
+survived the same run. Run C counted ANY `kairos conform` failure that was
+not a compile error as a kill, and P5's session had WSL `E_UNEXPECTED`
+failures. `mutants-long-conform.sh` now needs a diverging trace or a failed
+scenario check; anything else is `oracle-error`. H14 is two mutants, one arm.
