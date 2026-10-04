@@ -106,7 +106,11 @@ def read(path: str, want):
             line = line.rstrip("\n")
             if line.startswith("fn="):
                 cur = names.resolve(line[3:])
-                keep = want is None or want in cur
+                # A trailing `$` anchors the name at the END: `resume$` is
+                # `Kernel::resume` and not `resume_all` or `resume_pending`.
+                keep = want is None or (
+                    cur.endswith(want[:-1]) if want.endswith("$") else want in cur
+                )
                 base = None
                 pending = False
                 continue
@@ -178,7 +182,7 @@ def census(target: str) -> None:
     per_fn, incl, callee = read(DUMP, target)
     cost = collections.Counter()
     for fn, c in per_fn.items():
-        if target in fn:
+        if fn.endswith(target[:-1]) if target.endswith("$") else target in fn:
             cost.update(c)
     if not cost:
         sys.exit(f"no samples for {target!r} in {DUMP}")

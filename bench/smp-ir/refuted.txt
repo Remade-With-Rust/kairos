@@ -84,3 +84,40 @@ refuted R1: SimPort::take_tick peeks before clearing instead of
   LLVM already emits the same load/store/compare for both. rv32 sim port
   mixed: twelve rows -1..-3, queue_roundtrip +6, recv_empty +1. Not a
   win on any instrument that ships (the real port has no such flag).
+
+refuted R2: copy_data_to_queue writes the queue's fields before the slot,
+  so LLVM can fold the second resolve into the caller's. rv32 real port
+  queue_roundtrip 120 -> 113, sim -2, flash -4 / -6 B -- but host one-core
+  rows +32,092 (send_generic_outlined +27,469), SMP A +17,470 / +31,250, and
+  three unrelated rv32 rows +1 (main's register allocation). On the host the
+  trace call sits between the two resolves, so the order buys nothing there
+  and the reorder costs codegen. A NoTrace-only win; not taken.
+
+refuted R3: notify_locked reads the woken priority on its first resolve
+  and hands it to add_task_to_ready_list_at (the pattern of wins 5 and 8).
+  rv32 notify_roundtrip +1 on both ports, host +0 to the instruction, flash
+  speed +56 B, small -12 B. The read is paid on every notify and saves only
+  when the task was Waiting, which the hot notify path is not.
+
+refuted R4: drain_pending_ready_walk carries the woken priority (wins 5,
+  8, 9's pattern). Rows +0 -- no scenario here drains the pending-ready
+  list -- and program totals +2,203 on all three, SMP A +4,541 on all
+  three, flash speed +40 / small -18. Nothing to win where it never runs.
+
+refuted R5: LineTrace::num's group index with wrapping_sub instead of
+  saturating_sub. One-core rows +179,576 (event), SMP A +142,768 /
+  +153,161 / +89,117. The saturation is information: it bounds `at` to
+  0..=10 and the `groups.get(at..)` checks after the loop fold. Noted in
+  trace.rs (demo).
+
+refuted R6 (by reading, not measured): dropping end_wait from the queue
+  fast paths (7 rv32 instructions per successful send/receive/peek). Not
+  sound: queue_send_blocking returns Blocked WITHOUT a resume when the queue
+  turned out not full -- the C's for(;;) retry -- and leaves the wait frame
+  for the next call, which may then succeed on the fast path and must clear
+  it. The frame surviving a call is how xEntryTimeSet is kept.
+
+refuted R7: run_smp holds one kernel borrow for a whole turn instead of
+  re-borrowing per step. SMP A +51,154 / +43,806 / +11,665, one-core +0.
+  The RefMut guard live across the step loop costs more than the borrow
+  flag's test-set-release per step it removes.
