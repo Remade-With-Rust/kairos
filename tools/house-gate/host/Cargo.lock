@@ -642,9 +642,9 @@ dependencies = [
 
 [[package]]
 name = "ffai-core"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6b20f3f7f8eab78997f1e1dc253aeb1b633a5ec220fc3bce581718ff759cf0b"
+checksum = "354cdb9eb1607d9bedf82fd2a1103500c82b33b344897142e69695be28b09bb4"
 dependencies = [
  "candle-core",
  "rayon",
