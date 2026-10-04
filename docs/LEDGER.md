@@ -17006,3 +17006,58 @@ PROOF. The expected mechanism was an idle tie, and it was **refuted**:
 | kernel-wide | 1,429 | 1,341 | 88, **all with a written proof** | **0** (was 2: H14) |
 
 **Every arm of all 119 judged; `census.py --check` passes fresh.**
+
+## ★ 2026-10-04 — the C ABI on two cores (H15, D4), and a one-core Linux defect
+
+**The cells first.** `rusty_rtos-capi`'s two cells had not compiled since the
+kernel and port moved, through four pieces of drift:
+- the 14th const generic;
+- a `u32` handle index (`usize::from` exists only from `u16`);
+- `items_for` renamed to `list_slots_for`;
+- `init_stack` now an `unsafe fn`.
+
+Fixed, and both cells pass 25/25 again. The `wip/32bit-header-types`
+narrowing of the generated header is not taken: the 64-bit hosts need its
+split.
+
+**Two cores** (`capi-host --features smp`). The host port's one run permit
+passes between two kernel cores (`set_core`). The kernel runs every two-core
+path, and no two threads are ever inside it at once. When the permit
+passes was the hard question, measured three ways:
+
+| turn rule | result |
+|---|---|
+| at the tick only | 25/25 -- by hiding the overlap: each core ran a tick alone |
+| at the tick, plus whenever the other core is owed a switch | `GenQTest.c:564` in 5 of 5 |
+| **every top-level call's return (the C oracle's rule), the tick, a 200 µs slice** | the C's own two-core failures reproduce; everything else passes |
+
+Eight files fail on two cores in FreeRTOS itself: the C oracle's
+`smp_conformance` pins. They are excluded by name with the C's verdict.
+Result: **17/17, Windows 3 of 3, Linux 5 of 5.** The kill test poisons the
+port to report core 0. The cell's own turn counters still looked healthy
+under it, so the verdict now reads the kernel's `pxCurrentTCBs`, and the
+poisoned run fails.
+
+**The defect it found was on ONE core.** On Linux pthreads, every
+30,000-tick run of the one-core cell broke identity: "this thread is task
+77, the kernel believes 43". The README's "3 runs of 3" there no longer held.
+- **The cause.** A slot reused by `death.c` kept its last occupant's run
+  permit and freeze.
+- **A/B under the same load.** Clearing only the permit gave `TimerDemo`
+  4/4 fails, because the stale freeze made the next grant a thaw of nothing.
+  Clearing neither gave one stale grant and one identity break per run.
+  Clearing both: 5/5, no breaks.
+- Fixed in `rusty_rtos_port-host` (012ac3d).
+
+Also refuted along the way, each with its number:
+- "the identity break is a stale freeze": clearing it alone, every run still broke;
+- "a 200 µs slice fixes the late trigger receive": still 17–22 late per run;
+- "a tick should keep the interrupted core's owed switch": still 17–18.
+
+The late receive is the host waking a thread: bytes always equal blocked
+ticks, and it is never two ticks late. `StreamBufferDemo`'s own margin knob
+absorbs it, set in the two-core build only.
+
+Committed locally: capi 63b21d9, 65325d7 (capi `main` fast-forwarded); port
+012ac3d. Not pushed.
+

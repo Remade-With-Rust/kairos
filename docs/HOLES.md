@@ -59,11 +59,37 @@ every exit of the resumed `xStreamBufferReceive`, so a higher task preempts R
 inside the call. R's next call must answer 0, not wait again. Both mutants fail
 it. The census re-survey of the same day reads 0 unexplained kernel-wide.
 
-## H15 — The C ABI has never run on two cores — OPEN
+## H15 — The C ABI had never run on two cores — CLOSED 2026-10-04
 
-**Recorded 2026-10-04** (API differential D4, deferred there). `rusty_rtos-capi` runs 25 unmodified FreeRTOS demo files on one core: QEMU Cortex-M3, plus Windows and Linux hosts. No cell builds it with `configNUMBER_OF_CORES 2`. The kernel's two-core paths are judged through the Rust face (the demo's two-core corpus and the SMP differential), never through the 87 C symbols. A two-core defect in the ABI seam itself, such as the handle codec or a critical-section spelling, would pass every run.
+**Recorded 2026-10-04** (API differential D4). `rusty_rtos-capi` ran 25
+unmodified FreeRTOS demo files on one core only, and its cells had not
+compiled since the kernel and port moved.
 
-**Blocked first on the crate itself.** capi sits on branch `wip/32bit-header-types`. Its core crate's tests have not compiled since `Handle`'s index widened to `u32` (`codec.rs` test vectors). Whether those vectors widen with the handle or narrow at the boundary is the owner's decision. A two-core cell would be built on top of that crate.
+**Closed the same day** (rusty_rtos-capi 63b21d9, 65325d7; rusty_rtos_port
+012ac3d). The cells build again: 25/25 on Windows, on Linux and on QEMU
+Cortex-M3. `hosted/capi-host --features smp` compiles the same files with
+`configNUMBER_OF_CORES 2` and runs them on the two-core kernel. The host
+port's one run permit passes between two kernel cores at every top-level
+kernel call's return (the C oracle harness's turn rule), at every tick, and
+on a 200 us slice. **17 of 17**: 3 runs of 3 on Windows and 5 of 5 on Linux
+at 30,000 ticks. The verdict requires the kernel's own `pxCurrentTCBs` to
+have held both cores on a task, and a port poisoned to report core 0 fails it.
+
+Seventeen, because FreeRTOS itself fails eight of the files on two cores:
+they assume one core, and the C oracle's own two-core verdicts say so
+(`GenQTest.c:564`, reproduced here at the same line). They are excluded by
+name, with the C's verdict. One setting differs:
+`configSTREAM_BUFFER_TRIGGER_LEVEL_TEST_MARGIN 1`, the demo's knob for a
+woken task served a tick late.
+
+**What it found.** A Linux host-port defect that also affected **one core**:
+a reused task slot kept its last occupant's permit and freeze, and every
+Linux run broke the cell's identity check. Fixed in `rusty_rtos_port-host`.
+
+**What it does not claim.** Virtual cores never overlap in time, so a race
+that needs true simultaneity inside one kernel call is not reached. The
+Xtensa silicon cell (`xiao-s3-smp`) runs two real cores; it does not run
+the C ABI.
 
 ## H13 — The corpus was compared against the C at 64 bits only — CLOSED 2026-10-04
 
