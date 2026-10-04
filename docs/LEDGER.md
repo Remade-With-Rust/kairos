@@ -16875,3 +16875,87 @@ survived the same run. Run C counted ANY `kairos conform` failure that was
 not a compile error as a kill, and P5's session had WSL `E_UNEXPECTED`
 failures. `mutants-long-conform.sh` now needs a diverging trace or a failed
 scenario check; anything else is `oracle-error`. H14 is two mutants, one arm.
+
+## ★ 2026-10-04 — closing the API section: freshness, H14, a reap defect, the nightly, H13
+
+The answer to "is the API section finished?" was six items. These are the
+first four, in the order taken.
+
+**1. The census cannot go stale silently.** `census.py` fingerprints what it
+measured -- sha256 over the tracked files of kernel-core `src` and `tests`,
+the kernel's `oracle/api`, and demo-core, CRLF folded -- and `run.sh` stamps
+it at the start and refuses at the end if it moved; `mutants.py` stamps the
+kernel source into `mutants.json`. `--check` fails STALE when the checkout
+is not what was measured, and CI runs it `--require-inputs`. The README
+block names the kernel and demo commits. Kill tests: a kernel edit and a
+demo edit each fail it; a clone without the packages passes plain and fails
+`--require-inputs`. (umbrella 28eb29d)
+
+**4a. H14 closed by a test.** A port that raises one tick at a chosen exit
+(`TickAt`) lands H's wake on every exit of R's resumed
+`xStreamBufferReceive` in turn; R must answer 0 and not wait again. Both
+survivors of the arm (`take_stream_waited -> false`, `set_stream_waited ->
+()`) fail it. (kernel 0c29acb)
+
+**A one-core defect, found proving a mutant equivalent.** The kernel kept
+one deferred-delete slot, on the stated property that a second self-delete
+could not precede the first reap. It can -- the deleting task yields to the
+next ready task, not to idle -- and the second overwrote the first: a
+leaked slot and a task count one high. FreeRTOS keeps a list. Now each TCB
+carries its place in that list (one of the stride's padding words; still
+128 bytes on rv32) and one reaper serves both builds, oldest first, as
+`prvCheckTasksWaitingTermination`. No oracle reached it. Price: flash small
++214, speed +274; rv32 `notify_roundtrip` 47 -> 49. (kernel 989a5d2)
+
+**3. Fresh seeds nightly (D2).** The kernel's `scheduled.yml` gains
+`api-fresh`: fetch the pinned FreeRTOS, rebuild the C driver, require
+`run.sh` to reproduce the committed traces with no diff, then eight fresh
+seeds against the C. Locally: no diff, 134 fresh traces pass. Not yet run on
+GitHub. (kernel ca95c99)
+
+**4b. H13 closed: the corpus at 32 bits.** Every target is 32-bit and the C
+trace depends on the width (`unsigned long` ticks, `size_t` prefixes). Both
+corpus harnesses build `-m32`; `kairos conform --w32` runs an i686 sim
+against it; `oracle/pin.py` makes a pin from a C trace.
+
+| | result |
+|---|---|
+| one core, 100,000 ticks, `-m32` C vs i686 sim | **26 / 26 identical**, 18,542,585 lines |
+| pin rows reproduced from the 64-bit C | 24 / 24 to the digit |
+| rows whose ticks / yields / exits move at 32 bits | 0 of 24 one-core; 1 of 23 two-core |
+| `conformance`, `smp_conformance` at x86_64 and i686 | pass |
+| RV32 QEMU, Cortex-M3 QEMU, ESP32-S3 silicon vs `-m32` pins | 25 / 25 each |
+
+No kernel defect. Three harness constants had fixed the oracle host's width
+where the build's belonged: `PosixDemoConfig`'s tick and prefix (core
+bfc9989), `StreamBufferDemo`'s `sizeof( size_t )` wrap, and
+`MessageBufferAMP`'s handle on the wire (demo d945eb1). The second was pinned
+to 8 deliberately on 2026-09-21, when the pins were 64-bit only; with
+width-matched pins a bare 8 would be the defect -- the same rule, one width,
+taken from the pins. Until now each 32-bit cell ran a 64-bit tick against
+the 64-bit C: self-consistent, never the kernel a 32-bit user gets. The two
+footprint probes pin `Bits64` themselves, so their published numbers did
+not move with the config.
+
+**The flash pins were failing, and a measurement had read past them.**
+`bench/kernel-flash/run.sh` pinned 19,450 (speed) and 17,318 (small); HEAD
+reads 22,396 (1.61x) and 17,860 (1.28x, inside 1.30x). The reap fix quoted
+those totals and did not re-pin. Attributed by building the probe at each
+commit against worktrees -- the old pin reproduces to the byte at kernel
+0.3.2 + port 0.3.1:
+
+| step | speed | small |
+|---|---:|---:|
+| port 66fbbef, the critical-section pair in line on speed | +2,132 | 0 |
+| kernel 7e9f447, P2's three two-core changes | +242 | +458 |
+| kernel Ir round 3e7aeff..61cde1d | +298 | -130 |
+| kernel 989a5d2, the reap fix | +274 | +214 |
+
+The port step is a trade already priced in run.sh's notes (+1,866 B for
+-165 `mv`), taken for instructions on the speed profile. The P2 step is the
+open question: three two-core changes cost the ONE-core probe +458 B small,
+and a `NUMBER_OF_CORES > 1` gate should fold to nothing there. Logged, not
+chased.
+
+Committed locally only; nothing pushed or released. The demo's new i686 CI
+job and the kernel's registry build both need core's next release.

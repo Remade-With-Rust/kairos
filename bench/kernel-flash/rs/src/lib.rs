@@ -52,7 +52,12 @@ use rusty_rtos_core::config::{Config, PosixDemoConfig};
 pub struct MatchedConfig;
 
 impl Config for MatchedConfig {
-    type Tick = <PosixDemoConfig as Config>::Tick;
+    /// The u64 tick, Kairos's choice for a target, priced by `run.sh` at
+    /// thirty bytes. Named here rather than inherited: `PosixDemoConfig`
+    /// follows the build's width since H13 (umbrella `docs/HOLES.md`), and
+    /// this probe links rv32, so inheriting would have swapped the tick this
+    /// comparison has always measured for a 32-bit one without a word.
+    type Tick = rusty_rtos_core::tick::Bits64;
     const TICK_RATE_HZ: u32 = <PosixDemoConfig as Config>::TICK_RATE_HZ;
     const DYNAMIC_ALLOCATION: bool = true;
     const PORT_STACK_INIT_CRITICAL: bool = true;

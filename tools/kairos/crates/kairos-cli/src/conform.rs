@@ -113,6 +113,23 @@ fn oracle_scenario(scenario: &str) -> &str {
 const DEMO: &str = "rusty_rtos_demo";
 const SIM_BIN: &str = "kairos-sim";
 
+/// `--w32`: both sides at 32 bits -- the sim built for the 32-bit twin of
+/// this host, the oracle from `kairos oracle build --w32` (HOLES.md H13).
+static W32: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn w32() -> bool {
+    W32.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The 32-bit target the sim is built for under `--w32`.
+const fn w32_target() -> &'static str {
+    if cfg!(windows) {
+        "i686-pc-windows-msvc"
+    } else {
+        "i686-unknown-linux-gnu"
+    }
+}
+
 /// Build the sim once, so a `--all` sweep does not rebuild per scenario.
 fn build_sim(root: &Path) -> Result<()> {
     let dir = root.join(DEMO);
@@ -131,12 +148,11 @@ fn build_sim(root: &Path) -> Result<()> {
     // lockfile rewritten, and the SECOND check reported an H-07 failure
     // caused by the conform in between.
     let before = lockfile_if_standalone(&dir);
-    let result = crate::run(
-        false,
-        &dir,
-        "cargo",
-        &["build", "--release", "--bin", SIM_BIN],
-    );
+    let mut cargo_args = vec!["build", "--release", "--bin", SIM_BIN];
+    if w32() {
+        cargo_args.extend(["--target", w32_target()]);
+    }
+    let result = crate::run(false, &dir, "cargo", &cargo_args);
     restore_lockfile(&dir, before.as_ref());
     result?;
     Ok(())
@@ -176,8 +192,11 @@ fn restore_lockfile(dir: &Path, before: Option<&String>) {
 /// artefact.
 fn run_sim(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<String> {
     let dir = root.join(DEMO);
-    let bin = dir
-        .join("target")
+    let mut bin = dir.join("target");
+    if w32() {
+        bin = bin.join(w32_target());
+    }
+    let bin = bin
         .join("release")
         .join(format!("{SIM_BIN}{}", std::env::consts::EXE_SUFFIX));
     if !bin.is_file() {
@@ -195,7 +214,7 @@ fn run_sim(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<Strin
     let out = root
         .join("oracle")
         .join("traces")
-        .join(format!("{scenario}.sim"));
+        .join(format!("{scenario}.sim{}", if w32() { "-w32" } else { "" }));
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -211,29 +230,36 @@ fn run_oracle(root: &Path, scenario: &str, ticks: u64, exits: bool) -> Result<St
     let scenario = oracle_scenario(scenario);
     // `MessageBufferAMP` comes out of the second binary: it redefines
     // `sbSEND_COMPLETED`, which is global (see `oracle::binary_for`).
-    let bin_name = if scenario == "MessageBufferAMP" {
-        "corpus-amp"
-    } else {
-        "corpus"
-    };
-    let bin = root.join("oracle").join("build").join(bin_name);
+    let bin_name = format!(
+        "{}{}",
+        if scenario == "MessageBufferAMP" {
+            "corpus-amp"
+        } else {
+            "corpus"
+        },
+        if w32() { "-w32" } else { "" }
+    );
+    let bin = root.join("oracle").join("build").join(&bin_name);
     if !bin.is_file() {
         return fail(format!(
-            "oracle/build/{bin_name} is not built; run `kairos oracle build`"
+            "oracle/build/{bin_name} is not built; run `kairos oracle build{}`",
+            if w32() { " --w32" } else { "" }
         ));
     }
     let env = if exits { "KAIROS_TRACE_EXITS=1 " } else { "" };
     let script = format!(
-        "ulimit -f 4194304; {env}timeout 900 ./oracle/build/{bin_name} {scenario} {ticks} 2> oracle/traces/{scenario}.oracle; echo exit=$?"
+        "ulimit -f 4194304; {env}timeout 900 ./oracle/build/{bin_name} {scenario} {ticks} 2> oracle/traces/{scenario}.oracle{w}; echo exit=$?",
+        w = if w32() { "-w32" } else { "" }
     );
     let (ok, _stdout, stderr) = crate::oracle::host_shell(root, &script)?;
     if !ok {
         return fail(format!("running the oracle failed:\n{stderr}"));
     }
     Ok(fs::read_to_string(
-        root.join("oracle")
-            .join("traces")
-            .join(format!("{scenario}.oracle")),
+        root.join("oracle").join("traces").join(format!(
+            "{scenario}.oracle{}",
+            if w32() { "-w32" } else { "" }
+        )),
     )?)
 }
 
@@ -304,6 +330,10 @@ pub(crate) fn main(root: &Path, args: &[String]) -> Result<()> {
         .unwrap_or(2000);
     let exits = has_flag(args, "--exits");
     let all = has_flag(args, "--all");
+    W32.store(
+        has_flag(args, "--w32"),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     build_sim(root)?;
     if all {
         for scenario in SCENARIOS {

@@ -655,7 +655,11 @@ fn patch_task_notify(root: &Path) -> Result<()> {
     // From the pinned file every time, as `patch` does for port.c.
     git(
         &classic_dir(root),
-        &["checkout", "--", "FreeRTOS/Demo/Common/Minimal/TaskNotify.c"],
+        &[
+            "checkout",
+            "--",
+            "FreeRTOS/Demo/Common/Minimal/TaskNotify.c",
+        ],
     )?;
     let text = fs::read_to_string(&path)?;
     if text.contains(MARKER) {
@@ -847,7 +851,11 @@ fn compile(
     Ok(())
 }
 
-fn build(root: &Path, name: &str) -> Result<()> {
+/// `w32` builds the 32-bit twin (`-m32`, binaries `corpus-w32` and
+/// `corpus-amp-w32`): every target this kernel ships to is 32-bit, and the
+/// width is observable -- a message buffer's length prefix is a `size_t`
+/// (HOLES.md H13). `conform --w32` runs it against an i686 `kairos-sim`.
+fn build(root: &Path, name: &str, w32: bool) -> Result<()> {
     let sc = scenario(name)?;
     if !port_c(root).is_file() {
         return fail("oracle/FreeRTOS-Kernel is not fetched; run `kairos oracle fetch`");
@@ -893,15 +901,29 @@ fn build(root: &Path, name: &str) -> Result<()> {
     // Two binaries, identical but for one `-D`: see `Scenario::amp`.
     let plain = SCENARIOS.iter().filter(|s| !s.amp).count();
     let amp = SCENARIOS.len().saturating_sub(plain);
-    compile(root, &build_dir, &sources, &includes, ORACLE_BIN, "", plain)?;
+    // `-isystem` the multiarch asm headers: without gcc-multilib the `-m32`
+    // build finds no `asm/errno.h` (the Posix port includes errno through the
+    // Linux headers). The x86 ones there are unified -- `bitsperlong.h` keys on
+    // `__x86_64__`, `errno.h` is the generic table -- so they serve `-m32` as
+    // they serve the host; with gcc-multilib the flag changes nothing.
+    let (width, suffix) = if w32 {
+        (" -m32 -isystem /usr/include/x86_64-linux-gnu", "-w32")
+    } else {
+        ("", "")
+    };
+    let plain_bin = format!("{ORACLE_BIN}{suffix}");
+    let amp_bin = format!("{ORACLE_BIN_AMP}{suffix}");
+    compile(
+        root, &build_dir, &sources, &includes, &plain_bin, width, plain,
+    )?;
     if amp > 0 {
         compile(
             root,
             &build_dir,
             &sources,
             &includes,
-            ORACLE_BIN_AMP,
-            " -DKAIROS_AMP=1",
+            &amp_bin,
+            &format!("{width} -DKAIROS_AMP=1"),
             amp,
         )?;
     }
@@ -1000,8 +1022,12 @@ pub(crate) fn main(root: &Path, args: &[String]) -> Result<()> {
         "fetch" => fetch(root, &args[1..]),
         "patch" => patch(root),
         "build" => {
-            let name = args.get(1).map(String::as_str).unwrap_or("dynamic");
-            build(root, name)
+            let name = args
+                .iter()
+                .skip(1)
+                .find(|a| !a.starts_with("--"))
+                .map_or("dynamic", String::as_str);
+            build(root, name, crate::has_flag(args, "--w32"))
         }
         "cat" => {
             let name = args.get(1).map_or("dynamic", String::as_str);

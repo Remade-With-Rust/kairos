@@ -55,22 +55,47 @@ trace or a scenario failing its own check -- and anything else as
 **Closing it:** a scenario, or a sim-port unit test, that switches a stream
 receiver away exactly at the exit ending its wait.
 
-## H13 — The 26-scenario corpus is compared against the C at 64 bits only — OPEN
+## H13 — The corpus was compared against the C at 64 bits only — CLOSED 2026-10-04
 
 **Measured 2026-10-03 (plan P5).** Every target is 32-bit; the oracle host
 is x86-64, and the pointer width is observable -- a message buffer's length
-prefix is a `size_t`. Until P5 nothing compared Kairos against FreeRTOS at
-32 bits. P5 closed it for the API differential: `oracle/api/run.sh` builds
-the C driver `-m32` too and pins each build's trace (`pins/api*-w32-*.pin`),
-and `cargo test --target i686-pc-windows-msvc` replays them -- both builds,
-28,000 steps, identical. That first 32-bit comparison found a Kairos defect
-at once (a message prefix wider than `size_t` was written short; fixed).
+prefix is a `size_t`. P5 closed it for the API differential
+(`oracle/api/run.sh` builds the C driver `-m32` too, and an i686 replay of
+both builds' pins found a short-written prefix at once). The 26-scenario
+corpus and the two-core corpus stayed 64-bit only.
 
-**Still 64-bit only:** the 26-scenario corpus and the two-core corpus. Their
-C harness (`oracle/harness`, `oracle/harness-smp`) is built native; a `-m32`
-build and an i686 `kairos-sim` would make them judge the targets' width as
-well. Until then a width-dependent defect outside what the API
-differential's scripts reach would pass every corpus run.
+**Closed 2026-10-04.** Both corpus harnesses now build `-m32`
+(`kairos oracle build --w32`; `KAIROS_SMP_OUT`/`KAIROS_SMP_CFLAGS` for
+`oracle/harness-smp/build.sh`), `kairos conform --w32` runs an i686
+`kairos-sim` against the 32-bit C, and `oracle/pin.py` turns a C trace into
+a pin. Results:
+
+- **One core, 100,000 ticks: 26 of 26 identical**, 18,542,585 lines
+  (`kairos conform --all --ticks 100000 --w32`).
+- **The pin tables carry both widths.** Every one of the 24 C rows
+  reproduces the committed 64-bit pin to the digit; at 32 bits ticks,
+  yields and exits agree on every row, and only the text moves
+  (`portMAX_DELAY` prints as 2^32-1; message prefixes are four bytes).
+  Two-core at 20,000 ticks: 20 of 23 rows width-invariant; the three stream
+  and message rows differ, and `MessageBufferDemo`'s narrower prefix even
+  changes WHEN things run (ticks 20,011 -> 20,002, yields 12,654 -> 12,594).
+  `conformance` and `smp_conformance` pass at x86_64 and i686; demo CI gains
+  an i686 job.
+- **The targets are judged at their own width.** The RV32 and Cortex-M3
+  QEMU cells and the ESP32-S3 silicon cell: 25 of 25 against the `-m32`
+  pins. Until now each ran a 64-bit tick on a 32-bit part against the 64-bit
+  C -- self-consistent, never the kernel a 32-bit user gets.
+
+**What it took, and what it found.** It found no kernel defect. It found
+three places where the harness had fixed the oracle host's width into
+something that should follow the build: `PosixDemoConfig` (core: `Tick`
+and `MESSAGE_LENGTH_BYTES` now follow the pointer width, as `unsigned long`
+and `size_t` do in the C), and two scenario constants -- `StreamBufferDemo`'s
+`sizeof( size_t )` wrap and `MessageBufferAMP`'s handle on the wire -- now
+`pins::ORACLE_SIZE_T`. The first of those had been pinned to 8 on purpose
+(2026-09-21) when the pins were 64-bit only; with width-matched pins a bare
+8 would be the defect. And it found the flash bench's pins had been failing
+since 2026-10-03 (bench/kernel-flash/run.sh, re-pinned with attribution).
 
 ## H10 — 7 of 119 C-twinned APIs are never compared against the C on two cores — CLOSED 2026-10-03 (was 77)
 

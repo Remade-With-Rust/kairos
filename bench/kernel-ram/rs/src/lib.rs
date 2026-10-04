@@ -30,12 +30,59 @@
 
 use core::mem::size_of;
 
-use rusty_rtos_core::config::PosixDemoConfig;
+use rusty_rtos_core::config::{Config, PosixDemoConfig};
 use rusty_rtos_core::hooks::NoTickHook;
+use rusty_rtos_core::tick::Bits64;
 use rusty_rtos_core::trace::NoTrace;
 use rusty_rtos_kernel_core::kernel::Kernel;
 use rusty_rtos_kernel_core::{list_slots_for, lists_for};
 use rusty_rtos_port_core::sim::SimPort;
+
+/// `PosixDemoConfig` with the two widths this probe has always measured.
+///
+/// `PosixDemoConfig` follows the build's pointer width since H13 (umbrella
+/// `docs/HOLES.md`): a 32-bit tick and a four-byte message prefix on a
+/// 32-bit target, because that is what the `-m32` C oracle prints. This
+/// probe links a 32-bit target, so inheriting it would have moved every
+/// published number here through a change that was about the CORPUS. The
+/// u64 tick is Kairos's choice for a target (`bench/kernel-flash/run.sh`
+/// prices it), so it is pinned here, and the prefix with it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RamConfig;
+
+impl Config for RamConfig {
+    type Tick = Bits64;
+    const TICK_RATE_HZ: u32 = <PosixDemoConfig as Config>::TICK_RATE_HZ;
+    const INITIAL_TICK_COUNT: u64 = <PosixDemoConfig as Config>::INITIAL_TICK_COUNT;
+    const MAX_PRIORITIES: u8 = <PosixDemoConfig as Config>::MAX_PRIORITIES;
+    const MINIMAL_STACK_SIZE: usize = <PosixDemoConfig as Config>::MINIMAL_STACK_SIZE;
+    const MAX_TASK_NAME_LEN: usize = <PosixDemoConfig as Config>::MAX_TASK_NAME_LEN;
+    const USE_PREEMPTION: bool = <PosixDemoConfig as Config>::USE_PREEMPTION;
+    const USE_TIME_SLICING: bool = <PosixDemoConfig as Config>::USE_TIME_SLICING;
+    const IDLE_SHOULD_YIELD: bool = <PosixDemoConfig as Config>::IDLE_SHOULD_YIELD;
+    const USE_TICK_HOOK: bool = <PosixDemoConfig as Config>::USE_TICK_HOOK;
+    const USE_TIMERS: bool = <PosixDemoConfig as Config>::USE_TIMERS;
+    const USE_QUEUE_SETS: bool = <PosixDemoConfig as Config>::USE_QUEUE_SETS;
+    const NOTIFICATION_ARRAY_ENTRIES: usize = <PosixDemoConfig as Config>::NOTIFICATION_ARRAY_ENTRIES;
+    const NUM_TLS_POINTERS: usize = <PosixDemoConfig as Config>::NUM_TLS_POINTERS;
+    const QUEUE_REGISTRY_SIZE: usize = <PosixDemoConfig as Config>::QUEUE_REGISTRY_SIZE;
+    const TIMER_TASK_PRIORITY: u8 = <PosixDemoConfig as Config>::TIMER_TASK_PRIORITY;
+    const TIMER_QUEUE_LENGTH: usize = <PosixDemoConfig as Config>::TIMER_QUEUE_LENGTH;
+    const TIMER_TASK_STACK_DEPTH: usize = <PosixDemoConfig as Config>::TIMER_TASK_STACK_DEPTH;
+    const CHECK_FOR_STACK_OVERFLOW: u8 = <PosixDemoConfig as Config>::CHECK_FOR_STACK_OVERFLOW;
+    const NUMBER_OF_CORES: u8 = <PosixDemoConfig as Config>::NUMBER_OF_CORES;
+    const USE_TICKLESS_IDLE: bool = <PosixDemoConfig as Config>::USE_TICKLESS_IDLE;
+    const EXPECTED_IDLE_TIME_BEFORE_SLEEP: u64 = <PosixDemoConfig as Config>::EXPECTED_IDLE_TIME_BEFORE_SLEEP;
+    const TOTAL_HEAP_SIZE: usize = <PosixDemoConfig as Config>::TOTAL_HEAP_SIZE;
+    const DYNAMIC_ALLOCATION: bool = <PosixDemoConfig as Config>::DYNAMIC_ALLOCATION;
+    const PORT_STACK_INIT_CRITICAL: bool = <PosixDemoConfig as Config>::PORT_STACK_INIT_CRITICAL;
+    const MAX_TASKS: usize = <PosixDemoConfig as Config>::MAX_TASKS;
+    const MAX_QUEUES: usize = <PosixDemoConfig as Config>::MAX_QUEUES;
+    const MAX_TIMERS: usize = <PosixDemoConfig as Config>::MAX_TIMERS;
+    const MAX_EVENT_GROUPS: usize = <PosixDemoConfig as Config>::MAX_EVENT_GROUPS;
+    const MAX_STREAM_BUFFERS: usize = <PosixDemoConfig as Config>::MAX_STREAM_BUFFERS;
+    const MESSAGE_LENGTH_BYTES: usize = 8;
+}
 
 /// `PosixDemoConfig::MAX_PRIORITIES`, which sizes the ready lists. Written
 /// out rather than read through the trait so it reads beside the C arm's
@@ -57,7 +104,7 @@ macro_rules! ksize {
      $buffers:literal, $bytes:literal, $timers:literal, $groups:literal) => {
         size_of::<
             Kernel<
-                PosixDemoConfig,
+                RamConfig,
                 SimPort,
                 NoTrace,
                 NoTickHook,
@@ -70,7 +117,7 @@ macro_rules! ksize {
                 $bytes,
                 $timers,
                 $groups,
-                { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+                { <RamConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
             >,
         >()
     };
@@ -173,7 +220,7 @@ type TaskBase = Kernel<
     1024,
     16,
     2,
-    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+    { <RamConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
 >;
 type TaskPlus1 = Kernel<
     PosixDemoConfig,
@@ -189,7 +236,7 @@ type TaskPlus1 = Kernel<
     1024,
     16,
     2,
-    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+    { <RamConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
 >;
 probe!(KAIROS_TB_TCBS, TaskBase::FOOTPRINT_TCBS);
 probe!(KAIROS_TB_LISTS, TaskBase::FOOTPRINT_LISTS);
@@ -248,7 +295,7 @@ type Base = Kernel<
     1024,
     16,
     2,
-    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+    { <RamConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
 >;
 
 probe!(KAIROS_FP_TOTAL, Base::FOOTPRINT);
@@ -291,7 +338,7 @@ type T32 = Kernel<
     1024,
     32,
     2,
-    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+    { <RamConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
 >;
 
 probe!(KAIROS_T32_TOTAL, T32::FOOTPRINT);
@@ -317,7 +364,7 @@ type T17 = Kernel<
     1024,
     17,
     2,
-    { <PosixDemoConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
+    { <RamConfig as ::rusty_rtos_core::config::Config>::TIMER_QUEUE_LENGTH },
 >;
 
 probe!(KAIROS_T17_TOTAL, T17::FOOTPRINT);

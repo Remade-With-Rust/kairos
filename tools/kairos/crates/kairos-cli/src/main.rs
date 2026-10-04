@@ -1204,8 +1204,13 @@ fn declares_a_workspace(manifest: &Path) -> bool {
 /// directory a firmware cell rather than a host tool.
 fn pins_a_target(config: &Path) -> bool {
     fs::read_to_string(config).is_ok_and(|text| {
-        text.lines()
-            .any(|line| line.split('#').next().unwrap_or("").trim().starts_with("target ="))
+        text.lines().any(|line| {
+            line.split('#')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .starts_with("target =")
+        })
     })
 }
 
@@ -1596,12 +1601,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
             println!("$ sh {}   (bench)", script.display());
             // `sh`, not the shell this runs under: the scripts are POSIX and
             // the box's default may be PowerShell.
-            if let Err(e) = run(
-                false,
-                root,
-                "sh",
-                &[script.to_string_lossy().as_ref()],
-            ) {
+            if let Err(e) = run(false, root, "sh", &[script.to_string_lossy().as_ref()]) {
                 let why = e.to_string();
                 // A MISSING TOOL AND A MOVED PIN ARE DIFFERENT STATES, and
                 // the qemu block below says why that distinction is worth
@@ -1620,8 +1620,7 @@ fn check(root: &Path, manifest: &Manifest, args: &[String]) -> Result<()> {
                 // INCLUDING that it stopped compiling: `list-cost` was broken
                 // by a signature change and carried a 6.4% regression for
                 // several rounds behind exactly this message.
-                let retried = if why.contains("exit code: 127")
-                    || why.contains("command not found")
+                let retried = if why.contains("exit code: 127") || why.contains("command not found")
                 {
                     wsl_path(&script).and_then(|p| run(false, root, "wsl", &["-e", "sh", &p]).ok())
                 } else {

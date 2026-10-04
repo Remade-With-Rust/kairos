@@ -374,10 +374,29 @@ check "FreeRTOS kernel + port" "$c_text"    13924
 # (docs/LEDGER.md, 2026-10-02). Re-pinned 2026-10-02: the speed profile had
 # moved 19,484 -> 19,450 (and `mv` 756 -> 754) between the 0.2.2 pin and
 # kernel 0.3.x; the change is real and small and is NOT attributed here.
+#
+# Re-pinned 2026-10-04: speed 19,450 -> 22,396 (1.61x), small 17,318 -> 17,860
+# (1.28x, inside the 1.30x target). Both pins had been FAILING since
+# 2026-10-03. The reap fix (kernel 989a5d2) ran this script, quoted its
+# totals and left the pins as they were -- read as numbers, not as a gate.
+# The H13 work found the failure. Attributed by building this arm at each
+# commit against a worktree (umbrella docs/LEDGER.md, 2026-10-04):
+#
+#                                                         speed    small
+#   kernel 0.3.2 + port 0.3.1 (the old pin, reproduced)  19,450   17,318
+#   port 66fbbef, the critical-section pair in line       +2,132        0
+#   kernel 7e9f447, P2's three two-core changes             +242     +458
+#   kernel 3e7aeff..61cde1d, the one-core Ir round          +298     -130
+#   kernel 989a5d2, the double self-delete reap fix          +274     +214
+#
+# The port step is the trade the notes below already priced ("inlining the
+# critical-section pair (-165 `mv`, +1,866 B)"), taken on purpose for
+# instructions on the SPEED profile; `small` keeps the pair out of line, which
+# is why its column reads 0. The kernel steps are measured at the new port.
 if [ "${KAIROS_FLASH_FEATURES:-}" = small ]; then
-    check "Kairos kernel + port (small profile)" "$rs_kernel" 17318
+    check "Kairos kernel + port (small profile)" "$rs_kernel" 17860
 else
-    check "Kairos kernel + port"   "$rs_kernel" 19450
+    check "Kairos kernel + port"   "$rs_kernel" 22396
 fi
 
 # ---- the opcode counts, PINNED ---------------------------------------------
@@ -456,13 +475,18 @@ echo "opcode counts -- the four the 1.6x investigation named:"
 # one of the four fell, which is the signature of a folded check rather than a
 # reshuffle -- the event-item proof raised three of them.
 # 756 / 254 (2026-10-01, -13 / -4): the single resolve in `queue_take`, above.
+# 624 / 79 / 271 / 229 (2026-10-04, from 754 / 77 / 254 / 165): the in-line
+# critical-section pair took `mv` to 593 and `andi` to 216 at kernel 0.3.2 --
+# fewer calls to marshal for, and each inlined exit carries its own masks --
+# and the kernel's changes since added the rest (at the old port: mv 754 ->
+# 793, slli 254 -> 268, andi 165 -> 180).
 if [ "${KAIROS_FLASH_FEATURES:-}" != small ]; then
-    check "mv   (call-argument setup)" "$(ops mv)"   754
+    check "mv   (call-argument setup)" "$(ops mv)"   624
 fi
 [ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "mul  (non-p2 indexing)"     "$(ops mul)"    0
-[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "srli (u16 extraction)"      "$(ops srli)"  77
-[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "slli (u16 extraction)"      "$(ops slli)" 254
-[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "andi (incl. zext.b)"        "$(ops andi)" 165
+[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "srli (u16 extraction)"      "$(ops srli)"  79
+[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "slli (u16 extraction)"      "$(ops slli)" 271
+[ "${KAIROS_FLASH_FEATURES:-}" = small ] || check "andi (incl. zext.b)"        "$(ops andi)" 229
 
 echo
 if [ "$fail" -eq 0 ]; then
