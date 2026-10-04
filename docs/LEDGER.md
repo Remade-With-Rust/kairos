@@ -17061,3 +17061,21 @@ absorbs it, set in the two-core build only.
 Committed locally: capi 63b21d9, 65325d7 (capi `main` fast-forwarded); port
 012ac3d. Not pushed.
 
+## 2026-10-04 — releases: core 0.2.5, kernel 0.3.3
+
+Published from clean clones of GitHub `main`, each gated there: fmt, clippy
+-D warnings, tests, cargo deny, cargo vet --locked, the unsafe census, the
+hardening table, the no_std targets. Also gated by `tools/no-c-audit.sh`
+(no C or C++ in any published crate, dependency or linked firmware), with a
+dry run before each upload.
+
+| crate | version | why now |
+|---|---|---|
+| `rusty_rtos_core`, `rusty_rtos_alloc` | 0.2.5 | `TickHook::wants_tick` (the kernel uses it); `PosixDemoConfig` at the build's width (H13) |
+| `rusty_rtos_kernel-core`, `rusty_rtos_kernel` | 0.3.3 | the API differential's eleven fixes, P2's timer-command split, the reap fix, the cooperative inherit, two cores refused on a non-committing port, fifteen Ir wins |
+
+The dependents follow: kernel requires core 0.2.5 (and cargo-vet's publisher
+import), demo requires core 0.2.5 and kernel 0.3.3. Their locks were
+regenerated in clean clones, never the path-patched working trees. Demo CI's
+new i686 job had to add its target to the pinned toolchain.
+
