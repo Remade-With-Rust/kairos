@@ -7538,7 +7538,7 @@ M3 has had none of the seven.
 
 ## The kill-test rows' narrative, moved out of the plan (2026-09-21)
 
-`docs/plans/rtos-mission.md` had grown to 40,536 words with **nine table
+`docs/finished/rtos-mission.md` had grown to 40,536 words with **nine table
 cells holding 35% of it**. The K3 row alone was 22,974 characters in a single
 markdown cell — long enough that its own closing summary sat stale for eleven
 days while contradicting its own body, because nobody reads to the end of a

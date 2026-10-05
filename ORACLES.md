@@ -3,7 +3,7 @@
 A number measured against an unpinned checkout is not a number. Every oracle
 below is pinned to a commit; `kairos oracle fetch` clones exactly these, into
 `oracle/` (gitignored), and refuses to run against anything else. Re-pinning
-is a decision-log row in `docs/plans/rtos-mission.md`.
+is a decision-log row in `docs/finished/rtos-mission.md`.
 
 ## The kernel
 

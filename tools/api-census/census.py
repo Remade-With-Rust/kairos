@@ -783,7 +783,7 @@ def readme_block(rows, meta=None):
         "proved by the typed face's equivalence test, or carrying a written reason the census "
         "checks. The %d never compared on one core, and the %d never compared on two, are named "
         "in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md); the mission is "
-        "[`docs/plans/api-differential.md`](docs/plans/api-differential.md)."
+        "[`docs/finished/api-differential.md`](docs/finished/api-differential.md)."
         % (judged, len(api), len(api) - one, len(api) - two),
     ] + ([
         "",

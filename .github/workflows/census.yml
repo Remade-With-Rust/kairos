@@ -4,7 +4,7 @@ name: census
 # API-CENSUS block and docs/HOLES.md's API-CENSUS-HOLES block -- re-rendered
 # from the committed summary (docs/api-coverage.json) and compared byte for
 # byte. A count typed by hand into any of them fails here
-# (docs/plans/api-differential.md, P6).
+# (docs/finished/api-differential.md, P6).
 #
 # And the summary must be of the code that is actually on main. The census
 # records a fingerprint of everything it measured -- the kernel's source, its

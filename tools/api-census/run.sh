@@ -70,7 +70,7 @@ for l in sys.stdin:
 
 run C1 rusty_rtos_demo "-p rusty_rtos_demo-core --test conformance" \
     "--exact every_scenario_reproduces_the_c_kernels_trace_and_counters the_async_arm_reproduces_pollqs_trace_exactly"
-# The API differential (docs/plans/api-differential.md, P1): every step of a
+# The API differential (docs/finished/api-differential.md, P1): every step of a
 # seeded script compared against FreeRTOS, one core and two.
 run C1 rusty_rtos_kernel "-p rusty_rtos_kernel-core --test api_differential"     "--exact one_core_answers_every_step_as_the_c_kernel_does"
 # The digest pins (seeds that once found a defect) and the authored sweeps

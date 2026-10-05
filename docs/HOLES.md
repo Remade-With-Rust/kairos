@@ -149,7 +149,7 @@ re-asked the question when a second core arrived. The README's "22 APIs"
 sentence was by then stale in the other direction -- it overstated one core
 and said nothing about two.
 
-**Closing it:** `docs/plans/api-differential.md`, P1 (a generative differential
+**Closing it:** `docs/finished/api-differential.md`, P1 (a generative differential
 over the whole surface, one-core and two-core FreeRTOS builds) and P2 (the
 fifteen one-core scenarios that have never run on two cores).
 

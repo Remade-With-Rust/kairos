@@ -13,7 +13,7 @@ place it enters — today, on the host, and on a Cortex-M4F / RV32 part.
 the Kairos policy, on every target where Kairos would call it, and the call
 site is named.* Where the target is a 32-bit bare-metal part and the crate
 does not build there yet, the crate is ready on the host and the bare-metal
-work is a dated brick in [`plans/build-me-bare.md`](plans/build-me-bare.md).
+work is a dated brick in [`finished/build-me-bare.md`](finished/build-me-bare.md).
 Every verdict was taken by `tools/house-gate` (rustc 1.98.0, 2026-09-09;
 `thumbv7em-none-eabihf`, `riscv32imac-unknown-none-elf`, the host), not by
 reading a README.
@@ -106,6 +106,6 @@ compile gate proved the ban fires:
   `rusty_rtos_sntp` (K7) **wraps** `rusty_time-core`'s `no_std` leaf (0.2.0)
   rather than remaking coreSNTP -- it keeps the crate as its host-side oracle
   too, but the chip now runs the house codec itself.
-- `plans/build-me-bare.md` queues the bare-metal bricks; `upstream/` holds
+- `finished/build-me-bare.md` queues the bare-metal bricks; `upstream/` holds
   the three issue drafts; `tools/house-gate` re-takes every verdict here in
   one command (`no_std` gates, `host/`, `hostgit/`).

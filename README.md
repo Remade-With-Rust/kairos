@@ -13,7 +13,7 @@ against the C kernel's own trace.
 
 Runs on Cortex-M, RISC-V and the Janus ESP32 family.
 
-The plan is [docs/plans/rtos-mission.md](docs/plans/rtos-mission.md): where we
+The plan is [docs/finished/rtos-mission.md](docs/finished/rtos-mission.md): where we
 are, what is finished, what remains. Everything below summarises it.
 
 ## The one-line test
@@ -63,10 +63,10 @@ oracle/harness/      the deterministic-tick patch and trace hooks for the C kern
                      oracle/FreeRTOS-Kernel and oracle/FreeRTOS are fetched checkouts (ignored)
 .cargo/config.toml   [net] only; each repo's own (generated, gitignored) .cargo/config.toml
                      patches the siblings IT uses to the local checkouts — `kairos patches`
-docs/                plans/rtos-mission.md, the one plan; API-MAP.md and CONFIG-MAP.md, the contracts;
+docs/                finished/rtos-mission.md, the one plan; API-MAP.md and CONFIG-MAP.md, the contracts;
                      LEDGER.md, the family-level numbers (the oracle trace, the fleet gate);
                      HOUSE-STACK.md, every house crate's readiness for this family, compile-gated;
-                     plans/build-me-bare.md, the queue of house crates Kairos wants on bare metal
+                     finished/build-me-bare.md, the queue of house crates Kairos wants on bare metal
 rusty_rtos_*/        the packages (each: .git, Cargo.toml, crates/, firmware/, docs/plans/<name>.md,
                      docs/LEDGER.md, docs/plans/use-protection-please.md, ci)
 ```
@@ -144,7 +144,7 @@ against the C kernel, in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md):
 | one core | **117** | 58 |
 | two cores | **113** | 56 |
 
-**Every arm of 119 of the 119 is judged** -- compared on either build, contract-only, proved by the typed face's equivalence test, or carrying a written reason the census checks. The 2 never compared on one core, and the 6 never compared on two, are named in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md); the mission is [`docs/plans/api-differential.md`](docs/plans/api-differential.md).
+**Every arm of 119 of the 119 is judged** -- compared on either build, contract-only, proved by the typed face's equivalence test, or carrying a written reason the census checks. The 2 never compared on one core, and the 6 never compared on two, are named in [`docs/API-COVERAGE.md`](docs/API-COVERAGE.md); the mission is [`docs/finished/api-differential.md`](docs/finished/api-differential.md).
 
 **What the 119 are of.** They answer for 110 distinct FreeRTOS names: 107 of the 303 distinct names [`docs/API-MAP.md`](docs/API-MAP.md) lists from the pinned headers, and `taskENTER_CRITICAL`, `taskEXIT_CRITICAL`, `taskYIELD`, which it does not. The other 196 listed names have no Kairos twin, and nothing measured here speaks for them.
 
@@ -243,7 +243,7 @@ So: use it when your port's sleep is deep — one that gates clocks and drops
 power domains, where a wake costs hundreds of microseconds and real charge.
 On a shallow `wfi`/`waiti` idle it will not pay, and we would rather say so
 than quote you a wakeup count. The full workings are in
-[docs/plans/tickless-power.md](docs/plans/tickless-power.md).
+[docs/finished/tickless-power.md](docs/finished/tickless-power.md).
 
 ## Part of Remade With Rust
 
