@@ -107,15 +107,21 @@ dependencies = [
 
 [[package]]
 name = "rusty_json_turbo"
-version = "0.1.0"
-source = "git+https://github.com/Remade-With-Rust/rusty_json_turbo#5ed77c0e06a03fdc869ee626884f817bd08e4fa5"
+version = "0.3.0"
+source = "git+https://github.com/Remade-With-Rust/rusty_json_turbo?branch=master#3ef675c8f97f03c17a2b95b424be27d083808d25"
 dependencies = [
  "itoa",
  "memchr",
+ "rusty_json_turbo-accel",
  "serde",
  "serde_core",
  "zmij",
 ]
+
+[[package]]
+name = "rusty_json_turbo-accel"
+version = "0.3.0"
+source = "git+https://github.com/Remade-With-Rust/rusty_json_turbo?branch=master#3ef675c8f97f03c17a2b95b424be27d083808d25"
 
 [[package]]
 name = "rusty_zstd"

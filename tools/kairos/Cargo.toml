@@ -37,7 +37,7 @@ thoth = { version = "0.3.0", git = "https://github.com/Remade-With-Rust/thoth", 
 # The house JSON layer: serde_json forked and made fast; the library keeps
 # the name `serde_json`, so this is the whole migration. By git until it is
 # on crates.io. `status --json` is its consumer.
-serde_json = { package = "rusty_json_turbo", version = "0.1.0", git = "https://github.com/Remade-With-Rust/rusty_json_turbo", default-features = false, features = ["std"] }
+serde_json = { package = "rusty_json_turbo", git = "https://github.com/Remade-With-Rust/rusty_json_turbo", branch = "master", default-features = false, features = ["std"] }
 # The house compressor: a stored oracle trace is one zstd frame
 # (`oracle/traces/<scenario>.trace.zst`), round-tripped before it is kept.
 rusty_zstd = "=0.2.3"

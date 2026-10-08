@@ -121,8 +121,8 @@ checksum = "61c237be51374ef0b897e4a9205966b9941ce89d063e6e5d63bf96d8611580dc"
 
 [[package]]
 name = "rusty_json_turbo"
-version = "0.1.0"
-source = "git+https://github.com/Remade-With-Rust/rusty_json_turbo#c9973401da867969b347778a05be7bae2930d0c0"
+version = "0.3.0"
+source = "git+https://github.com/Remade-With-Rust/rusty_json_turbo?branch=master#3ef675c8f97f03c17a2b95b424be27d083808d25"
 dependencies = [
  "itoa",
  "memchr",
