@@ -13,6 +13,9 @@
 # filtered subtotal lies).
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+# The same root as WSL sees it (`/e/coding/x` -> `/mnt/e/coding/x`); a path
+# that is already a WSL one passes through. Never a drive written in.
+WROOT=$(printf '%s' "$ROOT" | sed -E 's|^/([a-zA-Z])/|/mnt/\L\1/|')
 K1=$ROOT/bench/smp-ir/out/k1
 if [ "${1:-}" = keep ]; then
     cp "$ROOT/bench/smp-ir/out/after.tot" "$ROOT/bench/smp-ir/out/baseline.tot"
@@ -22,8 +25,8 @@ if [ "${1:-}" = keep ]; then
     echo "baseline <- after"
     exit 0
 fi
-wsl -e bash -lc "cd /mnt/f/coding/rusty_RTOS && sh bench/smp-ir/run.sh after >/dev/null 2>&1 && sh bench/smp-ir/run.sh diff | grep -E '^(shape|A |B |anchors)'"
-wsl -e bash -lc "cd /mnt/f/coding/rusty_RTOS && OUT=/mnt/f/coding/rusty_RTOS/bench/smp-ir/out/k1 sh bench/kernel-ir/run.sh after >/dev/null 2>&1 && for s in BlockQ GenQTest TimerDemo; do printf '%s ' \$s; callgrind_annotate --threshold=100 bench/smp-ir/out/k1/cg.\$s 2>/dev/null | grep 'PROGRAM TOTALS' | sed 's/^ *//;s/ .*//' | tr -d ,; done > bench/smp-ir/out/k1/after.prog"
+wsl -e bash -lc "cd $WROOT && sh bench/smp-ir/run.sh after >/dev/null 2>&1 && sh bench/smp-ir/run.sh diff | grep -E '^(shape|A |B |anchors)'"
+wsl -e bash -lc "cd $WROOT && OUT=$WROOT/bench/smp-ir/out/k1 sh bench/kernel-ir/run.sh after >/dev/null 2>&1 && for s in BlockQ GenQTest TimerDemo; do printf '%s ' \$s; callgrind_annotate --threshold=100 bench/smp-ir/out/k1/cg.\$s 2>/dev/null | grep 'PROGRAM TOTALS' | sed 's/^ *//;s/ .*//' | tr -d ,; done > bench/smp-ir/out/k1/after.prog"
 python3 - "$K1" <<'PY'
 import sys, os
 k1 = sys.argv[1]

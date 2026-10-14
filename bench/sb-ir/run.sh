@@ -1,9 +1,9 @@
 #!/bin/sh
 # Per-function instruction counts for the STREAM-BUFFER path, from callgrind.
 #
-#     wsl -e bash -lc 'cd /mnt/f/coding/rusty_RTOS && sh bench/sb-ir/run.sh baseline'
-#     wsl -e bash -lc 'cd /mnt/f/coding/rusty_RTOS && sh bench/sb-ir/run.sh after'
-#     wsl -e bash -lc 'cd /mnt/f/coding/rusty_RTOS && sh bench/sb-ir/run.sh diff'
+#     wsl -e bash -lc 'cd /mnt/e/coding/rusty_RTOS && sh bench/sb-ir/run.sh baseline'
+#     wsl -e bash -lc 'cd /mnt/e/coding/rusty_RTOS && sh bench/sb-ir/run.sh after'
+#     wsl -e bash -lc 'cd /mnt/e/coding/rusty_RTOS && sh bench/sb-ir/run.sh diff'
 #
 # INVOKE IT THE SAME WAY EVERY TIME. A login shell and a non-login shell
 # hand the process a different `environ`, libc copies it at startup, and

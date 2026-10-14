@@ -8,6 +8,9 @@
 #     sh bench/smp-ir/probe.sh gates      # the gates alone
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+# The same root as WSL sees it (`/e/coding/x` -> `/mnt/e/coding/x`); a path
+# that is already a WSL one passes through. Never a drive written in.
+WROOT=$(printf '%s' "$ROOT" | sed -E 's|^/([a-zA-Z])/|/mnt/\L\1/|')
 # `keep` PROMOTES the measurement already taken; it never measures. Deciding
 # after seeing the numbers is the only order -- a keep that re-measured once
 # promoted a regression straight into the baseline.
@@ -38,13 +41,13 @@ echo "gates: ok"
 # `gates`: stop here -- for a candidate m.sh has already priced.
 [ "${1:-}" = gates ] && exit 0
 
-wsl -e bash -lc "cd /mnt/f/coding/rusty_RTOS && sh bench/smp-ir/run.sh after >/dev/null 2>&1 && sh bench/smp-ir/run.sh diff"
+wsl -e bash -lc "cd $WROOT && sh bench/smp-ir/run.sh after >/dev/null 2>&1 && sh bench/smp-ir/run.sh diff"
 
 # The ONE-core instrument too: an SMP change can move the one-core build
 # without running there (rustc's MIR inliner weighs generic bodies before
 # `C::NUMBER_OF_CORES` folds -- win 8 cost one core +63,896 that way).
 # Verdict: the sum of bench/kernel-ir's kernel rows, which is its own.
-wsl -e bash -lc "cd /mnt/f/coding/rusty_RTOS && OUT=/mnt/f/coding/rusty_RTOS/bench/smp-ir/out/k1 sh bench/kernel-ir/run.sh after >/dev/null 2>&1"
+wsl -e bash -lc "cd $WROOT && OUT=$WROOT/bench/smp-ir/out/k1 sh bench/kernel-ir/run.sh after >/dev/null 2>&1"
 python3 - "$ROOT/bench/smp-ir/out/k1/baseline.txt" "$ROOT/bench/smp-ir/out/k1/after.txt" <<'PY'
 import sys
 def tot(p):
