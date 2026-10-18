@@ -10,14 +10,14 @@ the crate, so a failure names its crate and nothing else:
 
 | member | crate | pin |
 |---|---|---|
-| `gate-alloc` | `rusty_alloc-api` | `=2.2.1`, `default-features = false` (needs the two cfgs below) |
+| `gate-alloc` | `rusty_alloc-api` | `=2.2.6`, `default-features = false` (needs the two cfgs below) |
 | `gate-symbols` | `rusty_symbols` | `=0.1.0`, `default-features = false` |
 | `gate-thoth` | `thoth` | git tag `v0.3.0`, `default-features = false` |
 | `gate-json` | `rusty_json_turbo` (lib `serde_json`) | git, `0.1.0`, `no_std + alloc` |
-| `gate-zstd` | `rusty_zstd` | `=0.2.5`, `no_std + alloc` |
-| `gate-erasure` | `rusty_erasure-core` | `=0.4.0` |
-| `gate-time` | `rusty_time-core` | `=0.1.10` |
-| `gate-xml` | `rusty_xml` | `=0.8.1` |
+| `gate-zstd` | `rusty_zstd` | `=0.4.1`, `no_std + alloc` |
+| `gate-erasure` | `rusty_erasure-core` | `=0.4.3` |
+| `gate-time` | `rusty_time-core` | `=0.3.1` |
+| `gate-xml` | `rusty_xml` | `=0.8.3` |
 
 ```sh
 sh tools/house-gate/run.sh            # everything: all three workspaces
