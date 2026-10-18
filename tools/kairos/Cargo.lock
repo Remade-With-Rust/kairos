@@ -87,9 +87,9 @@ dependencies = [
 
 [[package]]
 name = "rusty_alloc"
-version = "2.0.4"
+version = "2.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45e9f7d532888487c4352f949950fb42ce67dd19cd04598689bc08144267c188"
+checksum = "318c1ca44267aa30e631ed57f8c1db3e25991374bdadc35d97db11b65faba496"
 dependencies = [
  "libc",
  "portable-atomic",
@@ -98,9 +98,9 @@ dependencies = [
 
 [[package]]
 name = "rusty_alloc-api"
-version = "2.0.4"
+version = "2.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8c02943e4b13422460fa337aaefb0e0a49e21b4b9a9a310cce7480c2a5eddef"
+checksum = "613568557b57208dff4fa2cdb1ada1bc98339d3cc3ab9533edd712c4946165b4"
 dependencies = [
  "rusty_alloc",
 ]
@@ -125,9 +125,9 @@ source = "git+https://github.com/Remade-With-Rust/rusty_json_turbo?branch=master
 
 [[package]]
 name = "rusty_zstd"
-version = "0.2.3"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f48a9d700940c262e1b51ee0dd3400abc8948d44d36df294944464b4d5f6f600"
+checksum = "145055be9e2940b6b6ad3e5d5bcb09083db51f0112837a89658fd44ca2bf0c40"
 
 [[package]]
 name = "serde"

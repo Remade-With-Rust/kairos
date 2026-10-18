@@ -642,9 +642,9 @@ dependencies = [
 
 [[package]]
 name = "ffai-core"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6b20f3f7f8eab78997f1e1dc253aeb1b633a5ec220fc3bce581718ff759cf0b"
+checksum = "354cdb9eb1607d9bedf82fd2a1103500c82b33b344897142e69695be28b09bb4"
 dependencies = [
  "candle-core",
  "rayon",
@@ -1573,9 +1573,9 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "rusty_erasure"
-version = "0.4.1"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e15f06f248d5ad95750326fa0e66f2c6bf214fac258ad3a6024299e52355334"
+checksum = "ed29bb151d36095306a705a97d4372175a400eba5db826ebd6f16108d303535b"
 dependencies = [
  "rusty_erasure-accel",
  "rusty_erasure-core",
@@ -1583,30 +1583,30 @@ dependencies = [
 
 [[package]]
 name = "rusty_erasure-accel"
-version = "0.4.1"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e464cb9dc52f251c847210e5d781feeaff14315f2560ffd84b9393350a8fb3d"
+checksum = "f936d7453da2c1978e4c60c6eb66d2c27deda143f867fabe2310b3be45935667"
 dependencies = [
  "rusty_erasure-core",
 ]
 
 [[package]]
 name = "rusty_erasure-core"
-version = "0.4.1"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c237be51374ef0b897e4a9205966b9941ce89d063e6e5d63bf96d8611580dc"
+checksum = "b693e1dccb5b72487d60902e1294ab0ea19d7ce9696053f78b9ef3c97f9ae80f"
 
 [[package]]
 name = "rusty_time-core"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d019985f57b6328019a09a08644e6f6e4172a700885d966f834a976f72b9beb4"
+checksum = "44f9445bf24480eabedcbc777d8b3d8b4ca1d6c43df299d15d0e5c13fb8daa57"
 
 [[package]]
 name = "rusty_xml"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d62f943561f181b6f9ea530d836c1e6c63ba9375b768bf33b06a6709c71a548"
+checksum = "c384592269d72f310d69526cf931f6262cab5f0d7931d25e37dcf21ca21d81ab"
 dependencies = [
  "rusty_xml-parser",
  "rusty_xml-reader",
@@ -1619,9 +1619,9 @@ dependencies = [
 
 [[package]]
 name = "rusty_xml-parser"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ce36ad91cb38453fac219586afcbea526a8b24b0989b119c61e45e7448e5d2c"
+checksum = "0c94dca47309642938947586e2f3ce27009e43c698ed8910d6bdbab2cd20c682"
 dependencies = [
  "rusty_xml-sax",
  "rusty_xml-tree",
@@ -1629,9 +1629,9 @@ dependencies = [
 
 [[package]]
 name = "rusty_xml-reader"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f9aaba9e59cd3aafee7e094d7fe2cc0fdeeb066eb0dab118b824b512216c8f"
+checksum = "c2ea9d9f1d0c1239e99b32febf97e6c26d6ec91f348629f9d1c8b3db29885f09"
 dependencies = [
  "rusty_xml-parser",
  "rusty_xml-tree",
@@ -1639,21 +1639,21 @@ dependencies = [
 
 [[package]]
 name = "rusty_xml-sax"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8542e0d8dc4535799b5e592510d8dcde64739e7a83dc9bf53b231128e587aff4"
+checksum = "f7076815053bddd5ac7fd18d546bf20cc38ab433e1023faa02efe8c0035f985f"
 
 [[package]]
 name = "rusty_xml-tree"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17a39069fb550d81c80f1d71eba30dda906965c6951a8b7d16ffa1fcbf1721a7"
+checksum = "ba5e273886c1128a4ac2c5feb150700b1268cbebfd4043642471f7782852af5b"
 
 [[package]]
 name = "rusty_xml-valid"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f80f5115c44412710038572ba7a917edb0e89ba64d686bf7c420fa2e3807b87"
+checksum = "6901f044f95b7aead412dadd0034d4ff7cd1ba26d90e15a9617585010b54dc12"
 dependencies = [
  "rusty_xml-parser",
  "rusty_xml-tree",
@@ -1662,27 +1662,27 @@ dependencies = [
 
 [[package]]
 name = "rusty_xml-writer"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c3a5f3d27fefab6bca514a794305c6bf84bc20f239a89b35de7908670be0247"
+checksum = "722b5500ba394973f448a23888be42205191ea20a775ae8b708dc2b0b0581675"
 dependencies = [
  "rusty_xml-tree",
 ]
 
 [[package]]
 name = "rusty_xml-xpath"
-version = "0.8.1"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd2058e2ef719404f65a169226899f1a148544df40bc1166a52e9e4e93ad7b36"
+checksum = "66441829aa865648903c098c2baa7fb1df43e8b29aa9bff1ad0fb076fbbe6360"
 dependencies = [
  "rusty_xml-tree",
 ]
 
 [[package]]
 name = "rusty_zstd"
-version = "0.2.5"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc2318a1441e10cf436f0bf98615216b0a5410b6f546548b50faa170c7b4a1a6"
+checksum = "145055be9e2940b6b6ad3e5d5bcb09083db51f0112837a89658fd44ca2bf0c40"
 
 [[package]]
 name = "ryu"
@@ -1837,9 +1837,9 @@ checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
 
 [[package]]
 name = "spacedb-access"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b48aac6afb204e3d2de4e9e0915ce4d974e50d17ff3e671cd830131fc9b74fc"
+checksum = "e854dabccceb1589aa80fe09317b5ae39621637d521c42f460c3e80abd856109"
 dependencies = [
  "blake3",
  "getrandom 0.3.4",
@@ -1851,18 +1851,18 @@ dependencies = [
 
 [[package]]
 name = "spacedb-consistency"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69d50bfea5c6c6606872b97d93572f32f896e50acd189a725284452edcc651ed"
+checksum = "27fd130cb60bb047b94dba7a8e0286622e46bb77fded9a59afee0fe65d011a1e"
 dependencies = [
  "spacedb-crdt",
 ]
 
 [[package]]
 name = "spacedb-crdt"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea256df6fc984e5cbcf796620bea988a312ef4df95ad3dfddaa2a45995cc0390"
+checksum = "e3d391f89680e8b76da516310a2e33afcd7dd07d0b1def5a6c37c432add2ae5a"
 dependencies = [
  "getrandom 0.3.4",
  "serde",
@@ -1874,9 +1874,9 @@ dependencies = [
 
 [[package]]
 name = "spacedb-meter"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc1cc28e66b905a3d636d1fd1fdb63700ebb7415b8d636ac5912380d249fb69f"
+checksum = "33e1adcea579e1c7f057768f60837108580e506040f7a68c544de7d46b729062"
 dependencies = [
  "postcard",
  "serde",
@@ -1885,9 +1885,9 @@ dependencies = [
 
 [[package]]
 name = "spacedb-sdk"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "876accc5ac9c9ca6c3635f87f3866288c8be758b930de6dde7e19f8a61de5a8d"
+checksum = "eb0efd12f279d2face256018f2b36e4d86f9a2187f555413a06fb02431e0a450"
 dependencies = [
  "spacedb-access",
  "spacedb-consistency",
@@ -1898,9 +1898,9 @@ dependencies = [
 
 [[package]]
 name = "spacedb-store"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e655fa4dda0398b4f358a19ba25861bc19e62ac5426b1d4d3a2cedf607b04782"
+checksum = "d27a2e85739cc7ff86c3b116aa2204bd8dc1d438741828761ee05c0dcd3dfac5"
 dependencies = [
  "aes-gcm",
  "blake3",
