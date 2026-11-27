@@ -10,7 +10,7 @@ publish = false
 spacedb-sdk = { version = "=0.7.1", default-features = false }
 ffai-core = { version = "0.9.1" }
 rusty_time-core = { version = "=0.3.1" }
-rusty_xml = { version = "=0.8.3" }
+rusty_xml = { version = "0.10.6" }
 rusty_erasure = { version = "=0.4.3" }
 rusty_zstd = { version = "0.5.1" }
 
