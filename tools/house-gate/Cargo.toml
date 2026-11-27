@@ -14,7 +14,7 @@ rust-version = "1.85"
 publish = false
 
 [workspace.dependencies]
-rusty_zstd = { version = "=0.4.1", default-features = false, features = ["alloc"] }
+rusty_zstd = { version = "0.5.1", default-features = false, features = ["alloc"] }
 rusty_erasure-core = { version = "=0.4.3", default-features = false }
 rusty_time-core = { version = "=0.3.1", default-features = false }
 rusty_symbols = { version = "=0.1.0", default-features = false }
